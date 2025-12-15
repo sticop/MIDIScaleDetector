@@ -23,6 +23,7 @@ chmod +x setup.sh
 ```
 
 The script will:
+
 1. Install required tools (CMake, SQLite, etc.)
 2. Download JUCE framework
 3. Build the project
@@ -45,6 +46,7 @@ open MIDIScaleDetector.xcodeproj
 ```
 
 **On first launch:**
+
 1. Click the **Scan** button
 2. Add your MIDI folders (e.g., `~/Music/MIDI Files`)
 3. Click **Start Scan**
@@ -53,6 +55,7 @@ open MIDIScaleDetector.xcodeproj
 ### 2. Using the Plugin
 
 **In Ableton Live:**
+
 1. Open Ableton Live
 2. Preferences → Plug-Ins → Rescan
 3. Create a MIDI track
@@ -60,6 +63,7 @@ open MIDIScaleDetector.xcodeproj
 5. Play or load a MIDI clip
 
 **In Logic Pro:**
+
 1. Open Logic Pro
 2. Create a Software Instrument track
 3. Click MIDI FX slot
@@ -122,6 +126,7 @@ open MIDIScaleDetector.xcodeproj
 ## Troubleshooting
 
 **Plugin not showing in DAW?**
+
 ```bash
 # Verify installation
 ls ~/Library/Audio/Plug-Ins/VST3/
@@ -131,6 +136,7 @@ ls ~/Library/Audio/Plug-Ins/Components/
 ```
 
 **Database errors?**
+
 ```bash
 # Reset database
 rm ~/Library/Application\ Support/MIDIScaleDetector/midi_library.db
@@ -139,6 +145,7 @@ rm ~/Library/Application\ Support/MIDIScaleDetector/midi_library.db
 ```
 
 **Build errors?**
+
 ```bash
 # Clean and rebuild
 rm -rf build
@@ -160,6 +167,7 @@ rm -rf build
 ## What's Next?
 
 Explore these features:
+
 - Key change detection
 - Chord progression analysis
 - Collection statistics

@@ -25,7 +25,7 @@ Advanced MIDI file management and musical scale detection application for macOS.
 ## Technology Stack
 
 - **Languages**: C++17, Swift 5
-- **Frameworks**: 
+- **Frameworks**:
   - JUCE (audio plugin framework)
   - SwiftUI (macOS UI)
   - CoreMIDI (MIDI handling)

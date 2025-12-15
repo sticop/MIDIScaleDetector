@@ -9,6 +9,7 @@ MIDI Scale Detector is an advanced tool for analyzing, organizing, and working w
 ### 1. Automatic Scale Detection
 
 The application analyzes MIDI files to automatically detect:
+
 - **Musical Key** (C, D, E, F, G, A, B and their sharps/flats)
 - **Scale Type** (Major, Minor, Dorian, Phrygian, Lydian, etc.)
 - **Confidence Level** (How certain the detection is)
@@ -18,6 +19,7 @@ The application analyzes MIDI files to automatically detect:
 ### 2. MIDI File Browser
 
 A fast, searchable interface to:
+
 - Browse all MIDI files on your system
 - Filter by key, scale, tempo, or duration
 - Search by filename
@@ -27,6 +29,7 @@ A fast, searchable interface to:
 ### 3. DAW Integration
 
 Use as a VST3 or AU plugin in:
+
 - Ableton Live
 - Logic Pro
 - FL Studio
@@ -51,10 +54,12 @@ Use as a VST3 or AU plugin in:
 The main window has three sections:
 
 1. **Sidebar** (left)
+
    - Navigate by key or scale
    - Access favorites
 
 2. **File List** (center)
+
    - View all files with their properties
    - Sort by any column
    - Select files to view details
@@ -68,15 +73,18 @@ The main window has three sections:
 #### Searching and Filtering
 
 **Search Bar:**
+
 - Type to search by filename
 - Results update in real-time
 
 **Filter Menu:**
+
 - Filter by specific key (e.g., "C", "G#")
 - Filter by scale type (e.g., "Major", "Minor")
 - Combine filters for precise results
 
 **Sidebar Filtering:**
+
 - Click any key or scale in sidebar
 - View only files matching that criteria
 
@@ -85,6 +93,7 @@ The main window has three sections:
 #### Installing the Plugin
 
 The plugin is automatically installed during build:
+
 - **VST3**: `~/Library/Audio/Plug-Ins/VST3/`
 - **AU**: `~/Library/Audio/Plug-Ins/Components/`
 
@@ -107,15 +116,18 @@ The plugin is automatically installed during build:
 **Transform Modes:**
 
 1. **Off (Pass Through)**
+
    - MIDI passes unchanged
    - Use for analysis only
 
 2. **Constrain**
+
    - Snaps notes to detected scale
    - Wrong notes are corrected automatically
    - Great for learning scales
 
 3. **Harmonize**
+
    - Adds harmony notes based on scale
    - Creates triads automatically
    - Instant chord generation
@@ -171,6 +183,7 @@ The plugin is automatically installed during build:
 ### Key Change Detection
 
 For longer MIDI files, the analyzer can detect key changes:
+
 - View key changes in the detail panel
 - See timestamps of modulations
 - Understand harmonic structure
@@ -178,6 +191,7 @@ For longer MIDI files, the analyzer can detect key changes:
 ### Chord Progression Analysis
 
 The Detail View shows detected chord progressions:
+
 - View common progressions (I-IV-V, etc.)
 - Understand harmonic movement
 - Learn from analyzed files
@@ -185,6 +199,7 @@ The Detail View shows detected chord progressions:
 ### Note Distribution Visualization
 
 The piano roll view shows:
+
 - Which notes are most common
 - Note density across octaves
 - Visual representation of scale usage
@@ -192,6 +207,7 @@ The piano roll view shows:
 ### Statistics
 
 View collection statistics:
+
 - Total files analyzed
 - Key distribution across library
 - Scale type popularity
@@ -216,6 +232,7 @@ View collection statistics:
 ### Real-Time Performance
 
 For best plugin performance:
+
 1. Use lower latency buffer sizes
 2. Disable features you're not using
 3. Freeze tracks when not editing
@@ -224,6 +241,7 @@ For best plugin performance:
 ### Learning Music Theory
 
 Use the tool to:
+
 1. Analyze famous songs
 2. Compare scales visually
 3. Experiment with transformations
@@ -232,6 +250,7 @@ Use the tool to:
 ## Keyboard Shortcuts
 
 **Standalone App:**
+
 - `⌘S` - Start new scan
 - `⌘I` - Import single MIDI file
 - `⌘F` - Focus search field
@@ -320,6 +339,7 @@ A: Currently supports standard 12-tone equal temperament.
 ## Credits
 
 Developed using:
+
 - JUCE Framework
 - SQLite Database
 - SwiftUI (macOS app)

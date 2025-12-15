@@ -5,16 +5,19 @@
 ### Required Software
 
 1. **Xcode 14+** (for macOS development)
+
    ```bash
    xcode-select --install
    ```
 
 2. **CMake 3.20+**
+
    ```bash
    brew install cmake
    ```
 
 3. **JUCE Framework 7.0+**
+
    ```bash
    cd MIDIScaleDetector
    git clone https://github.com/juce-framework/JUCE.git
@@ -300,6 +303,7 @@ See `.github/workflows/build.yml` for automated build configuration.
 ## Support
 
 For issues and questions:
+
 - GitHub Issues: [Link to repository issues]
 - Documentation: `Documentation/` folder
 - Email: [Support email]

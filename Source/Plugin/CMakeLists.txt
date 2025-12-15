@@ -7,16 +7,16 @@ juce_add_plugin(MIDIScaleDetectorPlugin
     PLUGIN_CODE Msdp
     FORMATS VST3 AU
     PRODUCT_NAME "MIDI Scale Detector"
-    
+
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT TRUE
     IS_MIDI_EFFECT TRUE
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
-    
+
     COPY_PLUGIN_AFTER_BUILD TRUE
-    VST3_COPY_DIR "~/Library/Audio/Plug-Ins/VST3"
-    AU_COPY_DIR "~/Library/Audio/Plug-Ins/Components"
+    VST3_COPY_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/VST3"
+    AU_COPY_DIR "$ENV{HOME}/Library/Audio/Plug-Ins/Components"
 )
 
 # Plugin sources

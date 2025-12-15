@@ -41,6 +41,7 @@ This document describes the technical architecture of the MIDI Scale Detector sy
 **Purpose**: Parse standard MIDI files (SMF) and extract musical events.
 
 **Key Features**:
+
 - Supports MIDI Format 0, 1, and 2
 - Extracts note on/off, tempo, time signature events
 - Converts MIDI ticks to absolute time
@@ -48,6 +49,7 @@ This document describes the technical architecture of the MIDI Scale Detector sy
 - Meta event parsing
 
 **Data Structures**:
+
 ```cpp
 struct MIDIEvent {
     uint32_t tick;
@@ -64,6 +66,7 @@ struct MIDIFile {
 ```
 
 **Algorithm**:
+
 1. Read file header (MThd chunk)
 2. Parse track headers (MTrk chunks)
 3. Decode variable-length delta times
@@ -77,12 +80,15 @@ struct MIDIFile {
 **Algorithm**: Krumhansl-Schmuckler Key-Finding
 
 **Process**:
+
 1. **Build Note Histogram**
+
    - Count note occurrences weighted by duration and velocity
    - Reduce to 12-tone pitch class histogram
    - Normalize to probability distribution
 
 2. **Correlate with Key Profiles**
+
    ```
    For each of 24 keys (12 major + 12 minor):
        Rotate histogram to test root
@@ -91,6 +97,7 @@ struct MIDIFile {
    ```
 
 3. **Select Best Match**
+
    - Key with highest correlation is primary key
    - Confidence = normalized correlation coefficient
 
@@ -100,10 +107,12 @@ struct MIDIFile {
    - Return alternatives above confidence threshold
 
 **Key Profiles** (Krumhansl-Schmuckler):
+
 - Major: [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88]
 - Minor: [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17]
 
 **Accuracy Factors**:
+
 - More notes = higher confidence
 - Tonal music = better results
 - Atonal/chromatic music = lower confidence
@@ -114,6 +123,7 @@ struct MIDIFile {
 **Purpose**: Recursively scan filesystem for MIDI files and manage indexing.
 
 **Features**:
+
 - Multi-threaded scanning
 - Incremental updates (only scan modified files)
 - Exclusion patterns
@@ -121,6 +131,7 @@ struct MIDIFile {
 - Error handling
 
 **Workflow**:
+
 ```
 1. Recursively traverse directories
 2. Filter for .mid/.midi files
@@ -138,6 +149,7 @@ struct MIDIFile {
 **Purpose**: Persistent storage of MIDI file metadata and analysis results.
 
 **Schema**:
+
 ```sql
 CREATE TABLE midi_files (
     id INTEGER PRIMARY KEY,
@@ -162,6 +174,7 @@ CREATE INDEX idx_scale ON midi_files(detected_scale);
 ```
 
 **Operations**:
+
 - Insert/Update/Delete files
 - Search with multiple criteria
 - Aggregate statistics (key distribution, etc.)
@@ -172,6 +185,7 @@ CREATE INDEX idx_scale ON midi_files(detected_scale);
 **Purpose**: Real-time MIDI processing as VST3/AU plugin.
 
 **JUCE Framework Integration**:
+
 - Inherits from `juce::AudioProcessor`
 - Implements MIDI effect interface
 - Provides parameter automation
@@ -185,11 +199,13 @@ CREATE INDEX idx_scale ON midi_files(detected_scale);
 4. **Arpeggiate**: Generate arpeggios
 
 **Real-time Pipeline**:
+
 ```
 MIDI Input → Scale Detection → Transformation → MIDI Output
 ```
 
 **Processing Block**:
+
 ```cpp
 void processBlock(AudioBuffer<float>& buffer, MidiBuffer& midi) {
     for each MIDI message:
@@ -206,18 +222,21 @@ void processBlock(AudioBuffer<float>& buffer, MidiBuffer& midi) {
 **Technology**: SwiftUI + AppKit
 
 **Architecture**:
+
 - MVVM pattern
 - `@StateObject` for app state
 - `@EnvironmentObject` for dependency injection
 - Combine for reactive updates
 
 **Views**:
+
 - **Sidebar**: Navigation by key/scale
 - **File List**: Table view with sorting/filtering
 - **Detail Panel**: Comprehensive file analysis
 - **Settings**: User preferences
 
 **C++ Bridge**:
+
 - Swift → C++ interop for core functionality
 - Objective-C++ wrapper layer
 - Async callbacks for long operations
@@ -267,16 +286,19 @@ DAW receives processed MIDI
 ### Optimization Strategies
 
 1. **MIDI Parsing**:
+
    - Memory-mapped file I/O
    - Single-pass parsing
    - Efficient variable-length decoding
 
 2. **Scale Detection**:
+
    - Pre-computed key profiles
    - Fast correlation algorithm
    - Cached results
 
 3. **Database**:
+
    - Indexed columns for common queries
    - Prepared statements
    - Batch operations
@@ -330,6 +352,7 @@ DAW receives processed MIDI
 ### Custom Analysis
 
 Extend `HarmonicAnalysis` with:
+
 - Additional metrics
 - Specialized detectors
 - Custom visualizations
@@ -358,12 +381,14 @@ Extend `HarmonicAnalysis` with:
 ## Build System
 
 **CMake** configuration:
+
 - Modular target structure
 - Platform-specific optimizations
 - Optional components
 - Test integration
 
 **Targets**:
+
 - `MIDIScaleDetectorCore`: Static library
 - `MIDIScaleDetectorPlugin`: VST3/AU plugin
 - `MIDIScaleDetectorApp`: Standalone app (Xcode)
@@ -394,16 +419,19 @@ Extend `HarmonicAnalysis` with:
 ### Planned Features
 
 1. **Machine Learning**:
+
    - Neural network for scale detection
    - Training on large MIDI corpus
    - Improved accuracy for complex harmony
 
 2. **Cloud Sync**:
+
    - iCloud database sync
    - Shared libraries
    - Collaborative features
 
 3. **Advanced Analysis**:
+
    - Modulation detection
    - Chord progression analysis
    - Style classification
