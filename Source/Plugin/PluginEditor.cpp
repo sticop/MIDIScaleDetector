@@ -164,7 +164,8 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p) : AudioProcessorEd
     fileCountLabel.setColour(juce::Label::textColourId, juce::Colours::black);
     addAndMakeVisible(fileCountLabel);
     
-    keyFilterCombo.addItem("Key", 1);
+    // Key filter - populated dynamically from detected scales
+    keyFilterCombo.addItem("All Keys", 1);
     keyFilterCombo.setSelectedId(1);
     keyFilterCombo.onChange = [this]() { filterFiles(); };
     addAndMakeVisible(keyFilterCombo);
@@ -188,13 +189,18 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p) : AudioProcessorEd
     };
     addAndMakeVisible(previewToggle);
     
+    // Sync toggle - sync playback to host tempo
+    syncToHostToggle.setToggleState(true, juce::dontSendNotification);
+    syncToHostToggle.setTooltip("Sync playback to DAW tempo");
+    addAndMakeVisible(syncToHostToggle);
+    
     transportSlider.setRange(0, 1, 0.01);
     transportSlider.setSliderStyle(juce::Slider::LinearHorizontal);
     transportSlider.setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
     addAndMakeVisible(transportSlider);
     
     setWantsKeyboardFocus(true);
-    startTimer(20);
+    startTimer(10);  // Faster timer for better tempo sync
     setSize(900, 550);
 }
 
@@ -233,6 +239,38 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
     }
 }
 
+// Tempo sync helpers
+double MIDIXplorerEditor::getHostBpm() {
+    if (auto* playHead = getAudioProcessor()->getPlayHead()) {
+        if (auto posInfo = playHead->getPosition()) {
+            if (auto bpm = posInfo->getBpm()) {
+                return *bpm;
+            }
+        }
+    }
+    return 120.0;  // Default BPM
+}
+
+double MIDIXplorerEditor::getHostBeatPosition() {
+    if (auto* playHead = getAudioProcessor()->getPlayHead()) {
+        if (auto posInfo = playHead->getPosition()) {
+            if (auto ppq = posInfo->getPpqPosition()) {
+                return *ppq;
+            }
+        }
+    }
+    return 0.0;
+}
+
+bool MIDIXplorerEditor::isHostPlaying() {
+    if (auto* playHead = getAudioProcessor()->getPlayHead()) {
+        if (auto posInfo = playHead->getPosition()) {
+            return posInfo->getIsPlaying();
+        }
+    }
+    return false;
+}
+
 void MIDIXplorerEditor::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour(0xFFECECEC));
     
@@ -245,6 +283,13 @@ void MIDIXplorerEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xFFCCCCCC));
     g.drawLine(150.0f, 0.0f, 150.0f, (float)getHeight(), 1.0f);
     g.drawLine(0.0f, 35.0f, (float)getWidth(), 35.0f, 1.0f);
+    
+    // Show current tempo if synced
+    if (syncToHostToggle.getToggleState()) {
+        g.setColour(juce::Colours::darkgrey);
+        g.setFont(juce::FontOptions(11.0f));
+        g.drawText(juce::String(lastHostBpm, 1) + " BPM", getWidth() - 80, 8, 70, 20, juce::Justification::right);
+    }
 }
 
 void MIDIXplorerEditor::resized() {
@@ -252,7 +297,8 @@ void MIDIXplorerEditor::resized() {
     
     auto topBar = area.removeFromTop(35);
     previewToggle.setBounds(topBar.removeFromLeft(80).reduced(4));
-    transportSlider.setBounds(topBar.removeFromLeft(150).reduced(4));
+    syncToHostToggle.setBounds(topBar.removeFromLeft(60).reduced(4));
+    transportSlider.setBounds(topBar.removeFromLeft(120).reduced(4));
     
     auto sidebar = area.removeFromLeft(150);
     addLibraryBtn.setBounds(sidebar.removeFromTop(25).reduced(5, 2));
@@ -271,19 +317,61 @@ void MIDIXplorerEditor::resized() {
 }
 
 void MIDIXplorerEditor::timerCallback() {
+    // Update host tempo
+    lastHostBpm = getHostBpm();
+    
     // Analyze files progressively
+    bool needsKeyUpdate = false;
     for (size_t i = 0; i < allFiles.size(); ++i) {
         if (!allFiles[i].analyzed) {
             analyzeFile(i);
+            needsKeyUpdate = true;
             filterFiles();
             break;
         }
     }
     
-    // Handle playback with looping
+    // Update key filter when new keys are detected
+    if (needsKeyUpdate) {
+        updateKeyFilterFromDetectedScales();
+    }
+    
+    // Handle playback with looping and tempo sync
     if (isPlaying && pluginProcessor && previewToggle.getToggleState()) {
-        double elapsed = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackStartTime;
+        double elapsed;
         
+        if (syncToHostToggle.getToggleState() && isHostPlaying()) {
+            // Sync to host: calculate elapsed time based on host beat position
+            double currentBeat = getHostBeatPosition();
+            double beatsElapsed = currentBeat - playbackBeatPosition;
+            
+            // Handle looping - if we've gone backwards, we looped
+            if (beatsElapsed < 0) {
+                beatsElapsed = 0;
+                playbackBeatPosition = currentBeat;
+                playbackNoteIndex = 0;
+            }
+            
+            // Convert beats to seconds using host tempo
+            elapsed = (beatsElapsed / lastHostBpm) * 60.0;
+            
+            // Scale MIDI file timing to match host tempo
+            double tempoRatio = midiFileBpm / lastHostBpm;
+            elapsed *= tempoRatio;
+        } else {
+            // Free-running: use wall clock time, scaled by tempo ratio if sync is on
+            double rawElapsed = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackStartTime;
+            
+            if (syncToHostToggle.getToggleState()) {
+                // Scale timing based on current host tempo
+                double tempoRatio = lastHostBpm / midiFileBpm;
+                elapsed = rawElapsed * tempoRatio;
+            } else {
+                elapsed = rawElapsed;
+            }
+        }
+        
+        // Send MIDI events
         while (playbackNoteIndex < playbackSequence.getNumEvents()) {
             auto* evt = playbackSequence.getEventPointer(playbackNoteIndex);
             if (evt->message.getTimeStamp() <= elapsed) {
@@ -307,6 +395,7 @@ void MIDIXplorerEditor::timerCallback() {
                 pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
             }
             playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+            playbackBeatPosition = getHostBeatPosition();
             playbackNoteIndex = 0;
         }
     }
@@ -335,11 +424,12 @@ void MIDIXplorerEditor::addLibrary() {
 
 void MIDIXplorerEditor::scanLibraries() {
     allFiles.clear();
+    detectedKeys.clear();
     for (size_t i = 0; i < libraries.size(); ++i) {
         scanLibrary(i);
     }
     filterFiles();
-    populateKeyFilter();
+    updateKeyFilterFromDetectedScales();
 }
 
 void MIDIXplorerEditor::scanLibrary(size_t index) {
@@ -381,6 +471,11 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         if (midiFile.readFrom(stream)) {
             midiFile.convertTimestampTicksToSeconds();
             info.key = detectKey(midiFile);
+            
+            // Add to detected keys list
+            if (info.key != "?" && !detectedKeys.contains(info.key)) {
+                detectedKeys.add(info.key);
+            }
         } else {
             info.key = "?";
         }
@@ -420,24 +515,44 @@ void MIDIXplorerEditor::filterFiles() {
     fileCountLabel.setText("Name (" + juce::String((int)filteredFiles.size()) + " files)", juce::dontSendNotification);
 }
 
-void MIDIXplorerEditor::populateKeyFilter() {
-    keyFilterCombo.clear();
-    keyFilterCombo.addItem("Key", 1);
+void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
+    int currentSelection = keyFilterCombo.getSelectedId();
+    juce::String currentText = keyFilterCombo.getText();
     
-    juce::StringArray keys;
-    for (const auto& file : allFiles) {
-        if (file.analyzed && file.key != "?" && !keys.contains(file.key)) {
-            keys.add(file.key);
+    keyFilterCombo.clear();
+    keyFilterCombo.addItem("All Keys", 1);
+    
+    // Sort keys: Major keys first, then minor
+    juce::StringArray majorKeys, minorKeys;
+    for (const auto& key : detectedKeys) {
+        if (key.contains("Major")) {
+            majorKeys.add(key);
+        } else if (key.contains("min")) {
+            minorKeys.add(key);
         }
     }
-    keys.sort(false);
+    majorKeys.sort(false);
+    minorKeys.sort(false);
     
     int id = 2;
-    for (const auto& key : keys) {
+    for (const auto& key : majorKeys) {
+        keyFilterCombo.addItem(key, id++);
+    }
+    for (const auto& key : minorKeys) {
         keyFilterCombo.addItem(key, id++);
     }
     
-    keyFilterCombo.setSelectedId(1);
+    // Restore selection
+    if (currentSelection > 1) {
+        // Try to find the same key text
+        for (int i = 0; i < keyFilterCombo.getNumItems(); ++i) {
+            if (keyFilterCombo.getItemText(i) == currentText) {
+                keyFilterCombo.setSelectedId(keyFilterCombo.getItemId(i), juce::dontSendNotification);
+                return;
+            }
+        }
+    }
+    keyFilterCombo.setSelectedId(1, juce::dontSendNotification);
 }
 
 void MIDIXplorerEditor::playSelectedFile() {
@@ -455,6 +570,24 @@ void MIDIXplorerEditor::playSelectedFile() {
     
     if (!stream.openedOk() || !currentMidiFile.readFrom(stream)) return;
     
+    // Get original tempo from MIDI file
+    midiFileBpm = 120.0;  // Default
+    midiFileTicksPerQuarter = (double)currentMidiFile.getTimeFormat();
+    
+    // Look for tempo events
+    for (int t = 0; t < currentMidiFile.getNumTracks(); ++t) {
+        auto* track = currentMidiFile.getTrack(t);
+        if (track) {
+            for (int i = 0; i < track->getNumEvents(); ++i) {
+                auto& msg = track->getEventPointer(i)->message;
+                if (msg.isTempoMetaEvent()) {
+                    midiFileBpm = 60000000.0 / msg.getTempoSecondsPerQuarterNote() / 1000000.0;
+                    break;
+                }
+            }
+        }
+    }
+    
     currentMidiFile.convertTimestampTicksToSeconds();
     
     playbackSequence.clear();
@@ -470,6 +603,7 @@ void MIDIXplorerEditor::playSelectedFile() {
     
     isPlaying = true;
     playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+    playbackBeatPosition = getHostBeatPosition();
     playbackNoteIndex = 0;
     transportSlider.setValue(0, juce::dontSendNotification);
 }

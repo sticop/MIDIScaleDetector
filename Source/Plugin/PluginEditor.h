@@ -101,16 +101,24 @@ private:
     std::unique_ptr<DraggableListBox> fileListBox;
     
     juce::ToggleButton previewToggle{"Preview"};
+    juce::ToggleButton syncToHostToggle{"Sync"};
     juce::Slider transportSlider;
     
     std::vector<Library> libraries;
     std::vector<MIDIFileInfo> allFiles;
     std::vector<MIDIFileInfo> filteredFiles;
+    juce::StringArray detectedKeys;  // All unique keys found in scanned files
     
     int selectedFileIndex = -1;
     bool isPlaying = false;
     double playbackStartTime = 0;
+    double playbackBeatPosition = 0;  // For host sync
     int playbackNoteIndex = 0;
+    
+    // Tempo sync
+    double lastHostBpm = 120.0;
+    double midiFileBpm = 120.0;  // Original tempo of MIDI file
+    double midiFileTicksPerQuarter = 480.0;
     
     juce::MidiFile currentMidiFile;
     juce::MidiMessageSequence playbackSequence;
@@ -123,11 +131,16 @@ private:
     void scanLibrary(size_t index);
     void analyzeFile(size_t index);
     void filterFiles();
-    void populateKeyFilter();
+    void updateKeyFilterFromDetectedScales();
     void playSelectedFile();
     void stopPlayback();
     void revealInFinder(const juce::String& path);
     void selectAndPreview(int row);
+    
+    // Tempo helpers
+    double getHostBpm();
+    double getHostBeatPosition();
+    bool isHostPlaying();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MIDIXplorerEditor)
 };
