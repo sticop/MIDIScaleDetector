@@ -24,6 +24,8 @@ target_sources(MIDIXplorerPlugin
     PRIVATE
         MIDIScalePlugin.cpp
         MIDIScalePlugin.h
+        PluginEditor.cpp
+        PluginEditor.h
 )
 
 # Link libraries

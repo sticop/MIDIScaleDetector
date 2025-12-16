@@ -1,4 +1,5 @@
 #include "MIDIScalePlugin.h"
+#include "PluginEditor.h"
 
 namespace MIDIScaleDetector {
 
@@ -97,7 +98,7 @@ void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 }
 
 juce::AudioProcessorEditor* MIDIScalePlugin::createEditor() {
-    return new juce::GenericAudioProcessorEditor(*this);
+    return new ::MIDIXplorerEditor(*this);
 }
 
 void MIDIScalePlugin::getStateInformation(juce::MemoryBlock& destData) {
