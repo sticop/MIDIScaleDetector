@@ -1,116 +1,96 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_basics/juce_gui_basics.h>
-#include <juce_audio_utils/juce_audio_utils.h>
+#include <juce_gui_extra/juce_gui_extra.h>
+#include <juce_audio_formats/juce_audio_formats.h>
 
-class MIDIXplorerEditor : public juce::AudioProcessorEditor,
-                          public juce::Timer {
+class MIDIXplorerEditor : public juce::AudioProcessorEditor, private juce::Timer {
 public:
-    explicit MIDIXplorerEditor(juce::AudioProcessor& processor);
+    explicit MIDIXplorerEditor(juce::AudioProcessor& p);
     ~MIDIXplorerEditor() override;
-    
-    void paint(juce::Graphics&) override;
+
+    void paint(juce::Graphics& g) override;
     void resized() override;
     void timerCallback() override;
-    
-private:
-    // File info structure
+
+    struct Library {
+        juce::String name;
+        juce::String path;
+        bool enabled = true;
+        int fileCount = 0;
+        bool isScanning = false;
+    };
+
     struct MIDIFileInfo {
         juce::String fileName;
         juce::String fullPath;
-        juce::String key = "Analyzing...";
-        juce::String scale = "";
-        int noteCount = 0;
-        double duration = 0.0;
+        juce::String key;
+        juce::String libraryName;
         bool analyzed = false;
     };
-    
-    juce::Label titleLabel;
-    juce::Label statusLabel;
-    juce::TextButton addFolderBtn;
-    juce::TextButton refreshBtn;
-    juce::TextButton playBtn;
-    juce::TextButton stopBtn;
-    juce::ListBox fileListBox;
-    
-    // Detail panel
-    juce::Label detailTitle;
-    juce::Label detailKey;
-    juce::Label detailNotes;
-    juce::Label detailDuration;
-    
-    // File chooser
-    std::unique_ptr<juce::FileChooser> fileChooser;
-    
-    // Folders to scan
-    juce::StringArray scanFolders;
-    
-    // File list
-    std::vector<MIDIFileInfo> midiFiles;
-    int selectedIndex = -1;
-    
-    // MIDI playback
-    juce::MidiFile currentMidiFile;
-    juce::MidiMessageSequence playbackSequence;
-    double playbackStartTime = 0;
-    int playbackNoteIndex = 0;
-    bool isPlaying = false;
-    std::unique_ptr<juce::MidiOutput> midiOutput;
-    
-    // List model
+
+private:
+    class LibraryListModel : public juce::ListBoxModel {
+    public:
+        explicit LibraryListModel(MIDIXplorerEditor& o) : owner(o) {}
+        int getNumRows() override { return (int)owner.libraries.size(); }
+        void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) override;
+        void listBoxItemClicked(int row, const juce::MouseEvent& e) override;
+    private:
+        MIDIXplorerEditor& owner;
+    };
+
     class FileListModel : public juce::ListBoxModel {
     public:
+        explicit FileListModel(MIDIXplorerEditor& o) : owner(o) {}
+        int getNumRows() override { return (int)owner.filteredFiles.size(); }
+        void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) override;
+        void selectedRowsChanged(int lastRowSelected) override;
+        juce::var getDragSourceDescription(const juce::SparseSet<int>& selectedRows) override;
+    private:
         MIDIXplorerEditor& owner;
-        FileListModel(MIDIXplorerEditor& o) : owner(o) {}
-        
-        int getNumRows() override { return (int)owner.midiFiles.size(); }
-        
-        void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) override {
-            if (row < 0 || row >= (int)owner.midiFiles.size()) return;
-            
-            auto& file = owner.midiFiles[(size_t)row];
-            
-            // Background
-            if (selected) g.fillAll(juce::Colour(0xFF3A7BD5));
-            else if (row % 2 == 0) g.fillAll(juce::Colour(0xFF2A2A2A));
-            else g.fillAll(juce::Colour(0xFF252525));
-            
-            // File name
-            g.setColour(juce::Colours::white);
-            g.drawText(file.fileName, 10, 0, w - 200, h, juce::Justification::left);
-            
-            // Key/Scale
-            if (file.analyzed) {
-                g.setColour(juce::Colour(0xFF8AB4F8));
-                g.drawText(file.key + " " + file.scale, w - 180, 0, 100, h, juce::Justification::centred);
-                
-                // Status indicator
-                g.setColour(juce::Colours::green);
-                g.fillEllipse((float)(w - 70), (float)(h/2 - 5), 10.0f, 10.0f);
-            } else {
-                g.setColour(juce::Colours::grey);
-                g.drawText("Analyzing...", w - 180, 0, 100, h, juce::Justification::centred);
-                
-                // Status indicator
-                g.setColour(juce::Colours::orange);
-                g.fillEllipse((float)(w - 70), (float)(h/2 - 5), 10.0f, 10.0f);
-            }
-        }
-        
-        void selectedRowsChanged(int lastRowSelected) override {
-            owner.onFileSelected(lastRowSelected);
-        }
     };
-    std::unique_ptr<FileListModel> listModel;
+
+    std::unique_ptr<LibraryListModel> libraryModel;
+    std::unique_ptr<FileListModel> fileModel;
+
+    juce::TextButton addLibraryBtn{"+ Add Library"};
+    juce::Label librariesLabel;
+    juce::ListBox libraryListBox{"Libraries"};
     
-    void addFolder();
-    void scanForMidiFiles();
+    juce::Label fileCountLabel;
+    juce::ComboBox keyFilterCombo;
+    juce::TextEditor searchBox;
+    juce::ListBox fileListBox{"Files"};
+    
+    juce::TextButton playBtn, stopBtn;
+    juce::Slider transportSlider;
+    
+    std::vector<Library> libraries;
+    std::vector<MIDIFileInfo> allFiles;
+    std::vector<MIDIFileInfo> filteredFiles;
+    
+    int selectedFileIndex = -1;
+    bool isPlaying = false;
+    double playbackStartTime = 0;
+    int playbackNoteIndex = 0;
+    
+    juce::MidiFile currentMidiFile;
+    juce::MidiMessageSequence playbackSequence;
+    std::unique_ptr<juce::MidiOutput> midiOutput;
+    std::unique_ptr<juce::FileChooser> fileChooser;
+    
+    void addLibrary();
+    void scanLibraries();
+    void scanLibrary(size_t index);
     void analyzeFile(size_t index);
-    void onFileSelected(int index);
+    void filterFiles();
+    void populateKeyFilter();
     void playSelectedFile();
     void stopPlayback();
-    void updateDetailPanel();
-    
+    void revealInFinder(const juce::String& path);
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MIDIXplorerEditor)
 };
