@@ -63,7 +63,7 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
         g.drawText("...", w - 45, 0, 40, h, juce::Justification::right);
     } else {
         g.setColour(juce::Colours::grey);
-        g.drawText(juce::String(lib.fileCount) + " files", w - 50, 0, 45, h, juce::Justification::right);
+        g.drawText(juce::String(lib.fileCount), w - 40, 0, 35, h, juce::Justification::right);
     }
 }
 
@@ -113,6 +113,21 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
 
 void MIDIXplorerEditor::FileListModel::selectedRowsChanged(int lastRowSelected) {
     owner.selectedFileIndex = lastRowSelected;
+    if (owner.previewToggle.getToggleState() && lastRowSelected >= 0) {
+        owner.playSelectedFile();
+    }
+}
+
+void MIDIXplorerEditor::FileListModel::listBoxItemClicked(int row, const juce::MouseEvent& e) {
+    if (e.mods.isRightButtonDown() && row >= 0 && row < (int)owner.filteredFiles.size()) {
+        juce::PopupMenu menu;
+        menu.addItem(1, "Reveal in Finder");
+        menu.showMenuAsync(juce::PopupMenu::Options(), [this, row](int result) {
+            if (result == 1) {
+                owner.revealInFinder(owner.filteredFiles[(size_t)row].fullPath);
+            }
+        });
+    }
 }
 
 juce::var MIDIXplorerEditor::FileListModel::getDragSourceDescription(const juce::SparseSet<int>& selectedRows) {
@@ -126,11 +141,11 @@ juce::var MIDIXplorerEditor::FileListModel::getDragSourceDescription(const juce:
 
 // Main Editor
 MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p) : AudioProcessorEditor(&p) {
-    // Get reference to our plugin processor for MIDI output
     pluginProcessor = dynamic_cast<MIDIScaleDetector::MIDIScalePlugin*>(&p);
     
     libraryModel = std::make_unique<LibraryListModel>(*this);
     fileModel = std::make_unique<FileListModel>(*this);
+    fileListBox = std::make_unique<DraggableListBox>("Files", *this);
     
     addLibraryBtn.onClick = [this]() { addLibrary(); };
     addAndMakeVisible(addLibraryBtn);
@@ -145,7 +160,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p) : AudioProcessorEd
     libraryListBox.setColour(juce::ListBox::backgroundColourId, juce::Colours::white);
     addAndMakeVisible(libraryListBox);
     
-    fileCountLabel.setText("Name (0 files / 0 files shown)", juce::dontSendNotification);
+    fileCountLabel.setText("Name (0 files)", juce::dontSendNotification);
     fileCountLabel.setColour(juce::Label::textColourId, juce::Colours::black);
     addAndMakeVisible(fileCountLabel);
     
@@ -158,31 +173,64 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p) : AudioProcessorEd
     searchBox.onTextChange = [this]() { filterFiles(); };
     addAndMakeVisible(searchBox);
     
-    fileListBox.setModel(fileModel.get());
-    fileListBox.setRowHeight(20);
-    fileListBox.setColour(juce::ListBox::backgroundColourId, juce::Colours::white);
-    addAndMakeVisible(fileListBox);
+    fileListBox->setModel(fileModel.get());
+    fileListBox->setRowHeight(20);
+    fileListBox->setColour(juce::ListBox::backgroundColourId, juce::Colours::white);
+    addAndMakeVisible(fileListBox.get());
     
-    playBtn.setButtonText(">");
-    playBtn.onClick = [this]() { playSelectedFile(); };
-    addAndMakeVisible(playBtn);
-    
-    stopBtn.setButtonText("[]");
-    stopBtn.onClick = [this]() { stopPlayback(); };
-    addAndMakeVisible(stopBtn);
+    previewToggle.setToggleState(false, juce::dontSendNotification);
+    previewToggle.onClick = [this]() {
+        if (!previewToggle.getToggleState()) {
+            stopPlayback();
+        } else if (selectedFileIndex >= 0) {
+            playSelectedFile();
+        }
+    };
+    addAndMakeVisible(previewToggle);
     
     transportSlider.setRange(0, 1, 0.01);
     transportSlider.setSliderStyle(juce::Slider::LinearHorizontal);
     transportSlider.setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
     addAndMakeVisible(transportSlider);
     
-    startTimer(20); // Faster timer for smoother MIDI playback
+    setWantsKeyboardFocus(true);
+    startTimer(20);
     setSize(900, 550);
 }
 
 MIDIXplorerEditor::~MIDIXplorerEditor() {
     stopTimer();
     stopPlayback();
+}
+
+bool MIDIXplorerEditor::keyPressed(const juce::KeyPress& key) {
+    if (key == juce::KeyPress::upKey || key == juce::KeyPress::downKey) {
+        int newRow = selectedFileIndex;
+        
+        if (key == juce::KeyPress::upKey) {
+            newRow = std::max(0, selectedFileIndex - 1);
+        } else if (key == juce::KeyPress::downKey) {
+            newRow = std::min((int)filteredFiles.size() - 1, selectedFileIndex + 1);
+        }
+        
+        if (newRow != selectedFileIndex && newRow >= 0 && newRow < (int)filteredFiles.size()) {
+            selectAndPreview(newRow);
+            return true;
+        }
+    }
+    return false;
+}
+
+void MIDIXplorerEditor::selectAndPreview(int row) {
+    if (row < 0 || row >= (int)filteredFiles.size()) return;
+    
+    selectedFileIndex = row;
+    fileListBox->selectRow(row);
+    fileListBox->scrollToEnsureRowIsOnscreen(row);
+    
+    if (previewToggle.getToggleState()) {
+        playSelectedFile();
+    }
 }
 
 void MIDIXplorerEditor::paint(juce::Graphics& g) {
@@ -203,9 +251,8 @@ void MIDIXplorerEditor::resized() {
     auto area = getLocalBounds();
     
     auto topBar = area.removeFromTop(35);
-    playBtn.setBounds(topBar.removeFromLeft(30).reduced(4));
-    stopBtn.setBounds(topBar.removeFromLeft(30).reduced(4));
-    transportSlider.setBounds(topBar.removeFromLeft(120).reduced(4));
+    previewToggle.setBounds(topBar.removeFromLeft(80).reduced(4));
+    transportSlider.setBounds(topBar.removeFromLeft(150).reduced(4));
     
     auto sidebar = area.removeFromLeft(150);
     addLibraryBtn.setBounds(sidebar.removeFromTop(25).reduced(5, 2));
@@ -216,11 +263,11 @@ void MIDIXplorerEditor::resized() {
     libraryListBox.setBounds(sidebar.reduced(2));
     
     auto header = area.removeFromTop(25);
-    fileCountLabel.setBounds(header.removeFromLeft(250).reduced(5, 0));
+    fileCountLabel.setBounds(header.removeFromLeft(200).reduced(5, 0));
     keyFilterCombo.setBounds(header.removeFromRight(100).reduced(2));
     searchBox.setBounds(header.removeFromRight(150).reduced(2));
     
-    fileListBox.setBounds(area.reduced(2));
+    fileListBox->setBounds(area.reduced(2));
 }
 
 void MIDIXplorerEditor::timerCallback() {
@@ -233,14 +280,13 @@ void MIDIXplorerEditor::timerCallback() {
         }
     }
     
-    // Handle playback - send MIDI through processor
-    if (isPlaying && pluginProcessor) {
+    // Handle playback with looping
+    if (isPlaying && pluginProcessor && previewToggle.getToggleState()) {
         double elapsed = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackStartTime;
         
         while (playbackNoteIndex < playbackSequence.getNumEvents()) {
             auto* evt = playbackSequence.getEventPointer(playbackNoteIndex);
             if (evt->message.getTimeStamp() <= elapsed) {
-                // Send through the processor so it goes to the DAW's MIDI output
                 pluginProcessor->addMidiMessage(evt->message);
                 playbackNoteIndex++;
             } else {
@@ -249,15 +295,19 @@ void MIDIXplorerEditor::timerCallback() {
         }
         
         // Update transport slider
-        if (playbackSequence.getNumEvents() > 0) {
-            double totalTime = playbackSequence.getEndTime();
-            if (totalTime > 0) {
-                transportSlider.setValue(elapsed / totalTime, juce::dontSendNotification);
-            }
+        double totalTime = playbackSequence.getEndTime();
+        if (totalTime > 0) {
+            double progress = std::fmod(elapsed, totalTime) / totalTime;
+            transportSlider.setValue(progress, juce::dontSendNotification);
         }
         
+        // Loop when finished
         if (playbackNoteIndex >= playbackSequence.getNumEvents()) {
-            stopPlayback();
+            for (int ch = 1; ch <= 16; ++ch) {
+                pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+            }
+            playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+            playbackNoteIndex = 0;
         }
     }
 }
@@ -366,9 +416,8 @@ void MIDIXplorerEditor::filterFiles() {
         filteredFiles.push_back(file);
     }
     
-    fileListBox.updateContent();
-    fileCountLabel.setText("Name (" + juce::String((int)filteredFiles.size()) + " files / " + 
-                           juce::String((int)allFiles.size()) + " files shown)", juce::dontSendNotification);
+    fileListBox->updateContent();
+    fileCountLabel.setText("Name (" + juce::String((int)filteredFiles.size()) + " files)", juce::dontSendNotification);
 }
 
 void MIDIXplorerEditor::populateKeyFilter() {
@@ -395,7 +444,11 @@ void MIDIXplorerEditor::playSelectedFile() {
     if (selectedFileIndex < 0 || selectedFileIndex >= (int)filteredFiles.size()) return;
     if (!pluginProcessor) return;
     
-    stopPlayback();
+    if (isPlaying) {
+        for (int ch = 1; ch <= 16; ++ch) {
+            pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+        }
+    }
     
     juce::File file(filteredFiles[(size_t)selectedFileIndex].fullPath);
     juce::FileInputStream stream(file);
@@ -423,7 +476,6 @@ void MIDIXplorerEditor::playSelectedFile() {
 
 void MIDIXplorerEditor::stopPlayback() {
     if (isPlaying && pluginProcessor) {
-        // Send all notes off through the processor
         for (int ch = 1; ch <= 16; ++ch) {
             pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
         }

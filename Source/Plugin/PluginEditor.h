@@ -6,12 +6,13 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 
-// Forward declaration
 namespace MIDIScaleDetector {
     class MIDIScalePlugin;
 }
 
-class MIDIXplorerEditor : public juce::AudioProcessorEditor, private juce::Timer {
+class MIDIXplorerEditor : public juce::AudioProcessorEditor, 
+                          private juce::Timer,
+                          public juce::DragAndDropContainer {
 public:
     explicit MIDIXplorerEditor(juce::AudioProcessor& p);
     ~MIDIXplorerEditor() override;
@@ -19,6 +20,7 @@ public:
     void paint(juce::Graphics& g) override;
     void resized() override;
     void timerCallback() override;
+    bool keyPressed(const juce::KeyPress& key) override;
 
     struct Library {
         juce::String name;
@@ -54,8 +56,36 @@ private:
         void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) override;
         void selectedRowsChanged(int lastRowSelected) override;
         juce::var getDragSourceDescription(const juce::SparseSet<int>& selectedRows) override;
+        void listBoxItemClicked(int row, const juce::MouseEvent& e) override;
     private:
         MIDIXplorerEditor& owner;
+    };
+
+    // Custom ListBox for external drag and drop
+    class DraggableListBox : public juce::ListBox {
+    public:
+        DraggableListBox(const juce::String& name, MIDIXplorerEditor& o) 
+            : juce::ListBox(name), owner(o) {}
+        
+        void mouseDrag(const juce::MouseEvent& e) override {
+            if (e.getDistanceFromDragStart() > 5 && !isDragging) {
+                int row = getRowContainingPosition(e.x, e.y);
+                if (row >= 0 && row < (int)owner.filteredFiles.size()) {
+                    auto file = juce::File(owner.filteredFiles[(size_t)row].fullPath);
+                    if (file.existsAsFile()) {
+                        isDragging = true;
+                        juce::StringArray files;
+                        files.add(file.getFullPathName());
+                        juce::DragAndDropContainer::performExternalDragDropOfFiles(files, false);
+                        isDragging = false;
+                    }
+                }
+            }
+            juce::ListBox::mouseDrag(e);
+        }
+    private:
+        MIDIXplorerEditor& owner;
+        bool isDragging = false;
     };
 
     std::unique_ptr<LibraryListModel> libraryModel;
@@ -68,9 +98,9 @@ private:
     juce::Label fileCountLabel;
     juce::ComboBox keyFilterCombo;
     juce::TextEditor searchBox;
-    juce::ListBox fileListBox{"Files"};
+    std::unique_ptr<DraggableListBox> fileListBox;
     
-    juce::TextButton playBtn, stopBtn;
+    juce::ToggleButton previewToggle{"Preview"};
     juce::Slider transportSlider;
     
     std::vector<Library> libraries;
@@ -86,7 +116,6 @@ private:
     juce::MidiMessageSequence playbackSequence;
     std::unique_ptr<juce::FileChooser> fileChooser;
     
-    // Reference to our plugin processor
     MIDIScaleDetector::MIDIScalePlugin* pluginProcessor = nullptr;
     
     void addLibrary();
@@ -98,6 +127,7 @@ private:
     void playSelectedFile();
     void stopPlayback();
     void revealInFinder(const juce::String& path);
+    void selectAndPreview(int row);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MIDIXplorerEditor)
 };
