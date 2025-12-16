@@ -5,6 +5,7 @@
 #include "../Core/MIDIParser/MIDIParser.h"
 #include "../Core/ScaleDetector/ScaleDetector.h"
 #include "../Core/Database/Database.h"
+#include <mutex>
 
 namespace MIDIScaleDetector {
 
@@ -58,17 +59,27 @@ public:
     void setTransformMode(TransformMode mode) { transformMode = mode; }
     TransformMode getTransformMode() const { return transformMode; }
 
+    // MIDI playback from editor - thread-safe queue
+    void addMidiMessage(const juce::MidiMessage& msg);
+    void clearMidiQueue();
+    double getSampleRate() const { return currentSampleRate; }
+
 private:
     ScaleDetector detector;
     Scale currentScale;
 
     bool constrainToScale;
     TransformMode transformMode;
+    double currentSampleRate = 44100.0;
 
     // MIDI processing
     int constrainNoteToScale(int midiNote);
     std::vector<int> harmonizeNote(int midiNote);
     std::vector<int> arpeggiateNote(int midiNote);
+
+    // MIDI queue for playback from editor
+    std::vector<juce::MidiMessage> midiQueue;
+    std::mutex midiQueueMutex;
 
     // Parameters
     juce::AudioParameterFloat* scaleConfidence;

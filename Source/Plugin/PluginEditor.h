@@ -6,6 +6,11 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 
+// Forward declaration
+namespace MIDIScaleDetector {
+    class MIDIScalePlugin;
+}
+
 class MIDIXplorerEditor : public juce::AudioProcessorEditor, private juce::Timer {
 public:
     explicit MIDIXplorerEditor(juce::AudioProcessor& p);
@@ -79,8 +84,10 @@ private:
     
     juce::MidiFile currentMidiFile;
     juce::MidiMessageSequence playbackSequence;
-    std::unique_ptr<juce::MidiOutput> midiOutput;
     std::unique_ptr<juce::FileChooser> fileChooser;
+    
+    // Reference to our plugin processor
+    MIDIScaleDetector::MIDIScalePlugin* pluginProcessor = nullptr;
     
     void addLibrary();
     void scanLibraries();

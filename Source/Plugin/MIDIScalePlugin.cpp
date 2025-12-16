@@ -27,19 +27,38 @@ MIDIScalePlugin::MIDIScalePlugin()
 
 MIDIScalePlugin::~MIDIScalePlugin() {}
 
-void MIDIScalePlugin::prepareToPlay(double sampleRate, int samplesPerBlock) {
-    // Initialize if needed
+void MIDIScalePlugin::prepareToPlay(double sampleRate, int /*samplesPerBlock*/) {
+    currentSampleRate = sampleRate;
 }
 
 void MIDIScalePlugin::releaseResources() {
-    // Cleanup
+    clearMidiQueue();
+}
+
+void MIDIScalePlugin::addMidiMessage(const juce::MidiMessage& msg) {
+    std::lock_guard<std::mutex> lock(midiQueueMutex);
+    midiQueue.push_back(msg);
+}
+
+void MIDIScalePlugin::clearMidiQueue() {
+    std::lock_guard<std::mutex> lock(midiQueueMutex);
+    midiQueue.clear();
 }
 
 void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) {
     buffer.clear();
 
+    // First, add any queued MIDI messages from the editor (file playback)
+    {
+        std::lock_guard<std::mutex> lock(midiQueueMutex);
+        for (const auto& msg : midiQueue) {
+            midiMessages.addEvent(msg, 0);
+        }
+        midiQueue.clear();
+    }
+
     if (transformMode == TransformMode::Off) {
-        return; // Pass through
+        return; // Pass through with any queued messages
     }
 
     juce::MidiBuffer processedMidi;
@@ -76,7 +95,7 @@ void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                     for (size_t i = 0; i < arpNotes.size(); ++i) {
                         processedMidi.addEvent(
                             juce::MidiMessage::noteOn(channel, arpNotes[i], (juce::uint8)velocity),
-                            metadata.samplePosition + i * 100);
+                            metadata.samplePosition + (int)(i * 100));
                     }
                     break;
                 }
@@ -86,10 +105,8 @@ void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                     break;
             }
         } else if (message.isNoteOff()) {
-            // Handle note off - may need to turn off harmonized notes too
             processedMidi.addEvent(message, metadata.samplePosition);
         } else {
-            // Pass through other MIDI messages
             processedMidi.addEvent(message, metadata.samplePosition);
         }
     }
@@ -129,7 +146,6 @@ void MIDIScalePlugin::loadMIDIFile(const juce::File& file) {
         HarmonicAnalysis analysis = detector.analyze(midiFile);
         currentScale = analysis.primaryScale;
 
-        // Update parameters
         rootNote->setValueNotifyingHost(static_cast<float>(currentScale.root) / 11.0f);
         scaleConfidence->setValueNotifyingHost(static_cast<float>(currentScale.confidence));
     }
@@ -144,7 +160,6 @@ int MIDIScalePlugin::constrainNoteToScale(int midiNote) {
     int pitchClass = midiNote % 12;
     int rootPitch = static_cast<int>(currentScale.root);
 
-    // Find closest note in scale
     int minDist = 12;
     int closestNote = midiNote;
 
@@ -166,13 +181,11 @@ std::vector<int> MIDIScalePlugin::harmonizeNote(int midiNote) {
     notes.push_back(midiNote);
 
     if (currentScale.intervals.size() >= 3) {
-        // Add third
         int third = constrainNoteToScale(midiNote + 4);
         if (third != midiNote) {
             notes.push_back(third);
         }
 
-        // Add fifth
         int fifth = constrainNoteToScale(midiNote + 7);
         if (fifth != midiNote && fifth != third) {
             notes.push_back(fifth);
@@ -193,7 +206,6 @@ std::vector<int> MIDIScalePlugin::arpeggiateNote(int midiNote) {
     int octave = midiNote / 12;
     int rootPitch = static_cast<int>(currentScale.root);
 
-    // Create arpeggio from scale intervals
     for (size_t i = 0; i < std::min(size_t(4), currentScale.intervals.size()); ++i) {
         int note = octave * 12 + (rootPitch + currentScale.intervals[i]) % 12;
         notes.push_back(note);
@@ -204,7 +216,6 @@ std::vector<int> MIDIScalePlugin::arpeggiateNote(int midiNote) {
 
 } // namespace MIDIScaleDetector
 
-// JUCE plugin creation
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() {
     return new MIDIScaleDetector::MIDIScalePlugin();
 }
