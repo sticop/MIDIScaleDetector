@@ -1,63 +1,23 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @State private var selectedSidebar: SidebarItem = .library
+    @FocusState private var isFileListFocused: Bool
 
     var body: some View {
         NavigationView {
             // Sidebar
-            List(selection: $selectedSidebar) {
-                Section("Library") {
-                    Label("All Files", systemImage: "music.note.list")
-                        .tag(SidebarItem.library)
-                    Label("Favorites", systemImage: "star")
-                        .tag(SidebarItem.favorites)
-                }
-                
-                Section("Watched Folders") {
-                    ForEach(appState.savedFolders, id: \.self) { folder in
-                        HStack {
-                            Image(systemName: "folder")
-                            Text(URL(fileURLWithPath: folder).lastPathComponent)
-                        }
-                        .contextMenu {
-                            Button("Remove Folder") {
-                                // Remove folder from watch list
-                            }
-                            Button("Reveal in Finder") {
-                                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder)
-                            }
-                        }
-                    }
-                }
-
-                Section("Keys") {
-                    ForEach(["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"], id: \.self) { key in
-                        Text(key)
-                            .tag(SidebarItem.key(key))
-                    }
-                }
-
-                Section("Scales") {
-                    ForEach(["Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian"], id: \.self) { scale in
-                        Text(scale)
-                            .tag(SidebarItem.scale(scale))
-                    }
-                }
-            }
-            .listStyle(SidebarListStyle())
-            .frame(minWidth: 200)
-            .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    Button(action: { NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil) }) {
-                        Image(systemName: "sidebar.left")
-                    }
-                }
-            }
+            SidebarView(selectedSidebar: $selectedSidebar)
 
             // Main Content
             VStack(spacing: 0) {
+                // Project Settings Bar
+                ProjectSettingsBar()
+                
+                Divider()
+                
                 // Toolbar
                 ToolbarView()
 
@@ -69,30 +29,47 @@ struct ContentView: View {
                 } else if appState.midiFiles.isEmpty {
                     EmptyLibraryView()
                 } else {
-                    FileListView()
+                    FileListView(isFileListFocused: $isFileListFocused)
+                        .focused($isFileListFocused)
                 }
+                
+                // Transport Controls
+                TransportBar()
             }
 
             // Detail View
             if let selectedFile = appState.selectedFile {
                 DetailView(file: selectedFile)
             } else {
-                VStack(spacing: 16) {
-                    Image(systemName: "music.note")
-                        .font(.system(size: 48))
-                        .foregroundColor(.secondary)
-                    Text("Select a MIDI file")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
-                    Text("Or scan a folder to get started")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                PlaceholderDetailView()
             }
+        }
+        .onAppear {
+            isFileListFocused = true
         }
         .onChange(of: selectedSidebar) { oldValue, newValue in
             handleSidebarSelection(newValue)
+        }
+        // Global keyboard shortcuts
+        .onKeyPress(.upArrow) {
+            appState.selectPrevious()
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            appState.selectNext()
+            return .handled
+        }
+        .onKeyPress(.space) {
+            if appState.midiPlayer.isPlaying {
+                appState.stopPreview()
+            } else if let file = appState.selectedFile {
+                appState.playPreview(file: file)
+            }
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            appState.stopPreview()
+            return .handled
         }
     }
     
@@ -102,7 +79,6 @@ struct ContentView: View {
             appState.filterKey = "All"
             appState.filterScale = "All"
         case .favorites:
-            // Filter to favorites only
             break
         case .key(let key):
             appState.filterKey = key
@@ -114,11 +90,159 @@ struct ContentView: View {
     }
 }
 
+// MARK: - Sidebar
+struct SidebarView: View {
+    @EnvironmentObject var appState: AppState
+    @Binding var selectedSidebar: SidebarItem
+    
+    var body: some View {
+        List(selection: $selectedSidebar) {
+            Section("Library") {
+                Label("All Files (\(appState.midiFiles.count))", systemImage: "music.note.list")
+                    .tag(SidebarItem.library)
+                Label("Favorites", systemImage: "star.fill")
+                    .tag(SidebarItem.favorites)
+            }
+            
+            Section("Watched Folders") {
+                ForEach(appState.savedFolders, id: \.self) { folder in
+                    HStack {
+                        Image(systemName: "folder")
+                        Text(URL(fileURLWithPath: folder).lastPathComponent)
+                    }
+                    .contextMenu {
+                        Button("Reveal in Finder") {
+                            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder)
+                        }
+                    }
+                }
+            }
+
+            Section("Filter by Key") {
+                ForEach(["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"], id: \.self) { key in
+                    let count = appState.midiFiles.filter { $0.detectedKey == key }.count
+                    if count > 0 {
+                        HStack {
+                            Text(key)
+                            Spacer()
+                            Text("\(count)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .tag(SidebarItem.key(key))
+                    }
+                }
+            }
+
+            Section("Filter by Scale") {
+                ForEach(["Major", "Minor"], id: \.self) { scale in
+                    let count = appState.midiFiles.filter { $0.detectedScale == scale }.count
+                    if count > 0 {
+                        HStack {
+                            Text(scale)
+                            Spacer()
+                            Text("\(count)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .tag(SidebarItem.scale(scale))
+                    }
+                }
+            }
+        }
+        .listStyle(SidebarListStyle())
+        .frame(minWidth: 200)
+    }
+}
+
 enum SidebarItem: Hashable {
     case library
     case favorites
     case key(String)
     case scale(String)
+}
+
+// MARK: - Project Settings Bar
+struct ProjectSettingsBar: View {
+    @EnvironmentObject var appState: AppState
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Project Key/Scale
+            HStack(spacing: 8) {
+                Text("Project:")
+                    .foregroundColor(.secondary)
+                
+                Picker("Key", selection: $appState.projectKey) {
+                    ForEach(["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"], id: \.self) { key in
+                        Text(key).tag(key)
+                    }
+                }
+                .frame(width: 70)
+                
+                Picker("Scale", selection: $appState.projectScale) {
+                    ForEach(["Major", "Minor"], id: \.self) { scale in
+                        Text(scale).tag(scale)
+                    }
+                }
+                .frame(width: 80)
+                
+                Button("Match Filter") {
+                    appState.filterKey = appState.projectKey
+                    appState.filterScale = appState.projectScale
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            
+            Divider().frame(height: 20)
+            
+            // Project Tempo
+            HStack(spacing: 8) {
+                Text("Tempo:")
+                    .foregroundColor(.secondary)
+                
+                TextField("BPM", value: $appState.projectTempo, format: .number)
+                    .frame(width: 60)
+                    .textFieldStyle(.roundedBorder)
+                
+                Text("BPM")
+                    .foregroundColor(.secondary)
+            }
+            
+            Divider().frame(height: 20)
+            
+            // Sync Options
+            Toggle("Sync Preview Tempo", isOn: $appState.syncWithDAW)
+                .toggleStyle(.checkbox)
+            
+            Toggle("Auto-Preview", isOn: $appState.previewOnSelect)
+                .toggleStyle(.checkbox)
+            
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(NSColor.controlBackgroundColor))
+    }
+}
+
+// MARK: - Placeholder Detail View
+struct PlaceholderDetailView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "music.note")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+            Text("Select a MIDI file")
+                .font(.title2)
+                .foregroundColor(.secondary)
+            Text("Use ↑↓ arrows to browse, Space to preview")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 }
 
 // MARK: - Empty Library View
@@ -146,7 +270,6 @@ struct EmptyLibraryView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             
-            // Quick actions
             VStack(alignment: .leading, spacing: 8) {
                 Text("Common locations:")
                     .font(.caption)
@@ -230,12 +353,18 @@ struct ToolbarView: View {
                 Picker("Scale", selection: $appState.filterScale) {
                     Text("All Scales").tag("All")
                     Divider()
-                    ForEach(["Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian"], id: \.self) { scale in
+                    ForEach(["Major", "Minor"], id: \.self) { scale in
                         Text(scale).tag(scale)
                     }
                 }
             } label: {
-                Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                HStack {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                    if appState.filterKey != "All" || appState.filterScale != "All" {
+                        Text("\(appState.filterKey) \(appState.filterScale)")
+                            .font(.caption)
+                    }
+                }
             }
             
             // Rescan button
@@ -258,16 +387,87 @@ struct ToolbarView: View {
     }
 }
 
-// MARK: - File List View
+// MARK: - Transport Bar
+struct TransportBar: View {
+    @EnvironmentObject var appState: AppState
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Play/Stop
+            Button(action: {
+                if appState.midiPlayer.isPlaying {
+                    appState.stopPreview()
+                } else if let file = appState.selectedFile {
+                    appState.playPreview(file: file)
+                }
+            }) {
+                Image(systemName: appState.midiPlayer.isPlaying ? "stop.fill" : "play.fill")
+                    .font(.title2)
+            }
+            .buttonStyle(.plain)
+            .disabled(appState.selectedFile == nil)
+            
+            // Now playing info
+            if let file = appState.selectedFile {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(file.fileName)
+                        .font(.caption)
+                        .lineLimit(1)
+                    HStack(spacing: 8) {
+                        Text("\(file.detectedKey) \(file.detectedScale)")
+                            .font(.caption2)
+                            .foregroundColor(.accentColor)
+                        Text("•")
+                            .foregroundColor(.secondary)
+                        Text("\(Int(appState.syncWithDAW ? appState.projectTempo : file.tempo)) BPM")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            } else {
+                Text("No file selected")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            // Navigation hint
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up")
+                Image(systemName: "arrow.down")
+                Text("to browse")
+                    .font(.caption2)
+                Text("•")
+                Image(systemName: "space")
+                Text("to play/stop")
+                    .font(.caption2)
+            }
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(4)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+}
+
+// MARK: - File List View with Drag Support
 struct FileListView: View {
     @EnvironmentObject var appState: AppState
+    @FocusState.Binding var isFileListFocused: Bool
     @State private var sortOrder = [KeyPathComparator(\MIDIFileModel.fileName)]
 
     var body: some View {
         Table(appState.filteredFiles(), selection: Binding(
             get: { appState.selectedFile?.id },
             set: { id in
-                appState.selectedFile = appState.midiFiles.first { $0.id == id }
+                if let id = id, let file = appState.midiFiles.first(where: { $0.id == id }) {
+                    appState.selectFile(file)
+                }
             }
         ), sortOrder: $sortOrder) {
             TableColumn("★") { file in
@@ -279,8 +479,21 @@ struct FileListView: View {
             }
             .width(30)
             
-            TableColumn("File Name", value: \.fileName)
-                .width(min: 200)
+            TableColumn("File Name") { file in
+                // Draggable file name
+                Text(file.fileName)
+                    .draggable(file.itemProvider()) {
+                        // Drag preview
+                        HStack {
+                            Image(systemName: "music.note")
+                            Text(file.fileName)
+                        }
+                        .padding(8)
+                        .background(Color.accentColor.opacity(0.2))
+                        .cornerRadius(8)
+                    }
+            }
+            .width(min: 200)
 
             TableColumn("Key") { file in
                 Text(file.detectedKey)
@@ -292,7 +505,7 @@ struct FileListView: View {
             .width(60)
 
             TableColumn("Scale", value: \.detectedScale)
-                .width(100)
+                .width(80)
 
             TableColumn("Confidence") { file in
                 HStack(spacing: 4) {
@@ -309,22 +522,32 @@ struct FileListView: View {
                 Text(String(format: "%.0f", file.tempo))
             }
             .width(50)
+            
+            TableColumn("Time") { file in
+                Text(file.timeSignature)
+            }
+            .width(45)
 
             TableColumn("Duration") { file in
                 Text(formatDuration(file.duration))
             }
-            .width(70)
+            .width(60)
 
-            TableColumn("Notes") { file in
-                Text("\(file.totalNotes)")
+            TableColumn("Plays") { file in
+                Text("\(file.playCount)")
+                    .foregroundColor(.secondary)
             }
-            .width(50)
+            .width(45)
         }
         .contextMenu(forSelectionType: Int.self) { items in
             if let id = items.first, let file = appState.midiFiles.first(where: { $0.id == id }) {
+                Button("Preview") {
+                    appState.playPreview(file: file)
+                }
                 Button("Show in Finder") {
                     NSWorkspace.shared.selectFile(file.filePath, inFileViewerRootedAtPath: "")
                 }
+                Divider()
                 Button(file.isFavorite ? "Remove from Favorites" : "Add to Favorites") {
                     appState.toggleFavorite(file: file)
                 }
@@ -334,8 +557,8 @@ struct FileListView: View {
                 }
             }
         } primaryAction: { items in
-            if let id = items.first {
-                appState.selectedFile = appState.midiFiles.first { $0.id == id }
+            if let id = items.first, let file = appState.midiFiles.first(where: { $0.id == id }) {
+                appState.playPreview(file: file)
             }
         }
     }
@@ -391,21 +614,35 @@ struct DetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // Header
+                // Header with drag hint
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text(file.fileName)
-                            .font(.title)
-                            .fontWeight(.bold)
+                        VStack(alignment: .leading) {
+                            Text(file.fileName)
+                                .font(.title)
+                                .fontWeight(.bold)
+                            
+                            Text("Drag to DAW to import")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                         
                         Spacer()
                         
-                        Button(action: { appState.toggleFavorite(file: file) }) {
-                            Image(systemName: file.isFavorite ? "star.fill" : "star")
-                                .foregroundColor(file.isFavorite ? .yellow : .gray)
-                                .font(.title2)
-                        }
-                        .buttonStyle(.plain)
+                        // Draggable icon
+                        Image(systemName: "arrow.up.forward.app")
+                            .font(.title)
+                            .foregroundColor(.accentColor)
+                            .draggable(file.itemProvider()) {
+                                HStack {
+                                    Image(systemName: "music.note")
+                                    Text(file.fileName)
+                                }
+                                .padding()
+                                .background(Color.accentColor)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                            }
                     }
 
                     Text(file.filePath)
@@ -446,9 +683,11 @@ struct DetailView: View {
                         PropertyRow(label: "Detected Key", value: file.detectedKey)
                         PropertyRow(label: "Scale Type", value: file.detectedScale)
                         PropertyRow(label: "Confidence", value: "\(Int(file.confidence * 100))%")
-                        PropertyRow(label: "Tempo", value: String(format: "%.0f BPM", file.tempo))
+                        PropertyRow(label: "Original Tempo", value: String(format: "%.0f BPM", file.tempo))
+                        PropertyRow(label: "Time Signature", value: file.timeSignature)
                         PropertyRow(label: "Duration", value: formatDuration(file.duration))
                         PropertyRow(label: "Total Notes", value: "\(file.totalNotes)")
+                        PropertyRow(label: "Play Count", value: "\(file.playCount)")
                     }
                     .padding()
                 }
@@ -470,6 +709,11 @@ struct DetailView: View {
 
                 // Actions
                 HStack {
+                    Button(action: { appState.playPreview(file: file) }) {
+                        Label("Preview", systemImage: "play.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    
                     Button("Show in Finder") {
                         NSWorkspace.shared.selectFile(file.filePath, inFileViewerRootedAtPath: "")
                     }
@@ -480,10 +724,6 @@ struct DetailView: View {
                     }
                     
                     Spacer()
-                    
-                    Button("Remove from Library", role: .destructive) {
-                        appState.deleteFile(file: file)
-                    }
                 }
 
                 Spacer()
@@ -507,10 +747,6 @@ struct DetailView: View {
         switch scale {
         case "Major": intervals = [0, 2, 4, 5, 7, 9, 11]
         case "Minor": intervals = [0, 2, 3, 5, 7, 8, 10]
-        case "Dorian": intervals = [0, 2, 3, 5, 7, 9, 10]
-        case "Phrygian": intervals = [0, 1, 3, 5, 7, 8, 10]
-        case "Lydian": intervals = [0, 2, 4, 6, 7, 9, 11]
-        case "Mixolydian": intervals = [0, 2, 4, 5, 7, 9, 10]
         default: intervals = [0, 2, 4, 5, 7, 9, 11]
         }
         
@@ -608,7 +844,6 @@ struct ScanDialog: View {
                 Text("Select folders to scan:")
                     .font(.headline)
 
-                // Folder list
                 if selectedPaths.isEmpty {
                     VStack {
                         Spacer()
@@ -676,7 +911,6 @@ struct ScanDialog: View {
 
             Divider()
             
-            // Previously scanned folders
             if !appState.savedFolders.isEmpty {
                 VStack(alignment: .leading) {
                     Text("Previously scanned folders:")
@@ -728,19 +962,11 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             GeneralSettings()
-                .tabItem {
-                    Label("General", systemImage: "gear")
-                }
-
-            ScanSettings()
-                .tabItem {
-                    Label("Scanning", systemImage: "arrow.clockwise")
-                }
-
+                .tabItem { Label("General", systemImage: "gear") }
+            PlaybackSettings()
+                .tabItem { Label("Playback", systemImage: "play.circle") }
             PluginSettings()
-                .tabItem {
-                    Label("Plugin", systemImage: "app.connected.to.app.below.fill")
-                }
+                .tabItem { Label("Plugin", systemImage: "puzzlepiece") }
         }
         .frame(width: 500, height: 400)
     }
@@ -756,15 +982,6 @@ struct GeneralSettings: View {
                     Text(databaseLocation.isEmpty ? "Default (Application Support)" : databaseLocation)
                         .foregroundColor(.secondary)
                 }
-                Button("Choose Location...") {
-                    let panel = NSOpenPanel()
-                    panel.canChooseFiles = false
-                    panel.canChooseDirectories = true
-                    if panel.runModal() == .OK, let url = panel.url {
-                        databaseLocation = url.path
-                    }
-                }
-                
                 Button("Open Database Location") {
                     let path = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
                         .appendingPathComponent("MIDIScaleDetector")
@@ -776,16 +993,22 @@ struct GeneralSettings: View {
     }
 }
 
-struct ScanSettings: View {
-    @AppStorage("scanRecursive") var scanRecursive = true
-    @AppStorage("rescanModified") var rescanModified = true
-    @AppStorage("watchFolders") var watchFolders = true
-
+struct PlaybackSettings: View {
+    @EnvironmentObject var appState: AppState
+    
     var body: some View {
         Form {
-            Toggle("Scan folders recursively", isOn: $scanRecursive)
-            Toggle("Automatically rescan modified files", isOn: $rescanModified)
-            Toggle("Watch folders for new files", isOn: $watchFolders)
+            Toggle("Auto-preview on selection", isOn: $appState.previewOnSelect)
+            Toggle("Sync preview tempo with project", isOn: $appState.syncWithDAW)
+            
+            Section("MIDI Output") {
+                Text("MIDI is sent via virtual port: 'MIDI Scale Detector'")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("Route this to your DAW's MIDI input to preview with your instruments")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding()
     }
@@ -814,16 +1037,11 @@ struct PluginSettings: View {
                 }
 
                 HStack {
-                    Button("Reveal VST3 in Finder") {
-                        let pluginPath = FileManager.default.homeDirectoryForCurrentUser
-                            .appendingPathComponent("Library/Audio/Plug-Ins/VST3")
-                        NSWorkspace.shared.open(pluginPath)
+                    Button("Reveal VST3") {
+                        NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Audio/Plug-Ins/VST3"))
                     }
-                    
-                    Button("Reveal AU in Finder") {
-                        let pluginPath = FileManager.default.homeDirectoryForCurrentUser
-                            .appendingPathComponent("Library/Audio/Plug-Ins/Components")
-                        NSWorkspace.shared.open(pluginPath)
+                    Button("Reveal AU") {
+                        NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Audio/Plug-Ins/Components"))
                     }
                 }
             }
@@ -835,12 +1053,10 @@ struct PluginSettings: View {
 // MARK: - Menu Commands
 struct MenuCommands: Commands {
     let appState: AppState
-    @State private var showingScanDialog = false
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("Scan for MIDI Files...") {
-                // Post notification to trigger scan dialog
                 NotificationCenter.default.post(name: .showScanDialog, object: nil)
             }
             .keyboardShortcut("n", modifiers: .command)
@@ -851,18 +1067,29 @@ struct MenuCommands: Commands {
             .keyboardShortcut("r", modifiers: [.command, .shift])
             .disabled(appState.savedFolders.isEmpty)
         }
-
-        CommandGroup(after: .importExport) {
-            Button("Import MIDI File...") {
-                let panel = NSOpenPanel()
-                panel.allowedContentTypes = [.midi]
-                panel.allowsMultipleSelection = true
-                
-                if panel.runModal() == .OK {
-                    appState.startScan(paths: panel.urls.map { $0.deletingLastPathComponent() })
+        
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            Button("Previous File") {
+                appState.selectPrevious()
+            }
+            .keyboardShortcut(.upArrow, modifiers: [])
+            
+            Button("Next File") {
+                appState.selectNext()
+            }
+            .keyboardShortcut(.downArrow, modifiers: [])
+            
+            Divider()
+            
+            Button("Play/Stop Preview") {
+                if appState.midiPlayer.isPlaying {
+                    appState.stopPreview()
+                } else if let file = appState.selectedFile {
+                    appState.playPreview(file: file)
                 }
             }
-            .keyboardShortcut("i", modifiers: .command)
+            .keyboardShortcut(.space, modifiers: [])
         }
     }
 }
