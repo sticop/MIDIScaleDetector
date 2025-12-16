@@ -6,7 +6,7 @@ import AVFoundation
 import UniformTypeIdentifiers
 
 @main
-struct MIDIScaleDetectorApp: App {
+struct MIDIXplorerApp: App {
     @StateObject private var appState = AppState()
 
     var body: some Scene {
@@ -244,13 +244,13 @@ class MIDIPlayer: ObservableObject {
     
     private func setupMIDI() {
         // Create MIDI client
-        MIDIClientCreate("MIDIScaleDetector" as CFString, nil, nil, &midiClient)
+        MIDIClientCreate("MIDIXplorer" as CFString, nil, nil, &midiClient)
         
         // Create output port
         MIDIOutputPortCreate(midiClient, "Output" as CFString, &outputPort)
         
         // Create virtual source for sending MIDI to DAWs
-        MIDISourceCreate(midiClient, "MIDI Scale Detector" as CFString, &virtualSource)
+        MIDISourceCreate(midiClient, "MIDI Xplorer" as CFString, &virtualSource)
     }
     
     func loadMIDIFile(url: URL) -> Bool {
@@ -707,7 +707,7 @@ class AppState: ObservableObject {
             in: .userDomainMask
         ).first!
         
-        let appFolder = appSupport.appendingPathComponent("MIDIScaleDetector")
+        let appFolder = appSupport.appendingPathComponent("MIDIXplorer")
         try? FileManager.default.createDirectory(at: appFolder, withIntermediateDirectories: true)
         
         let dbPath = appFolder.appendingPathComponent("midi_library.db").path

@@ -1,4 +1,4 @@
-# MIDI Scale Detector - Development Roadmap
+# MIDI Xplorer - Development Roadmap
 
 ## Project Status
 

@@ -1,4 +1,4 @@
-# 🎵 MIDI Scale Detector - Complete Project Delivery
+# 🎵 MIDI Xplorer - Complete Project Delivery
 
 ## ✅ Project Complete
 
@@ -47,7 +47,7 @@ I've successfully designed and built a comprehensive macOS application for advan
 ## 🗂️ Project Structure
 
 ```
-MIDIScaleDetector/
+MIDIXplorer/
 ├── 📄 Documentation (5 guides)
 │   ├── ARCHITECTURE.md      - Technical deep-dive
 │   ├── BUILD.md            - Build instructions
@@ -130,7 +130,7 @@ MIDIScaleDetector/
 
 ```bash
 # 1. Navigate to the project
-cd /Users/hamimadghirni/MIDIScaleDetector
+cd /Users/hamimadghirni/MIDIXplorer
 
 # 2. Run automated setup
 ./setup.sh
@@ -155,7 +155,7 @@ cmake --build .
 
 # 3. Open standalone app in Xcode
 cd Source/Standalone
-open MIDIScaleDetector.xcodeproj
+open MIDIXplorer.xcodeproj
 ```
 
 ---
@@ -354,7 +354,7 @@ open MIDIScaleDetector.xcodeproj
 
 ## 📞 Project Information
 
-**Project Name**: MIDI Scale Detector
+**Project Name**: MIDI Xplorer
 **Version**: 1.0.0-alpha
 **Platform**: macOS 12.0+
 **Architecture**: Universal (x86_64 + ARM64)
@@ -373,7 +373,7 @@ open MIDIScaleDetector.xcodeproj
 The complete project is now available at:
 
 ```
-/Users/hamimadghirni/MIDIScaleDetector
+/Users/hamimadghirni/MIDIXplorer
 ```
 
 Everything is set up and ready to:

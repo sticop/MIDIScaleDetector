@@ -1,4 +1,4 @@
-# MIDI Scale Detector - Build Instructions
+# MIDI Xplorer - Build Instructions
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@
 3. **JUCE Framework 7.0+**
 
    ```bash
-   cd MIDIScaleDetector
+   cd MIDIXplorer
    git clone https://github.com/juce-framework/JUCE.git
    ```
 
@@ -43,7 +43,7 @@
 
 ```bash
 git clone <repository-url>
-cd MIDIScaleDetector
+cd MIDIXplorer
 ```
 
 ### 2. Download JUCE
@@ -84,8 +84,8 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . --config Release
 
 # Build specific targets
-cmake --build . --target MIDIScaleDetectorCore
-cmake --build . --target MIDIScaleDetectorPlugin
+cmake --build . --target MIDIXplorerCore
+cmake --build . --target MIDIXplorerPlugin
 ```
 
 ### 6. Build Options
@@ -112,13 +112,13 @@ The standalone macOS application uses SwiftUI and requires Xcode:
 
 ```bash
 cd Source/Standalone
-xcodebuild -scheme MIDIScaleDetector -configuration Release
+xcodebuild -scheme MIDIXplorer -configuration Release
 ```
 
 Or open in Xcode:
 
 ```bash
-open Source/Standalone/MIDIScaleDetector.xcodeproj
+open Source/Standalone/MIDIXplorer.xcodeproj
 ```
 
 ## Installing Plugins
@@ -128,7 +128,7 @@ open Source/Standalone/MIDIScaleDetector.xcodeproj
 After building, the VST3 plugin will be automatically copied to:
 
 ```
-~/Library/Audio/Plug-Ins/VST3/MIDI Scale Detector.vst3
+~/Library/Audio/Plug-Ins/VST3/MIDI Xplorer.vst3
 ```
 
 ### Audio Unit Plugin
@@ -136,7 +136,7 @@ After building, the VST3 plugin will be automatically copied to:
 The AU plugin will be copied to:
 
 ```
-~/Library/Audio/Plug-Ins/Components/MIDI Scale Detector.component
+~/Library/Audio/Plug-Ins/Components/MIDI Xplorer.component
 ```
 
 ### Manual Installation
@@ -145,10 +145,10 @@ If automatic installation fails:
 
 ```bash
 # VST3
-cp -r build/MIDIScaleDetectorPlugin_artefacts/VST3/*.vst3 ~/Library/Audio/Plug-Ins/VST3/
+cp -r build/MIDIXplorerPlugin_artefacts/VST3/*.vst3 ~/Library/Audio/Plug-Ins/VST3/
 
 # AU
-cp -r build/MIDIScaleDetectorPlugin_artefacts/AU/*.component ~/Library/Audio/Plug-Ins/Components/
+cp -r build/MIDIXplorerPlugin_artefacts/AU/*.component ~/Library/Audio/Plug-Ins/Components/
 ```
 
 ### Verify Installation
@@ -170,14 +170,14 @@ auval -v aufx Msdp Msdt
 2. Go to Preferences → Plug-Ins
 3. Click "Rescan"
 4. Create a MIDI track
-5. Add "MIDI Scale Detector" as a MIDI effect
+5. Add "MIDI Xplorer" as a MIDI effect
 
 ### Logic Pro
 
 1. Open Logic Pro
 2. Create a Software Instrument track
 3. Click on "MIDI FX" slot
-4. Select "Audio Units" → "MIDIScaleDetector" → "MIDI Scale Detector"
+4. Select "Audio Units" → "MIDIXplorer" → "MIDI Xplorer"
 
 ## Running Tests
 
@@ -213,7 +213,7 @@ cmake --build .
 
 ```bash
 cmake -G Xcode ..
-open MIDIScaleDetector.xcodeproj
+open MIDIXplorer.xcodeproj
 ```
 
 ## Troubleshooting

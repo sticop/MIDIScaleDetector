@@ -23,7 +23,7 @@ public:
     bool hasEditor() const override { return true; }
 
     // Plugin info
-    const juce::String getName() const override { return "MIDI Scale Detector"; }
+    const juce::String getName() const override { return "MIDI Xplorer"; }
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return true; }
     bool isMidiEffect() const override { return true; }

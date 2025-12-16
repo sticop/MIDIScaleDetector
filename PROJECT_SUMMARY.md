@@ -1,4 +1,4 @@
-# MIDI Scale Detector - Project Summary
+# MIDI Xplorer - Project Summary
 
 ## What We've Built
 
@@ -81,7 +81,7 @@ A complete, professional-grade macOS application for advanced MIDI file manageme
 ## Project Structure
 
 ```
-MIDIScaleDetector/
+MIDIXplorer/
 ├── Source/
 │   ├── Core/                          # Shared C++ core (4 components)
 │   │   ├── MIDIParser/               # MIDI file parsing
@@ -89,7 +89,7 @@ MIDIScaleDetector/
 │   │   ├── Database/                 # SQLite persistence
 │   │   └── FileScanner/              # File indexing
 │   ├── Standalone/                   # macOS SwiftUI app
-│   │   ├── MIDIScaleDetectorApp.swift
+│   │   ├── MIDIXplorerApp.swift
 │   │   └── UI/ContentView.swift
 │   └── Plugin/                       # VST3/AU plugin
 │       ├── MIDIScalePlugin.h
@@ -170,7 +170,7 @@ MIDIScaleDetector/
 
 ### UI (2 files)
 
-11. `MIDIScaleDetectorApp.swift` - App entry point
+11. `MIDIXplorerApp.swift` - App entry point
 12. `ContentView.swift` - UI implementation
 
 ### Build System (4 files)

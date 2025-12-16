@@ -1,4 +1,4 @@
-# MIDI Scale Detector
+# MIDI Xplorer
 
 Advanced MIDI file management and musical scale detection application for macOS.
 
@@ -36,7 +36,7 @@ Advanced MIDI file management and musical scale detection application for macOS.
 ## Project Structure
 
 ```
-MIDIScaleDetector/
+MIDIXplorer/
 ├── Source/
 │   ├── Core/              # Shared core logic
 │   │   ├── MIDIParser/    # MIDI file parsing
@@ -69,7 +69,7 @@ MIDIScaleDetector/
 ```bash
 # Clone and setup
 git clone <repository-url>
-cd MIDIScaleDetector
+cd MIDIXplorer
 
 # Build with CMake
 mkdir build && cd build
@@ -77,7 +77,7 @@ cmake ..
 cmake --build . --config Release
 
 # Or use Xcode
-open MIDIScaleDetector.xcodeproj
+open MIDIXplorer.xcodeproj
 ```
 
 ## Development Roadmap

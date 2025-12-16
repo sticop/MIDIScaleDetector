@@ -984,7 +984,7 @@ struct GeneralSettings: View {
                 }
                 Button("Open Database Location") {
                     let path = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-                        .appendingPathComponent("MIDIScaleDetector")
+                        .appendingPathComponent("MIDIXplorer")
                     NSWorkspace.shared.open(path)
                 }
             }
@@ -1002,7 +1002,7 @@ struct PlaybackSettings: View {
             Toggle("Sync preview tempo with project", isOn: $appState.syncWithDAW)
             
             Section("MIDI Output") {
-                Text("MIDI is sent via virtual port: 'MIDI Scale Detector'")
+                Text("MIDI is sent via virtual port: 'MIDI Xplorer'")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Text("Route this to your DAW's MIDI input to preview with your instruments")

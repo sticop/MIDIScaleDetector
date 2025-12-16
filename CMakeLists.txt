@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(MIDIScaleDetector VERSION 1.0.0 LANGUAGES C CXX)
+project(MIDIXplorer VERSION 1.0.0 LANGUAGES C CXX)
 
 # C++ Standard
 set(CMAKE_CXX_STANDARD 17)
@@ -60,14 +60,14 @@ if(BUILD_TESTS)
 endif()
 
 # Installation
-install(TARGETS MIDIScaleDetectorCore
+install(TARGETS MIDIXplorerCore
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
 
 # Summary
 message(STATUS "")
-message(STATUS "MIDIScaleDetector Configuration Summary:")
+message(STATUS "MIDIXplorer Configuration Summary:")
 message(STATUS "  Version: ${PROJECT_VERSION}")
 message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Build Standalone: ${BUILD_STANDALONE}")

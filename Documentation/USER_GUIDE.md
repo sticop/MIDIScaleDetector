@@ -1,8 +1,8 @@
-# MIDI Scale Detector - User Guide
+# MIDI Xplorer - User Guide
 
 ## Overview
 
-MIDI Scale Detector is an advanced tool for analyzing, organizing, and working with MIDI files based on their musical scale and harmonic content.
+MIDI Xplorer is an advanced tool for analyzing, organizing, and working with MIDI files based on their musical scale and harmonic content.
 
 ## Features
 
@@ -42,7 +42,7 @@ Use as a VST3 or AU plugin in:
 
 #### First Launch
 
-1. **Open MIDI Scale Detector**
+1. **Open MIDI Xplorer**
 2. **Scan Your MIDI Files**
    - Click "Scan" button
    - Add folders containing your MIDI files
@@ -100,7 +100,7 @@ The plugin is automatically installed during build:
 #### Loading in Ableton Live
 
 1. Create a MIDI track
-2. In MIDI Effects, add "MIDI Scale Detector"
+2. In MIDI Effects, add "MIDI Xplorer"
 3. The plugin will appear in the device chain
 4. Load a MIDI file or play live MIDI
 
@@ -108,7 +108,7 @@ The plugin is automatically installed during build:
 
 1. Create a Software Instrument track
 2. Click the MIDI FX slot
-3. Select Audio Units → MIDIScaleDetector → MIDI Scale Detector
+3. Select Audio Units → MIDIXplorer → MIDI Xplorer
 4. The plugin interface will appear
 
 #### Plugin Features
@@ -156,7 +156,7 @@ The plugin is automatically installed during build:
 
 ### Example 2: Correcting Off-Key MIDI in Real-Time
 
-1. Load MIDI Scale Detector as plugin in your DAW
+1. Load MIDI Xplorer as plugin in your DAW
 2. Create or load a MIDI clip
 3. Plugin auto-detects the scale
 4. Set Transform Mode to "Constrain"

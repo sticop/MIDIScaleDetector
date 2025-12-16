@@ -1,8 +1,8 @@
-# MIDI Scale Detector - Technical Architecture
+# MIDI Xplorer - Technical Architecture
 
 ## Overview
 
-This document describes the technical architecture of the MIDI Scale Detector system.
+This document describes the technical architecture of the MIDI Xplorer system.
 
 ## System Architecture
 
@@ -389,9 +389,9 @@ Extend `HarmonicAnalysis` with:
 
 **Targets**:
 
-- `MIDIScaleDetectorCore`: Static library
-- `MIDIScaleDetectorPlugin`: VST3/AU plugin
-- `MIDIScaleDetectorApp`: Standalone app (Xcode)
+- `MIDIXplorerCore`: Static library
+- `MIDIXplorerPlugin`: VST3/AU plugin
+- `MIDIXplorerApp`: Standalone app (Xcode)
 
 ## Testing Strategy
 

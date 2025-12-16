@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
 
 # Plugin configuration
-juce_add_plugin(MIDIScaleDetectorPlugin
-    COMPANY_NAME "MIDIScaleDetector"
+juce_add_plugin(MIDIXplorerPlugin
+    COMPANY_NAME "MIDIXplorer"
     PLUGIN_MANUFACTURER_CODE Msdt
     PLUGIN_CODE Msdp
     FORMATS VST3 AU
-    PRODUCT_NAME "MIDI Scale Detector"
+    PRODUCT_NAME "MIDI Xplorer"
 
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT TRUE
@@ -20,16 +20,16 @@ juce_add_plugin(MIDIScaleDetectorPlugin
 )
 
 # Plugin sources
-target_sources(MIDIScaleDetectorPlugin
+target_sources(MIDIXplorerPlugin
     PRIVATE
         MIDIScalePlugin.cpp
         MIDIScalePlugin.h
 )
 
 # Link libraries
-target_link_libraries(MIDIScaleDetectorPlugin
+target_link_libraries(MIDIXplorerPlugin
     PRIVATE
-        MIDIScaleDetectorCore
+        MIDIXplorerCore
         juce::juce_audio_utils
         juce::juce_audio_processors
     PUBLIC
@@ -39,7 +39,7 @@ target_link_libraries(MIDIScaleDetectorPlugin
 )
 
 # Compile definitions
-target_compile_definitions(MIDIScaleDetectorPlugin
+target_compile_definitions(MIDIXplorerPlugin
     PUBLIC
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0

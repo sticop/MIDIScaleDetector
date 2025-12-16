@@ -1,4 +1,4 @@
-# MIDI Scale Detector - Quick Start Guide
+# MIDI Xplorer - Quick Start Guide
 
 Get up and running in 5 minutes!
 
@@ -15,7 +15,7 @@ Get up and running in 5 minutes!
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd MIDIScaleDetector
+cd MIDIXplorer
 
 # Run setup script
 chmod +x setup.sh
@@ -40,7 +40,7 @@ See [BUILD.md](BUILD.md) for detailed instructions.
 ```bash
 # Open in Xcode
 cd Source/Standalone
-open MIDIScaleDetector.xcodeproj
+open MIDIXplorer.xcodeproj
 
 # Build and run (⌘R)
 ```
@@ -59,7 +59,7 @@ open MIDIScaleDetector.xcodeproj
 1. Open Ableton Live
 2. Preferences → Plug-Ins → Rescan
 3. Create a MIDI track
-4. Add "MIDI Scale Detector" from MIDI Effects
+4. Add "MIDI Xplorer" from MIDI Effects
 5. Play or load a MIDI clip
 
 **In Logic Pro:**
@@ -67,7 +67,7 @@ open MIDIScaleDetector.xcodeproj
 1. Open Logic Pro
 2. Create a Software Instrument track
 3. Click MIDI FX slot
-4. Choose: Audio Units → MIDIScaleDetector → MIDI Scale Detector
+4. Choose: Audio Units → MIDIXplorer → MIDI Xplorer
 
 ## Basic Usage
 
@@ -139,7 +139,7 @@ ls ~/Library/Audio/Plug-Ins/Components/
 
 ```bash
 # Reset database
-rm ~/Library/Application\ Support/MIDIScaleDetector/midi_library.db
+rm ~/Library/Application\ Support/MIDIXplorer/midi_library.db
 
 # Restart app and rescan
 ```
