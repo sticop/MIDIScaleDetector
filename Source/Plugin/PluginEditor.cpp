@@ -287,15 +287,18 @@ void MIDIXplorerEditor::timerCallback() {
                 pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
             }
         }
-        currentTime = std::fmod(currentTime, totalDuration);
+        // Reset to beginning of file (not fmod to avoid timing drift)
+        currentTime = 0.0;
         playbackNoteIndex = 0;
         if (synced) {
-            // Calculate new start beat for the loop
-            double beatsInFile = (totalDuration * bpm) / 60.0;
-            playbackStartBeat = hostBeat - (currentTime * bpm) / (60.0 * speedRatio);
+            // Reset start beat to current host position for clean loop
+
+            playbackStartBeat = hostBeat;
         } else {
-            playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - currentTime / speedRatio;
+            playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
         }
+        // Return here to let next timer callback start fresh from beginning
+        return;
     }
     
     // Play notes that should have started by now
