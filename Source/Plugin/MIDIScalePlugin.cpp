@@ -287,13 +287,13 @@ void MIDIScalePlugin::updatePlayback() {
     double totalDuration = playbackState.fileDuration.load();
     if (totalDuration <= 0) totalDuration = 1.0;
 
-    double currentTime;
     double midiFileBpm = playbackState.fileBpm.load();
     if (midiFileBpm <= 0) midiFileBpm = 120.0;  // Fallback
 
     bool synced = playbackState.syncToHost.load() && transportState.isPlaying.load();
     double hostBeat = transportState.ppqPosition.load();
 
+    double currentTime;
     if (synced) {
         double beatsElapsed = hostBeat - playbackState.playbackStartBeat.load();
         currentTime = (beatsElapsed * 60.0) / midiFileBpm;
@@ -309,30 +309,39 @@ void MIDIScalePlugin::updatePlayback() {
         if (currentTime < 0) currentTime = 0;
     }
 
-    // Handle wrapping for position display
-    double wrappedTime = std::fmod(currentTime, totalDuration);
-    if (wrappedTime < 0) wrappedTime += totalDuration;
+    // Check if we need to loop
+    int loopCount = 0;
+    while (currentTime >= totalDuration && loopCount < 10) {  // Safety limit
+        loopCount++;
+        
+        // Reset note index for new loop iteration
+        playbackState.playbackNoteIndex.store(0);
+        
+        // Adjust timing references to account for the loop
+        if (synced) {
+            double beatsPerLoop = (totalDuration * midiFileBpm) / 60.0;
+            double newStartBeat = playbackState.playbackStartBeat.load() + beatsPerLoop;
+            playbackState.playbackStartBeat.store(newStartBeat);
+        } else {
+            double newStartTime = playbackState.playbackStartTime.load() + totalDuration;
+            playbackState.playbackStartTime.store(newStartTime);
+        }
+        
+        // Recalculate current time after adjustment
+        if (synced) {
+            double beatsElapsed = hostBeat - playbackState.playbackStartBeat.load();
+            currentTime = (beatsElapsed * 60.0) / midiFileBpm;
+        } else {
+            currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackState.playbackStartTime.load();
+        }
+    }
+
+    // Ensure time is within valid range
+    if (currentTime < 0) currentTime = 0;
+    if (currentTime > totalDuration) currentTime = totalDuration;
 
     // Update position for UI
-    playbackState.playbackPosition.store(wrappedTime / totalDuration);
-
-    // Handle looping
-    if (currentTime >= totalDuration) {
-        // Send all notes off
-        for (int ch = 1; ch <= 16; ch++) {
-            addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-        }
-        playbackState.playbackNoteIndex.store(0);
-
-        if (synced) {
-            // Recalculate start beat based on current host position to stay locked
-            double beatsForOvershoot = (wrappedTime * midiFileBpm) / 60.0;
-            playbackState.playbackStartBeat.store(hostBeat - beatsForOvershoot);
-        } else {
-            playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 - wrappedTime);
-        }
-        currentTime = wrappedTime;
-    }
+    playbackState.playbackPosition.store(currentTime / totalDuration);
 
     // Play notes that should have triggered by now
     int noteIndex = playbackState.playbackNoteIndex.load();
