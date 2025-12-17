@@ -319,17 +319,17 @@ void MIDIScalePlugin::updatePlayback() {
         for (int ch = 1; ch <= 16; ch++) {
             addMidiMessage(juce::MidiMessage::allNotesOff(ch));
         }
-        
+
         // Reset note index to start from scratch
         playbackState.playbackNoteIndex.store(0);
-        
+
         // Reset timing to start a fresh loop
         if (synced) {
             // Align to the next loop start based on total duration in beats
             double beatsPerLoop = (totalDuration * midiFileBpm) / 60.0;
             double loopsCompleted = std::floor((hostBeat - playbackState.playbackStartBeat.load()) * midiFileBpm / 60.0 / totalDuration);
             playbackState.playbackStartBeat.store(playbackState.playbackStartBeat.load() + loopsCompleted * beatsPerLoop);
-            
+
             // Recalculate current time
             double beatsElapsed = hostBeat - playbackState.playbackStartBeat.load();
             currentTime = (beatsElapsed * 60.0) / midiFileBpm;
@@ -338,7 +338,7 @@ void MIDIScalePlugin::updatePlayback() {
             playbackState.playbackStartTime.store(playbackState.playbackStartTime.load() + loopsCompleted * totalDuration);
             currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackState.playbackStartTime.load();
         }
-        
+
         // Clamp to valid range
         if (currentTime < 0) currentTime = 0;
         if (currentTime >= totalDuration) currentTime = 0;  // Safety

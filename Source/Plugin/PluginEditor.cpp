@@ -137,36 +137,30 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     playPauseButton.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
     isPlaying = false;  // Start with playback stopped
     playPauseButton.onClick = [this]() {
-        // When synced to host, playback is controlled by DAW transport only
-        // The button does nothing when sync is enabled
-        if (syncToHostToggle.getToggleState()) {
-            return;  // Ignore button clicks when synced to host
-        }
-
         if (!isPlaying) {
-            // Start playing (manual mode only)
+            // Start playing
             isPlaying = true;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
             // If no file is loaded, play the first file
             if (!fileLoaded && !filteredFiles.empty()) {
                 selectAndPreview(0);
             } else if (fileLoaded) {
-                // Resume playback
-                if (playbackNoteIndex == 0) {
-                    playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
-                    playbackStartBeat = getHostBeatPosition();
-                }
+                // Start fresh playback
+                playbackNoteIndex = 0;
+                playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+                playbackStartBeat = getHostBeatPosition();
             }
-            // Set processor playback state so it continues when editor closes
+            // Set processor playback state
             if (pluginProcessor) {
                 pluginProcessor->setPlaybackPlaying(true);
                 pluginProcessor->resetPlayback();
             }
         } else {
-            // Pause (manual mode only)
+            // Pause/Stop
             isPlaying = false;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
-            // Send all notes off when pausing
+            playbackNoteIndex = 0;  // Reset for next play
+            // Send all notes off when stopping
             if (pluginProcessor) {
                 pluginProcessor->setPlaybackPlaying(false);
                 for (int ch = 1; ch <= 16; ch++) {
