@@ -151,6 +151,7 @@ private:
     void addLibrary();
     void scanLibraries();
     void scanLibrary(size_t index);
+    void refreshLibrary(size_t index);
     void analyzeFile(size_t index);
     void filterFiles();
     void sortFiles();

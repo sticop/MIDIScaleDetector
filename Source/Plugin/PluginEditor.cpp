@@ -690,6 +690,25 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
     updateKeyFilterFromDetectedScales();
 }
 
+void MIDIXplorerEditor::refreshLibrary(size_t index) {
+    if (index >= libraries.size()) return;
+
+    auto& lib = libraries[index];
+    
+    // Remove all files from this library
+    allFiles.erase(
+        std::remove_if(allFiles.begin(), allFiles.end(),
+            [&lib](const MIDIFileInfo& f) { return f.libraryName == lib.name; }),
+        allFiles.end());
+    
+    // Rescan the library
+    if (lib.enabled) {
+        scanLibrary(index);
+    }
+    
+    libraryListBox.repaint();
+}
+
 void MIDIXplorerEditor::analyzeFile(size_t index) {
     if (index >= allFiles.size()) return;
 
@@ -900,17 +919,20 @@ void MIDIXplorerEditor::LibraryListModel::listBoxItemClicked(int row, const juce
     if (e.mods.isRightButtonDown()) {
         juce::PopupMenu menu;
         menu.addItem(1, "Reveal in Finder");
-        menu.addItem(2, owner.libraries[(size_t)row].enabled ? "Disable" : "Enable");
-        menu.addItem(3, "Remove");
+        menu.addItem(2, "Refresh");
+        menu.addItem(3, owner.libraries[(size_t)row].enabled ? "Disable" : "Enable");
+        menu.addItem(4, "Remove");
 
         menu.showMenuAsync(juce::PopupMenu::Options(), [this, row](int result) {
             if (result == 1) {
                 owner.revealInFinder(owner.libraries[(size_t)row].path);
             } else if (result == 2) {
+                owner.refreshLibrary((size_t)row);
+            } else if (result == 3) {
                 owner.libraries[(size_t)row].enabled = !owner.libraries[(size_t)row].enabled;
                 owner.saveLibraries();
                 owner.scanLibraries();
-            } else if (result == 3) {
+            } else if (result == 4) {
                 owner.libraries.erase(owner.libraries.begin() + row);
                 owner.saveLibraries();
                 owner.libraryListBox.updateContent();
