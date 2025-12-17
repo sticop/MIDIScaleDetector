@@ -87,6 +87,7 @@ public:
         std::atomic<double> fileBpm{120.0};
         std::atomic<bool> syncToHost{true};
         std::atomic<float> velocityScale{1.0f};  // 0.0 to 2.0 (0% to 200%)
+        std::atomic<int> transposeAmount{0};      // -24 to +24 semitones
         juce::String currentFilePath;
     };
 
@@ -108,6 +109,8 @@ public:
     bool isSyncToHost() const { return playbackState.syncToHost; }
     void setVelocityScale(float scale) { playbackState.velocityScale = scale; }
     float getVelocityScale() const { return playbackState.velocityScale; }
+    void setTransposeAmount(int amount) { playbackState.transposeAmount = juce::jlimit(-24, 24, amount); }
+    int getTransposeAmount() const { return playbackState.transposeAmount; }
     juce::String getCurrentFilePath() const { return playbackState.currentFilePath; }
     
     // Queue MIDI for insertion at DAW playhead

@@ -379,13 +379,18 @@ void MIDIScalePlugin::updatePlayback() {
         if (eventTime <= currentTime) {
             auto msg = event->message;
             if (msg.isNoteOn()) {
+                // Apply transpose
+                int transposedNote = juce::jlimit(0, 127, msg.getNoteNumber() + playbackState.transposeAmount.load());
                 // Apply velocity scaling
                 int velocity = msg.getVelocity();
                 velocity = juce::jlimit(1, 127, (int)(velocity * velScale));
-                msg = juce::MidiMessage::noteOn(msg.getChannel(), msg.getNoteNumber(), (juce::uint8)velocity);
+                msg = juce::MidiMessage::noteOn(msg.getChannel(), transposedNote, (juce::uint8)velocity);
                 msg.setTimeStamp(eventTime);
                 addMidiMessage(msg);
             } else if (msg.isNoteOff()) {
+                // Apply transpose to note-off too
+                int transposedNoteOff = juce::jlimit(0, 127, msg.getNoteNumber() + playbackState.transposeAmount.load());
+                msg = juce::MidiMessage::noteOff(msg.getChannel(), transposedNoteOff);
                 addMidiMessage(msg);
             }
             noteIndex++;

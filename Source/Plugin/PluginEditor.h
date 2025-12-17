@@ -172,6 +172,11 @@ private:
     juce::TextButton addToDAWButton;  // Add to DAW at playhead
     juce::TextButton zoomInButton;
     juce::TextButton zoomOutButton;
+    juce::TextButton semitoneUpButton;    // Transpose up semitone
+    juce::TextButton semitoneDownButton;  // Transpose down semitone
+    juce::TextButton octaveUpButton;      // Transpose up octave
+    juce::TextButton octaveDownButton;    // Transpose down octave
+    int transposeAmount = 0;              // Current transpose in semitones
     bool isPlaying = true;
     juce::ToggleButton syncToHostToggle{"DAW Sync"};
     juce::Slider transportSlider;
@@ -227,6 +232,7 @@ private:
     void stopPlayback();
     void restartPlayback();
     void playNextFile();  // Play next or random file
+    void applyTransposeToPlayback();  // Apply transpose to current playback
     void revealInFinder(const juce::String& path);
     void toggleFavorite(int row);
     void saveFavorites();

@@ -237,6 +237,48 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     };
     addAndMakeVisible(zoomInButton);
 
+    // Transpose buttons - semitone
+    semitoneDownButton.setButtonText("-1");
+    semitoneDownButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a5a));
+    semitoneDownButton.setColour(juce::TextButton::textColourOffId, juce::Colours::lightblue);
+    semitoneDownButton.setTooltip("Transpose down 1 semitone");
+    semitoneDownButton.onClick = [this]() {
+        transposeAmount = juce::jlimit(-24, 24, transposeAmount - 1);
+        applyTransposeToPlayback();
+    };
+    addAndMakeVisible(semitoneDownButton);
+
+    semitoneUpButton.setButtonText("+1");
+    semitoneUpButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a5a));
+    semitoneUpButton.setColour(juce::TextButton::textColourOffId, juce::Colours::lightblue);
+    semitoneUpButton.setTooltip("Transpose up 1 semitone");
+    semitoneUpButton.onClick = [this]() {
+        transposeAmount = juce::jlimit(-24, 24, transposeAmount + 1);
+        applyTransposeToPlayback();
+    };
+    addAndMakeVisible(semitoneUpButton);
+
+    // Transpose buttons - octave
+    octaveDownButton.setButtonText("-12");
+    octaveDownButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff5a3a5a));
+    octaveDownButton.setColour(juce::TextButton::textColourOffId, juce::Colours::pink);
+    octaveDownButton.setTooltip("Transpose down 1 octave");
+    octaveDownButton.onClick = [this]() {
+        transposeAmount = juce::jlimit(-24, 24, transposeAmount - 12);
+        applyTransposeToPlayback();
+    };
+    addAndMakeVisible(octaveDownButton);
+
+    octaveUpButton.setButtonText("+12");
+    octaveUpButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff5a3a5a));
+    octaveUpButton.setColour(juce::TextButton::textColourOffId, juce::Colours::pink);
+    octaveUpButton.setTooltip("Transpose up 1 octave");
+    octaveUpButton.onClick = [this]() {
+        transposeAmount = juce::jlimit(-24, 24, transposeAmount + 12);
+        applyTransposeToPlayback();
+    };
+    addAndMakeVisible(octaveUpButton);
+
     syncToHostToggle.setToggleState(true, juce::dontSendNotification);
     syncToHostToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
     syncToHostToggle.setColour(juce::ToggleButton::tickColourId, juce::Colours::orange);
@@ -435,6 +477,12 @@ void MIDIXplorerEditor::resized() {
     transport.removeFromLeft(8);
     zoomOutButton.setBounds(transport.removeFromLeft(28));
     zoomInButton.setBounds(transport.removeFromLeft(28));
+    transport.removeFromLeft(12);
+    // Transpose buttons
+    octaveDownButton.setBounds(transport.removeFromLeft(32));
+    semitoneDownButton.setBounds(transport.removeFromLeft(28));
+    semitoneUpButton.setBounds(transport.removeFromLeft(28));
+    octaveUpButton.setBounds(transport.removeFromLeft(32));
     transport.removeFromLeft(10);
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
     transportSlider.setBounds(transport);
@@ -822,6 +870,12 @@ void MIDIXplorerEditor::playNextFile() {
     int nextIndex = (selectedFileIndex + 1) % (int)filteredFiles.size();
 
     selectAndPreview(nextIndex);
+}
+
+void MIDIXplorerEditor::applyTransposeToPlayback() {
+    if (pluginProcessor) {
+        pluginProcessor->setTransposeAmount(transposeAmount);
+    }
 }
 
 double MIDIXplorerEditor::getHostBpm() {
