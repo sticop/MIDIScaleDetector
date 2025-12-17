@@ -281,15 +281,16 @@ void MIDIXplorerEditor::timerCallback() {
     double currentTime;
     // When synced, use host BPM; otherwise use MIDI file's original tempo
     double bpm = synced ? hostBpm : midiFileBpm;
-    double speedRatio = bpm / midiFileBpm;
 
     if (synced) {
         // Calculate position based on host beat position relative to when we started
         double beatsElapsed = hostBeat - playbackStartBeat;
-        // Convert beats to seconds at the original MIDI file tempo
-        currentTime = (beatsElapsed * 60.0) / bpm * speedRatio;
+        // Convert beats to MIDI file time (seconds at MIDI file's tempo)
+        // beatsElapsed beats = beatsElapsed * 60 / midiFileBpm seconds in MIDI file time
+        currentTime = (beatsElapsed * 60.0) / midiFileBpm;
     } else {
-        currentTime = (juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackStartTime) * speedRatio;
+        // Freerun mode: use real time directly (MIDI file plays at its original tempo)
+        currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackStartTime;
     }
 
     // Use pre-calculated file duration
@@ -318,17 +319,20 @@ void MIDIXplorerEditor::timerCallback() {
                 pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
             }
         }
-        // Reset to beginning of file (not fmod to avoid timing drift)
-        currentTime = 0.0;
+        // Calculate how much we overshot and preserve it for smooth loop
+        double overshoot = currentTime - totalDuration;
+        currentTime = overshoot;
         playbackNoteIndex = 0;
+        
         if (synced) {
-            // Reset start beat to current host position for clean loop
-
-            playbackStartBeat = hostBeat;
+            // Calculate how many beats the file duration represents
+            double fileDurationInBeats = (totalDuration * midiFileBpm) / 60.0;
+            // Advance start beat by file duration in beats (preserves fractional timing)
+            playbackStartBeat += fileDurationInBeats;
         } else {
-            playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+            playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - overshoot;
         }
-        // Continue to play notes at time 0 immediately
+        // Continue to play notes that should have started
     }
 
     // Play notes that should have started by now
