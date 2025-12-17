@@ -56,7 +56,8 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     sortCombo.onChange = [this]() { sortFiles(); filterFiles(); };
     addAndMakeVisible(sortCombo);
 
-    // Quantize dropdown and button
+    // Quantize dropdown (Off = no quantize, selecting a value applies it)
+    quantizeCombo.addItem("Quantize: Off", 100);
     quantizeCombo.addSectionHeading("Straight Notes");
     quantizeCombo.addItem("1/1 Note", 1);
     quantizeCombo.addItem("1/2 Note", 2);
@@ -96,14 +97,17 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     quantizeCombo.addItem("1/16 & 1/16 Triplet", 31);
     quantizeCombo.addItem("1/16 & 1/8 Triplet", 32);
     quantizeCombo.addItem("1/8 & 1/8 Triplet", 33);
-    quantizeCombo.setSelectedId(5);  // Default to 1/16 Note
+    quantizeCombo.setSelectedId(100);  // Default to Off
     quantizeCombo.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff3a3a3a));
+    quantizeCombo.onChange = [this]() {
+        if (quantizeCombo.getSelectedId() != 100) {
+            quantizeMidi();
+        } else if (isQuantized) {
+            // When switching back to Off, reload original file
+            loadSelectedFile();
+        }
+    };
     addAndMakeVisible(quantizeCombo);
-    
-    quantizeButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a4a4a));
-    quantizeButton.setColour(juce::TextButton::textColourOffId, juce::Colours::cyan);
-    quantizeButton.onClick = [this]() { quantizeMidi(); };
-    addAndMakeVisible(quantizeButton);
 
     // Search box with modern rounded style
     searchBox.setTextToShowWhenEmpty("🔍 Search MIDI files...", juce::Colours::grey);
@@ -318,7 +322,6 @@ void MIDIXplorerEditor::resized() {
     sortCombo.setBounds(topBar.removeFromLeft(110).reduced(2));
     topBar.removeFromLeft(8);
     quantizeCombo.setBounds(topBar.removeFromLeft(145).reduced(2));
-    quantizeButton.setBounds(topBar.removeFromLeft(70).reduced(2));
     topBar.removeFromLeft(8);
     syncToHostToggle.setBounds(topBar.removeFromRight(90));
 
@@ -842,8 +845,8 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
     filterFiles();
     updateKeyFilterFromDetectedScales();
     
-    // Restore previously selected file, or preselect first file
-    if (!filteredFiles.empty() && selectedFileIndex < 0) {
+    // Always ensure a file is selected and loaded
+    if (!filteredFiles.empty()) {
         int indexToSelect = 0;
         
         // Check if we have a pending file path to restore
@@ -855,10 +858,15 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
                 }
             }
             pendingSelectedFilePath = "";  // Clear after using
+        } else if (selectedFileIndex >= 0 && selectedFileIndex < (int)filteredFiles.size()) {
+            // Keep current selection if valid
+            indexToSelect = selectedFileIndex;
         }
         
         fileListBox->selectRow(indexToSelect);
-        selectAndPreview(indexToSelect);
+        if (!fileLoaded) {
+            selectAndPreview(indexToSelect);
+        }
     }
 }
 
@@ -1319,9 +1327,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
     g.drawRect(bounds);
     
     if (sequence == nullptr || sequence->getNumEvents() == 0) {
-        g.setColour(juce::Colours::grey);
-        g.drawText("No MIDI loaded", bounds, juce::Justification::centred);
-        return;
+        return;  // Just show empty view, no message
     }
     
     int noteRange = highestNote - lowestNote + 1;
