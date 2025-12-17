@@ -129,6 +129,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
 
     // Load saved libraries
     loadLibraries();
+    loadFavorites();
 
     startTimer(20); // 50 fps for smooth sync
 }
@@ -993,8 +994,12 @@ void MIDIXplorerEditor::filterFiles() {
     juce::String searchText = searchBox.getText().toLowerCase();
 
     for (const auto& file : allFiles) {
-        // Check key filter
-        if (keyFilterCombo.getSelectedId() > 1) {
+        // Check favorites filter (ID 2)
+        if (keyFilterCombo.getSelectedId() == 2) {
+            if (!file.favorite) continue;
+        }
+        // Check key filter (IDs > 2)
+        else if (keyFilterCombo.getSelectedId() > 2) {
             if (file.key != keyFilter) continue;
         }
 
@@ -1035,8 +1040,9 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
 
     keyFilterCombo.clear();
     keyFilterCombo.addItem("All Keys", 1);
+    keyFilterCombo.addItem("♥ Favorites", 2);
 
-    int id = 2;
+    int id = 3;
     for (const auto& key : uniqueKeys) {
         keyFilterCombo.addItem(key, id++);
     }
@@ -1046,6 +1052,56 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
 
 void MIDIXplorerEditor::revealInFinder(const juce::String& path) {
     juce::File(path).revealToUser();
+}
+
+void MIDIXplorerEditor::toggleFavorite(int row) {
+    if (row < 0 || row >= (int)filteredFiles.size()) return;
+    
+    auto& filteredFile = filteredFiles[(size_t)row];
+    filteredFile.favorite = !filteredFile.favorite;
+    
+    // Also update in allFiles
+    for (auto& f : allFiles) {
+        if (f.fullPath == filteredFile.fullPath) {
+            f.favorite = filteredFile.favorite;
+            break;
+        }
+    }
+    
+    // Save favorites
+    saveFavorites();
+    
+    // Refresh list
+    fileListBox->repaint();
+}
+
+void MIDIXplorerEditor::saveFavorites() {
+    auto settingsDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("MIDIXplorer");
+    auto favFile = settingsDir.getChildFile("favorites.txt");
+    
+    juce::String content;
+    for (const auto& f : allFiles) {
+        if (f.favorite) {
+            content += f.fullPath + "\n";
+        }
+    }
+    favFile.replaceWithText(content);
+}
+
+void MIDIXplorerEditor::loadFavorites() {
+    auto settingsDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("MIDIXplorer");
+    auto favFile = settingsDir.getChildFile("favorites.txt");
+    
+    if (!favFile.existsAsFile()) return;
+    
+    juce::StringArray favPaths;
+    favFile.readLines(favPaths);
+    
+    for (auto& f : allFiles) {
+        f.favorite = favPaths.contains(f.fullPath);
+    }
 }
 
 // Library list model implementation
@@ -1216,17 +1272,27 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
         g.fillRect(0, 0, w, h);
     }
 
+    // Heart favorite icon
+    g.setFont(16.0f);
+    if (file.favorite) {
+        g.setColour(juce::Colour(0xffff4466));  // Red heart for favorites
+        g.drawText(juce::String::fromUTF8("♥"), 4, 0, 20, h, juce::Justification::centred);
+    } else {
+        g.setColour(juce::Colour(0xff666666));  // Grey heart outline
+        g.drawText(juce::String::fromUTF8("♡"), 4, 0, 20, h, juce::Justification::centred);
+    }
+
     // Key badge
     g.setColour(juce::Colour(0xff3a3a3a));
-    g.fillRoundedRectangle(8.0f, 6.0f, 70.0f, 20.0f, 4.0f);
+    g.fillRoundedRectangle(28.0f, 6.0f, 70.0f, 20.0f, 4.0f);
     g.setColour(juce::Colours::cyan);
     g.setFont(11.0f);
-    g.drawText(file.key, 8, 6, 70, 20, juce::Justification::centred);
+    g.drawText(file.key, 28, 6, 70, 20, juce::Justification::centred);
 
     // File name
     g.setColour(juce::Colours::white);
     g.setFont(13.0f);
-    g.drawText(file.fileName, 88, 0, w - 340, h, juce::Justification::centredLeft);
+    g.drawText(file.fileName, 108, 0, w - 360, h, juce::Justification::centredLeft);
 
     // Instrument name
     g.setColour(juce::Colour(0xffaaaaff));

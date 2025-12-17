@@ -39,6 +39,7 @@ public:
         double bpm = 120.0;     // Tempo in BPM
         juce::String instrument = "---";  // GM instrument name
         bool analyzed = false;
+        bool favorite = false;  // Marked as favorite
     };
 
 private:
@@ -179,6 +180,9 @@ private:
     void stopPlayback();
     void restartPlayback();
     void revealInFinder(const juce::String& path);
+    void toggleFavorite(int row);
+    void saveFavorites();
+    void loadFavorites();
     void selectAndPreview(int row);
 
     // Persistence
