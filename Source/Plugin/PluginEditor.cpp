@@ -209,6 +209,12 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
             playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
         }
         syncToHostToggle.setToggleState(pluginProcessor->isSyncToHost(), juce::dontSendNotification);
+        
+        // Restore the selected file path from processor
+        juce::String lastPath = pluginProcessor->getCurrentFilePath();
+        if (lastPath.isNotEmpty()) {
+            pendingSelectedFilePath = lastPath;
+        }
     }
 
     startTimer(20); // 50 fps for smooth sync
@@ -850,12 +856,14 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
     // Always ensure a file is selected and loaded
     if (!filteredFiles.empty()) {
         int indexToSelect = 0;
+        bool foundPendingFile = false;
         
-        // Check if we have a pending file path to restore
+        // Check if we have a pending file path to restore (from processor or saved state)
         if (pendingSelectedFilePath.isNotEmpty()) {
             for (size_t i = 0; i < filteredFiles.size(); i++) {
                 if (filteredFiles[i].fullPath == pendingSelectedFilePath) {
                     indexToSelect = (int)i;
+                    foundPendingFile = true;
                     break;
                 }
             }
@@ -863,11 +871,23 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
         } else if (selectedFileIndex >= 0 && selectedFileIndex < (int)filteredFiles.size()) {
             // Keep current selection if valid
             indexToSelect = selectedFileIndex;
+            foundPendingFile = true;
         }
         
         fileListBox->selectRow(indexToSelect);
-        if (!fileLoaded) {
+        selectedFileIndex = indexToSelect;
+        
+        // Only load the file if not already loaded in the processor
+        bool processorHasFile = pluginProcessor && !pluginProcessor->getCurrentFilePath().isEmpty();
+        if (!fileLoaded && !processorHasFile) {
             selectAndPreview(indexToSelect);
+        } else if (processorHasFile) {
+            // Sync editor state with processor without reloading
+            fileLoaded = true;
+            if (pluginProcessor) {
+                midiFileDuration = pluginProcessor->getFileDuration();
+                midiFileBpm = pluginProcessor->getFileBpm();
+            }
         }
     }
 }
