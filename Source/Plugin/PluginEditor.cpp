@@ -579,6 +579,7 @@ void MIDIXplorerEditor::scheduleFileChange() {
 }
 
 void MIDIXplorerEditor::loadSelectedFile() {
+    isQuantized = false;  // Reset quantize when loading new file
     if (selectedFileIndex < 0 || selectedFileIndex >= (int)filteredFiles.size()) return;
 
     auto& info = filteredFiles[(size_t)selectedFileIndex];
@@ -1723,18 +1724,46 @@ void MIDIXplorerEditor::quantizeMidi() {
         quantizedMidi.addTrack(newTrack);
     }
     
-    // Save quantized file back (overwrite)
-    juce::FileOutputStream outputStream(midiFile);
-    if (!outputStream.openedOk()) return;
-    outputStream.setPosition(0);
-    outputStream.truncate();
-    quantizedMidi.writeTo(outputStream);
-    outputStream.flush();
+    // Apply quantization only to the playback sequence (temporary, not saved to file)
+    // Convert to seconds for playback
+    quantizedMidi.convertTimestampTicksToSeconds();
     
-    // Reload the file to update the display and playback
-    loadSelectedFile();
+    // Merge all tracks into playback sequence
+    playbackSequence.clear();
+    for (int t = 0; t < quantizedMidi.getNumTracks(); t++) {
+        auto* track = quantizedMidi.getTrack(t);
+        if (track) {
+            for (int i = 0; i < track->getNumEvents(); i++) {
+                playbackSequence.addEvent(track->getEventPointer(i)->message);
+            }
+        }
+    }
+    playbackSequence.updateMatchedPairs();
+    playbackSequence.sort();
+    
+    // Update duration from quantized sequence
+    midiFileDuration = 0.0;
+    for (int i = 0; i < playbackSequence.getNumEvents(); i++) {
+        double t = playbackSequence.getEventPointer(i)->message.getTimeStamp();
+        if (t > midiFileDuration) midiFileDuration = t;
+    }
+    
+    // Reset playback position and send sequence to processor
+    playbackNoteIndex = 0;
+    currentPlaybackPosition = 0.0;
+    
+    if (pluginProcessor) {
+        pluginProcessor->loadPlaybackSequence(playbackSequence, midiFileDuration, midiFileBpm, filteredFiles[(size_t)selectedFileIndex].fullPath);
+        if (isPlaying) {
+            pluginProcessor->resetPlayback();
+        }
+    }
+    
+    // Update the MIDI note viewer with quantized sequence
+    midiNoteViewer.setSequence(&playbackSequence, midiFileDuration);
     
     // Show brief confirmation
     juce::String modeName = quantizeCombo.getText();
-    DBG("Quantized MIDI to: " << modeName);
+    isQuantized = true;
+    DBG("Quantized MIDI to: " << modeName << " (temporary)");
 }

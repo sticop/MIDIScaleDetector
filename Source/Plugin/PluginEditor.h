@@ -73,18 +73,24 @@ private:
 
         void mouseDown(const juce::MouseEvent& e) override {
             dragStartRow = getRowContainingPosition(e.x, e.y);
+            dragStartPos = e.position;
             
             // Check if clicking on heart area (first 24 pixels of the row)
             if (e.x < 24 && dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
                 owner.toggleFavorite(dragStartRow);
+                heartClicked = true;
                 return;  // Don't process further
             }
+            heartClicked = false;
             
             juce::ListBox::mouseDown(e);
         }
 
         void mouseDrag(const juce::MouseEvent& e) override {
-            if (e.getDistanceFromDragStart() > 10 && !isDragging && dragStartRow >= 0) {
+            if (heartClicked) return;  // Don't drag if heart was clicked
+            
+            // Lower threshold for easier dragging (5 pixels instead of 10)
+            if (e.getDistanceFromDragStart() > 5 && !isDragging && dragStartRow >= 0) {
                 if (dragStartRow < (int)owner.filteredFiles.size()) {
                     isDragging = true;
                     auto filePath = owner.filteredFiles[(size_t)dragStartRow].fullPath;
@@ -92,10 +98,10 @@ private:
                     if (file.existsAsFile()) {
                         juce::StringArray files;
                         files.add(file.getFullPathName());
-                        // Use copy mode for DAW compatibility
+                        DBG("Dragging file: " << file.getFullPathName());
+                        // Use copy mode (true) for external drag to DAW
                         juce::DragAndDropContainer::performExternalDragDropOfFiles(files, true);
                     }
-                    isDragging = false;
                 }
             }
         }
@@ -103,12 +109,15 @@ private:
         void mouseUp(const juce::MouseEvent& e) override {
             isDragging = false;
             dragStartRow = -1;
+            heartClicked = false;
             juce::ListBox::mouseUp(e);
         }
     private:
         MIDIXplorerEditor& owner;
         bool isDragging = false;
+        bool heartClicked = false;
         int dragStartRow = -1;
+        juce::Point<float> dragStartPos;
     };
 
     // MIDI Note Viewer (Piano Roll)
@@ -156,6 +165,7 @@ private:
     int selectedFileIndex = -1;
     juce::String pendingSelectedFilePath;
     bool fileLoaded = false;
+    bool isQuantized = false;
     double playbackStartTime = 0;
     double playbackStartBeat = 0;
     int playbackNoteIndex = 0;
