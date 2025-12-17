@@ -298,8 +298,7 @@ void MIDIXplorerEditor::timerCallback() {
         } else {
             playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
         }
-        // Return here to let next timer callback start fresh from beginning
-        return;
+        // Continue to play notes at time 0 immediately
     }
     
     // Play notes that should have started by now
