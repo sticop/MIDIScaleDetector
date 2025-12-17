@@ -74,7 +74,7 @@ private:
 
         void mouseDown(const juce::MouseEvent& e) override {
             dragStartRow = getRowContainingPosition(e.x, e.y);
-            dragStartPos = e.position;
+            dragStartPos = e.getPosition();
             
             // Check if clicking on heart area (first 24 pixels of the row)
             if (e.x < 24 && dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
@@ -88,21 +88,26 @@ private:
         }
 
         void mouseDrag(const juce::MouseEvent& e) override {
-            if (heartClicked) return;  // Don't drag if heart was clicked
+            if (heartClicked) return;
             
-            // Lower threshold for easier dragging (5 pixels instead of 10)
-            if (e.getDistanceFromDragStart() > 5 && !isDragging && dragStartRow >= 0) {
-                if (dragStartRow < (int)owner.filteredFiles.size()) {
+            // Start native file drag when mouse moves enough
+            if (!isDragging && dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
+                auto distance = e.getPosition().getDistanceFrom(dragStartPos);
+                if (distance > 4) {
                     isDragging = true;
                     auto filePath = owner.filteredFiles[(size_t)dragStartRow].fullPath;
                     juce::File file(filePath);
                     if (file.existsAsFile()) {
+                        // Native OS file drag - this is the standard way
                         juce::StringArray files;
                         files.add(file.getFullPathName());
-                        DBG("Dragging file: " << file.getFullPathName());
-                        // Use copy mode (true) for external drag to DAW
-                        juce::DragAndDropContainer::performExternalDragDropOfFiles(files, true);
+                        
+                        // canMoveFiles = false means copy only (safer for DAWs)
+                        auto result = juce::DragAndDropContainer::performExternalDragDropOfFiles(files, false);
+                        (void)result;  // Ignore result, drag started
                     }
+                    isDragging = false;
+                    dragStartRow = -1;
                 }
             }
         }
@@ -118,7 +123,7 @@ private:
         bool isDragging = false;
         bool heartClicked = false;
         int dragStartRow = -1;
-        juce::Point<float> dragStartPos;
+        juce::Point<int> dragStartPos;
     };
 
     // MIDI Note Viewer (Piano Roll)
