@@ -142,7 +142,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
         if (syncToHostToggle.getToggleState()) {
             return;  // Ignore button clicks when synced to host
         }
-        
+
         if (!isPlaying) {
             // Start playing (manual mode only)
             isPlaying = true;
@@ -1258,11 +1258,7 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
     juce::StringArray allKeysAndRelatives;
 
     for (const auto& file : allFiles) {
-        // Add the detected key
-        if (file.key != "---" && !allKeysAndRelatives.contains(file.key)) {
-            allKeysAndRelatives.add(file.key);
-        }
-        // Add the relative key (from Circle of Fifths)
+        // Only add the relative key format (e.g., "C/Am")
         if (file.relativeKey.isNotEmpty() && file.relativeKey != "---" &&
             !allKeysAndRelatives.contains(file.relativeKey)) {
             allKeysAndRelatives.add(file.relativeKey);
