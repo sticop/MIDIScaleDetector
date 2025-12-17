@@ -1344,6 +1344,12 @@ juce::var MIDIXplorerEditor::FileListModel::getDragSourceDescription(const juce:
 void MIDIXplorerEditor::FileListModel::listBoxItemClicked(int row, const juce::MouseEvent& e) {
     if (row < 0 || row >= (int)owner.filteredFiles.size()) return;
 
+    // Check if heart area clicked (first 24 pixels)
+    if (e.x < 24 && e.mods.isLeftButtonDown()) {
+        owner.toggleFavorite(row);
+        return;
+    }
+
     if (e.mods.isRightButtonDown()) {
         juce::PopupMenu menu;
         menu.addItem(1, "Reveal in Finder");

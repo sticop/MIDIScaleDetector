@@ -72,6 +72,13 @@ private:
 
         void mouseDown(const juce::MouseEvent& e) override {
             dragStartRow = getRowContainingPosition(e.x, e.y);
+            
+            // Check if clicking on heart area (first 24 pixels of the row)
+            if (e.x < 24 && dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
+                owner.toggleFavorite(dragStartRow);
+                return;  // Don't process further
+            }
+            
             juce::ListBox::mouseDown(e);
         }
 
