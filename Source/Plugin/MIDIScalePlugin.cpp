@@ -71,10 +71,13 @@ void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             bool hostNowPlaying = pos->getIsPlaying();
             if (hostNowPlaying && !wasHostPlaying && playbackState.syncToHost.load() && playbackState.fileLoaded.load()) {
                 playbackState.isPlaying.store(true);
+                playbackState.playbackNoteIndex.store(0);  // Reset note index
                 resetPlayback();
             }
             // Auto-stop when host stops
             else if (!hostNowPlaying && wasHostPlaying && playbackState.syncToHost.load()) {
+                playbackState.isPlaying.store(false);  // Stop playback state
+                playbackState.playbackNoteIndex.store(0);  // Reset for next play
                 // Send all notes off
                 for (int ch = 1; ch <= 16; ch++) {
                     addMidiMessage(juce::MidiMessage::allNotesOff(ch));
@@ -286,21 +289,31 @@ void MIDIScalePlugin::updatePlayback() {
     
     double currentTime;
     double midiFileBpm = playbackState.fileBpm.load();
+    if (midiFileBpm <= 0) midiFileBpm = 120.0;  // Fallback
+    
     bool synced = playbackState.syncToHost.load() && transportState.isPlaying.load();
     double hostBeat = transportState.ppqPosition.load();
     
     if (synced) {
         double beatsElapsed = hostBeat - playbackState.playbackStartBeat.load();
         currentTime = (beatsElapsed * 60.0) / midiFileBpm;
+        
+        // If time is negative (DAW seeked backwards), reset to beginning
+        if (currentTime < 0) {
+            playbackState.playbackNoteIndex.store(0);
+            playbackState.playbackStartBeat.store(hostBeat);
+            currentTime = 0;
+        }
     } else {
         currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackState.playbackStartTime.load();
+        if (currentTime < 0) currentTime = 0;
     }
     
-    // Handle wrapping
+    // Handle wrapping for position display
     double wrappedTime = std::fmod(currentTime, totalDuration);
     if (wrappedTime < 0) wrappedTime += totalDuration;
     
-    // Update position
+    // Update position for UI
     playbackState.playbackPosition.store(wrappedTime / totalDuration);
     
     // Handle looping
@@ -321,13 +334,13 @@ void MIDIScalePlugin::updatePlayback() {
         currentTime = wrappedTime;
     }
     
-    // Play notes - use tight timing to avoid double triggers
+    // Play notes that should have triggered by now
     int noteIndex = playbackState.playbackNoteIndex.load();
     while (noteIndex < playbackSequence.getNumEvents()) {
         auto* event = playbackSequence.getEventPointer(noteIndex);
         double eventTime = event->message.getTimeStamp();
         
-        // Only play notes that are at or before current time (no lookahead)
+        // Play notes at or before current time
         if (eventTime <= currentTime) {
             auto msg = event->message;
             if (msg.isNoteOn() || msg.isNoteOff()) {
