@@ -591,6 +591,7 @@ void MIDIXplorerEditor::scheduleFileChange() {
 
 void MIDIXplorerEditor::loadSelectedFile() {
     isQuantized = false;  // Reset quantize when loading new file
+    quantizeCombo.setSelectedId(100, juce::dontSendNotification);  // Reset to "Off"
     if (selectedFileIndex < 0 || selectedFileIndex >= (int)filteredFiles.size()) return;
 
     auto& info = filteredFiles[(size_t)selectedFileIndex];
