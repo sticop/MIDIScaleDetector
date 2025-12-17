@@ -792,37 +792,92 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         }
     }
 
-    // Major and minor scale templates
-    const int majorTemplate[] = {1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1};
-    const int minorTemplate[] = {1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0};
+    // Comprehensive scale templates (intervals from root)
+    struct ScaleTemplate {
+        const char* name;
+        int intervals[12];
+    };
+    
+    static const ScaleTemplate scales[] = {
+        // Major modes
+        {"Major",           {1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1}},
+        {"Dorian",          {1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0}},
+        {"Phrygian",        {1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0}},
+        {"Lydian",          {1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1}},
+        {"Mixolydian",      {1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0}},
+        {"Minor",           {1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0}},  // Natural minor/Aeolian
+        {"Locrian",         {1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0}},
+        
+        // Other minor variants
+        {"Harmonic Min",    {1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1}},
+        {"Melodic Min",     {1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1}},
+        
+        // Pentatonic
+        {"Major Pent",      {1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0}},
+        {"Minor Pent",      {1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0}},
+        
+        // Blues
+        {"Blues",           {1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0}},
+        {"Major Blues",     {1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0}},
+        
+        // Exotic/World scales
+        {"Hungarian Min",   {1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1}},
+        {"Spanish",         {1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0}},
+        {"Arabic",          {1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 0}},
+        {"Japanese",        {1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0}},
+        {"Egyptian",        {1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0}},
+        {"Persian",         {1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 0}},
+        
+        // Jazz/Bebop
+        {"Bebop Dom",       {1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1}},
+        {"Bebop Major",     {1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1}},
+        {"Altered",         {1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0}},
+        
+        // Symmetric
+        {"Whole Tone",      {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}},
+        {"Diminished",      {1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1}},
+        {"Aug",             {1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1}},
+        {"Chromatic",       {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}},
+    };
+    
     const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-
+    const int numScales = sizeof(scales) / sizeof(scales[0]);
+    
     int bestKey = 0;
-    bool bestIsMajor = true;
+    int bestScaleIdx = 0;
     int bestScore = -1;
 
     for (int root = 0; root < 12; root++) {
-        int majorScore = 0, minorScore = 0;
-        for (int i = 0; i < 12; i++) {
-            int idx = (i + root) % 12;
-            majorScore += noteHistogram[(size_t)idx] * majorTemplate[i];
-            minorScore += noteHistogram[(size_t)idx] * minorTemplate[i];
-        }
+        for (int s = 0; s < numScales; s++) {
+            int score = 0;
+            int templateNotes = 0;
+            int matchedNotes = 0;
+            
+            for (int i = 0; i < 12; i++) {
+                int idx = (i + root) % 12;
+                if (scales[s].intervals[i] == 1) {
+                    templateNotes++;
+                    score += noteHistogram[(size_t)idx] * 2;  // Bonus for matching scale notes
+                    if (noteHistogram[(size_t)idx] > 0) matchedNotes++;
+                } else {
+                    score -= noteHistogram[(size_t)idx];  // Penalty for non-scale notes
+                }
+            }
+            
+            // Prefer scales where more template notes are actually used
+            if (templateNotes > 0) {
+                score += (matchedNotes * 10) / templateNotes;
+            }
 
-        if (majorScore > bestScore) {
-            bestScore = majorScore;
-            bestKey = root;
-            bestIsMajor = true;
-        }
-        if (minorScore > bestScore) {
-            bestScore = minorScore;
-            bestKey = root;
-            bestIsMajor = false;
+            if (score > bestScore) {
+                bestScore = score;
+                bestKey = root;
+                bestScaleIdx = s;
+            }
         }
     }
 
-    info.key = juce::String(noteNames[bestKey]) + (bestIsMajor ? " Major" : " Minor");
-
+    info.key = juce::String(noteNames[bestKey]) + " " + scales[bestScaleIdx].name;
     // Extract tempo from MIDI file
     info.bpm = 120.0;  // Default
     for (int track = 0; track < midiFile.getNumTracks(); track++) {
