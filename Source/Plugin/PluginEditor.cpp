@@ -1564,14 +1564,14 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     // Circle of Fifths relative key (Parent Major / Relative minor)
     if (file.relativeKey.isNotEmpty()) {
         g.setColour(juce::Colour(0xffff9944));  // Orange for relative key
-        g.setFont(9.0f);
-        g.drawText("(" + file.relativeKey + ")", 102, 6, 55, 20, juce::Justification::centredLeft);
+        g.setFont(12.0f);
+        g.drawText("(" + file.relativeKey + ")", 102, 6, 70, 20, juce::Justification::centredLeft);
     }
 
     // File name
     g.setColour(juce::Colours::white);
     g.setFont(13.0f);
-    g.drawText(file.fileName, 160, 0, w - 415, h, juce::Justification::centredLeft);
+    g.drawText(file.fileName, 175, 0, w - 430, h, juce::Justification::centredLeft);
 
     // Instrument name
     g.setColour(juce::Colour(0xffaaaaff));
@@ -1838,9 +1838,9 @@ void MIDIXplorerEditor::quantizeMidi() {
         double currentStartBeat = playbackStartBeat;
         double currentStartTime = playbackStartTime;
         bool wasPlaying = isPlaying;
-        
+
         pluginProcessor->loadPlaybackSequence(playbackSequence, midiFileDuration, midiFileBpm, filteredFiles[(size_t)selectedFileIndex].fullPath);
-        
+
         if (wasPlaying) {
             // Restore timing so playback continues from same position
             playbackStartBeat = currentStartBeat;
