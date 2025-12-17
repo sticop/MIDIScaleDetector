@@ -1119,7 +1119,7 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
 
     keyFilterCombo.clear();
     keyFilterCombo.addItem("All Keys", 1);
-    keyFilterCombo.addItem("♥ Favorites", 2);
+    keyFilterCombo.addItem("Favorites", 2);
 
     int id = 3;
     for (const auto& key : uniqueKeys) {
@@ -1351,14 +1351,16 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
         g.fillRect(0, 0, w, h);
     }
 
-    // Heart favorite icon
-    g.setFont(16.0f);
+    // Favorite star icon (drawn as a filled/empty circle)
+    float starX = 12.0f;
+    float starY = h / 2.0f;
+    float starRadius = 6.0f;
     if (file.favorite) {
-        g.setColour(juce::Colour(0xffff4466));  // Red heart for favorites
-        g.drawText(juce::String::fromUTF8("♥"), 4, 0, 20, h, juce::Justification::centred);
+        g.setColour(juce::Colour(0xffff4466));  // Red for favorites
+        g.fillEllipse(starX - starRadius, starY - starRadius, starRadius * 2, starRadius * 2);
     } else {
-        g.setColour(juce::Colour(0xff666666));  // Grey heart outline
-        g.drawText(juce::String::fromUTF8("♡"), 4, 0, 20, h, juce::Justification::centred);
+        g.setColour(juce::Colour(0xff555555));  // Grey outline
+        g.drawEllipse(starX - starRadius, starY - starRadius, starRadius * 2, starRadius * 2, 1.5f);
     }
 
     // Key badge
