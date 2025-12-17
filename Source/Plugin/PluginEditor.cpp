@@ -373,6 +373,8 @@ void MIDIXplorerEditor::timerCallback() {
     if (position >= 0 && position <= 1) {
         transportSlider.setValue(position, juce::dontSendNotification);
         midiNoteViewer.setPlaybackPosition(position);
+        currentPlaybackPosition = position;
+        fileListBox->repaint();  // Refresh to show progress bar
 
         // Update time display
         double displayTime = std::fmod(currentTime, totalDuration);
@@ -1187,6 +1189,17 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     int secs = (int)(file.duration) % 60;
     juce::String durationStr = juce::String::formatted("%d:%02d", mins, secs);
     g.drawText(durationStr, w - 60, 0, 55, h, juce::Justification::centredRight);
+
+    // Progress bar for currently playing file
+    if (row == owner.selectedFileIndex && owner.isPlaying && owner.fileLoaded) {
+        // Background of progress bar
+        g.setColour(juce::Colour(0xff333333));
+        g.fillRect(8, h - 4, w - 16, 3);
+        // Progress fill
+        int progressWidth = (int)((w - 16) * owner.currentPlaybackPosition);
+        g.setColour(juce::Colour(0xff00cc88));
+        g.fillRect(8, h - 4, progressWidth, 3);
+    }
 }
 
 void MIDIXplorerEditor::FileListModel::selectedRowsChanged(int lastRowSelected) {
