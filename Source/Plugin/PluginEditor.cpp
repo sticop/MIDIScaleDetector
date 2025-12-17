@@ -490,16 +490,20 @@ void MIDIXplorerEditor::stopPlayback() {
 }
 
 void MIDIXplorerEditor::restartPlayback() {
-    // Send all notes off to stop current playback
-    if (pluginProcessor) {
-        for (int ch = 1; ch <= 16; ch++) {
-            pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+    if (syncToHostToggle.getToggleState() && isHostPlaying()) {
+        // Queue restart for the next beat to maintain sync
+        scheduleFileChange();
+    } else {
+        // Restart immediately in freerun mode
+        if (pluginProcessor) {
+            for (int ch = 1; ch <= 16; ch++) {
+                pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+            }
         }
+        playbackNoteIndex = 0;
+        playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+        playbackStartBeat = getHostBeatPosition();
     }
-    // Reset playback position to beginning
-    playbackNoteIndex = 0;
-    playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
-    playbackStartBeat = getHostBeatPosition();
 }
 
 double MIDIXplorerEditor::getHostBpm() {
