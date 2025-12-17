@@ -159,6 +159,8 @@ private:
     bool isPlaying = true;
     juce::ToggleButton syncToHostToggle{"DAW Sync"};
     juce::Slider transportSlider;
+    juce::Slider velocitySlider;
+    juce::Label velocityLabel;
     juce::Label timeDisplayLabel;  // Shows elapsed / total time
     MIDINoteViewer midiNoteViewer;
 

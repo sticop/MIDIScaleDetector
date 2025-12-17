@@ -261,7 +261,7 @@ void MIDIScalePlugin::loadPlaybackSequence(const juce::MidiMessageSequence& seq,
 
     // Clear and rebuild the sequence, truncating notes at the end boundary
     playbackSequence.clear();
-    
+
     // Leave a small gap at the end for clean loop transitions
     double effectiveEnd = duration - 0.02;  // 20ms before the end
     double noteOffTime = duration - 0.03;   // Note-offs 30ms before end
@@ -336,7 +336,7 @@ void MIDIScalePlugin::updatePlayback() {
 
     double totalDuration = playbackState.fileDuration.load();
     if (totalDuration <= 0) totalDuration = 1.0;
-    
+
     // Add a tiny gap at the end to ensure clean loop transitions
     double loopEndTime = totalDuration - 0.01;  // 10ms gap before loop
 
@@ -402,6 +402,9 @@ void MIDIScalePlugin::updatePlayback() {
 
     // Play notes that should have triggered by now
     int noteIndex = playbackState.playbackNoteIndex.load();
+    // Get velocity scale
+    float velScale = playbackState.velocityScale.load();
+    
     while (noteIndex < playbackSequence.getNumEvents()) {
         auto* event = playbackSequence.getEventPointer(noteIndex);
         double eventTime = event->message.getTimeStamp();
@@ -409,7 +412,14 @@ void MIDIScalePlugin::updatePlayback() {
         // Play notes at or before current time
         if (eventTime <= currentTime) {
             auto msg = event->message;
-            if (msg.isNoteOn() || msg.isNoteOff()) {
+            if (msg.isNoteOn()) {
+                // Apply velocity scaling
+                int velocity = msg.getVelocity();
+                velocity = juce::jlimit(1, 127, (int)(velocity * velScale));
+                msg = juce::MidiMessage::noteOn(msg.getChannel(), msg.getNoteNumber(), (juce::uint8)velocity);
+                msg.setTimeStamp(eventTime);
+                addMidiMessage(msg);
+            } else if (msg.isNoteOff()) {
                 addMidiMessage(msg);
             }
             noteIndex++;

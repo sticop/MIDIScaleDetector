@@ -181,6 +181,30 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     };
     addAndMakeVisible(syncToHostToggle);
 
+    // Velocity slider for volume control
+    velocityLabel.setText("Vol:", juce::dontSendNotification);
+    velocityLabel.setFont(juce::Font(12.0f));
+    velocityLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    velocityLabel.setJustificationType(juce::Justification::centredRight);
+    addAndMakeVisible(velocityLabel);
+    
+    velocitySlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    velocitySlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 40, 20);
+    velocitySlider.setRange(0.0, 200.0, 1.0);  // 0% to 200%
+    velocitySlider.setValue(100.0);  // Default 100%
+    velocitySlider.setTextValueSuffix("%");
+    velocitySlider.setColour(juce::Slider::trackColourId, juce::Colour(0xff3a3a3a));
+    velocitySlider.setColour(juce::Slider::thumbColourId, juce::Colours::orange);
+    velocitySlider.setColour(juce::Slider::textBoxTextColourId, juce::Colours::white);
+    velocitySlider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff2a2a2a));
+    velocitySlider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xff444444));
+    velocitySlider.onValueChange = [this]() {
+        if (pluginProcessor) {
+            pluginProcessor->setVelocityScale((float)(velocitySlider.getValue() / 100.0));
+        }
+    };
+    addAndMakeVisible(velocitySlider);
+
     transportSlider.setSliderStyle(juce::Slider::LinearBar);
     transportSlider.setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
     transportSlider.setRange(0.0, 1.0);
@@ -328,6 +352,9 @@ void MIDIXplorerEditor::resized() {
     sortCombo.setBounds(topBar.removeFromLeft(110).reduced(2));
     topBar.removeFromLeft(8);
     quantizeCombo.setBounds(topBar.removeFromLeft(145).reduced(2));
+    topBar.removeFromLeft(8);
+    velocityLabel.setBounds(topBar.removeFromLeft(28));
+    velocitySlider.setBounds(topBar.removeFromLeft(100).reduced(2));
     topBar.removeFromLeft(8);
     syncToHostToggle.setBounds(topBar.removeFromRight(90));
 

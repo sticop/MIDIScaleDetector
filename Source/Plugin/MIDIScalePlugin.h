@@ -86,6 +86,7 @@ public:
         std::atomic<double> fileDuration{0.0};
         std::atomic<double> fileBpm{120.0};
         std::atomic<bool> syncToHost{true};
+        std::atomic<float> velocityScale{1.0f};  // 0.0 to 2.0 (0% to 200%)
         juce::String currentFilePath;
     };
     
@@ -105,6 +106,8 @@ public:
     double getFileBpm() const { return playbackState.fileBpm; }
     void setSyncToHost(bool sync) { playbackState.syncToHost = sync; }
     bool isSyncToHost() const { return playbackState.syncToHost; }
+    void setVelocityScale(float scale) { playbackState.velocityScale = scale; }
+    float getVelocityScale() const { return playbackState.velocityScale; }
     juce::String getCurrentFilePath() const { return playbackState.currentFilePath; }
 
 private:
