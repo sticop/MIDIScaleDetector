@@ -36,7 +36,8 @@ public:
         juce::String key;
         juce::String relativeKey;  // Circle of Fifths relative major/minor
         juce::String libraryName;
-        double duration = 0.0;  // Duration in seconds
+        double duration = 0.0;      // Duration in seconds (rounded to bars)
+        double durationBeats = 0.0; // Duration in beats
         double bpm = 120.0;     // Tempo in BPM
         juce::String instrument = "---";  // GM instrument name
         bool analyzed = false;
@@ -173,7 +174,8 @@ private:
     // Host sync state
     double lastHostBpm = 120.0;
     double midiFileBpm = 120.0;
-    double midiFileDuration = 0.0;  // Actual duration of the MIDI file in seconds
+    double midiFileDuration = 0.0;       // Duration in seconds (rounded to bars)
+    double midiFileDurationBeats = 0.0;  // Duration in beats
     double currentPlaybackPosition = 0.0;  // 0.0 to 1.0 for progress display
     bool wasHostPlaying = false;
     double lastBeatPosition = 0;

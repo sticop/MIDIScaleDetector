@@ -630,22 +630,29 @@ void MIDIXplorerEditor::loadSelectedFile() {
     playbackSequence.updateMatchedPairs();
 
     // Calculate actual file duration (find the last note-off time)
-    midiFileDuration = 0.0;
+    double maxEventTime = 0.0;
     for (int i = 0; i < playbackSequence.getNumEvents(); i++) {
         auto* event = playbackSequence.getEventPointer(i);
         double eventTime = event->message.getTimeStamp();
-        if (eventTime > midiFileDuration) {
-            midiFileDuration = eventTime;
+        if (eventTime > maxEventTime) {
+            maxEventTime = eventTime;
         }
         // For note-on events, check if there is a matched note-off
         if (event->message.isNoteOn() && event->noteOffObject != nullptr) {
             double noteOffTime = event->noteOffObject->message.getTimeStamp();
-            if (noteOffTime > midiFileDuration) {
-                midiFileDuration = noteOffTime;
+            if (noteOffTime > maxEventTime) {
+                maxEventTime = noteOffTime;
             }
         }
     }
-    if (midiFileDuration <= 0) midiFileDuration = 1.0;
+    
+    // Round duration to nearest bar (4 beats) for clean looping that matches DAW
+    double beatsPerSecond = midiFileBpm / 60.0;
+    double totalBeats = maxEventTime * beatsPerSecond;
+    double bars = std::ceil(totalBeats / 4.0);  // Round up to nearest bar
+    if (bars < 1.0) bars = 1.0;
+    midiFileDurationBeats = bars * 4.0;
+    midiFileDuration = midiFileDurationBeats / beatsPerSecond;
 
     // Update MIDI note viewer
     midiNoteViewer.setSequence(&playbackSequence, midiFileDuration);
@@ -1051,12 +1058,29 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     double maxTime = 0.0;
     for (int track = 0; track < midiFile.getNumTracks(); track++) {
         auto* sequence = midiFile.getTrack(track);
-        if (sequence && sequence->getNumEvents() > 0) {
-            double lastTime = sequence->getEventPointer(sequence->getNumEvents() - 1)->message.getTimeStamp();
-            if (lastTime > maxTime) maxTime = lastTime;
+        if (sequence) {
+            for (int i = 0; i < sequence->getNumEvents(); i++) {
+                auto* event = sequence->getEventPointer(i);
+                double eventTime = event->message.getTimeStamp();
+                if (eventTime > maxTime) maxTime = eventTime;
+                // For note-on, also check note-off time
+                if (event->message.isNoteOn() && event->noteOffObject) {
+                    double offTime = event->noteOffObject->message.getTimeStamp();
+                    if (offTime > maxTime) maxTime = offTime;
+                }
+            }
         }
     }
-    info.duration = maxTime;
+    
+    // Round duration to nearest bar (4 beats) for clean looping
+    double bpm = info.bpm > 0 ? info.bpm : 120.0;
+    double beatsPerSecond = bpm / 60.0;
+    double totalBeats = maxTime * beatsPerSecond;
+    double bars = std::ceil(totalBeats / 4.0);  // Round up to nearest bar
+    if (bars < 1.0) bars = 1.0;
+    double roundedBeats = bars * 4.0;
+    info.duration = roundedBeats / beatsPerSecond;
+    info.durationBeats = roundedBeats;
     // Extract instrument from first program change
     static const char* gmInstruments[] = {
         "Acoustic Grand Piano", "Bright Acoustic Piano", "Electric Grand Piano", "Honky-tonk Piano",
@@ -1504,11 +1528,12 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     juce::String bpmStr = juce::String((int)file.bpm) + " bpm";
     g.drawText(bpmStr, w - 130, 0, 60, h, juce::Justification::centredRight);
 
-    // Draw duration
+    // Draw duration (bars and time)
+    int bars = (int)(file.durationBeats / 4.0);
     int mins = (int)(file.duration) / 60;
     int secs = (int)(file.duration) % 60;
-    juce::String durationStr = juce::String::formatted("%d:%02d", mins, secs);
-    g.drawText(durationStr, w - 60, 0, 55, h, juce::Justification::centredRight);
+    juce::String durationStr = juce::String::formatted("%dbar %d:%02d", bars, mins, secs);
+    g.drawText(durationStr, w - 85, 0, 80, h, juce::Justification::centredRight);
 
     // Progress bar for currently playing file
     if (row == owner.selectedFileIndex && owner.isPlaying && owner.fileLoaded) {
