@@ -298,8 +298,12 @@ void MIDIScalePlugin::updatePlayback() {
         double beatsElapsed = hostBeat - playbackState.playbackStartBeat.load();
         currentTime = (beatsElapsed * 60.0) / midiFileBpm;
 
-        // If time is negative (DAW seeked backwards), reset to beginning
+        // If time is negative (DAW seeked backwards), reset completely
         if (currentTime < 0) {
+            // Send all notes off for clean state
+            for (int ch = 1; ch <= 16; ch++) {
+                addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+            }
             playbackState.playbackNoteIndex.store(0);
             playbackState.playbackStartBeat.store(hostBeat);
             currentTime = 0;
@@ -309,36 +313,36 @@ void MIDIScalePlugin::updatePlayback() {
         if (currentTime < 0) currentTime = 0;
     }
 
-    // Check if we need to loop
-    int loopCount = 0;
-    while (currentTime >= totalDuration && loopCount < 10) {  // Safety limit
-        loopCount++;
-        
-        // Reset note index for new loop iteration
-        playbackState.playbackNoteIndex.store(0);
-        
-        // Adjust timing references to account for the loop
-        if (synced) {
-            double beatsPerLoop = (totalDuration * midiFileBpm) / 60.0;
-            double newStartBeat = playbackState.playbackStartBeat.load() + beatsPerLoop;
-            playbackState.playbackStartBeat.store(newStartBeat);
-        } else {
-            double newStartTime = playbackState.playbackStartTime.load() + totalDuration;
-            playbackState.playbackStartTime.store(newStartTime);
+    // Check if we've reached the end - do a clean reset
+    if (currentTime >= totalDuration) {
+        // Send all notes off for a clean slate
+        for (int ch = 1; ch <= 16; ch++) {
+            addMidiMessage(juce::MidiMessage::allNotesOff(ch));
         }
         
-        // Recalculate current time after adjustment
+        // Reset note index to start from scratch
+        playbackState.playbackNoteIndex.store(0);
+        
+        // Reset timing to start a fresh loop
         if (synced) {
+            // Align to the next loop start based on total duration in beats
+            double beatsPerLoop = (totalDuration * midiFileBpm) / 60.0;
+            double loopsCompleted = std::floor((hostBeat - playbackState.playbackStartBeat.load()) * midiFileBpm / 60.0 / totalDuration);
+            playbackState.playbackStartBeat.store(playbackState.playbackStartBeat.load() + loopsCompleted * beatsPerLoop);
+            
+            // Recalculate current time
             double beatsElapsed = hostBeat - playbackState.playbackStartBeat.load();
             currentTime = (beatsElapsed * 60.0) / midiFileBpm;
         } else {
+            double loopsCompleted = std::floor(currentTime / totalDuration);
+            playbackState.playbackStartTime.store(playbackState.playbackStartTime.load() + loopsCompleted * totalDuration);
             currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackState.playbackStartTime.load();
         }
+        
+        // Clamp to valid range
+        if (currentTime < 0) currentTime = 0;
+        if (currentTime >= totalDuration) currentTime = 0;  // Safety
     }
-
-    // Ensure time is within valid range
-    if (currentTime < 0) currentTime = 0;
-    if (currentTime > totalDuration) currentTime = totalDuration;
 
     // Update position for UI
     playbackState.playbackPosition.store(currentTime / totalDuration);
