@@ -758,6 +758,21 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
 
     info.key = juce::String(noteNames[bestKey]) + (bestIsMajor ? " Major" : " Minor");
 
+    // Extract tempo from MIDI file
+    info.bpm = 120.0;  // Default
+    for (int track = 0; track < midiFile.getNumTracks(); track++) {
+        auto* trackSeq = midiFile.getTrack(track);
+        if (trackSeq) {
+            for (int i = 0; i < trackSeq->getNumEvents(); i++) {
+                auto& msg = trackSeq->getEventPointer(i)->message;
+                if (msg.isTempoMetaEvent()) {
+                    info.bpm = 60.0 / msg.getTempoSecondsPerQuarterNote();
+                    break;
+                }
+            }
+        }
+    }
+
     // Calculate duration
     midiFile.convertTimestampTicksToSeconds();
     double maxTime = 0.0;
@@ -934,6 +949,11 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     // Duration in seconds
     g.setColour(juce::Colours::grey);
     g.setFont(11.0f);
+    // Draw BPM
+    juce::String bpmStr = juce::String((int)file.bpm) + " bpm";
+    g.drawText(bpmStr, w - 130, 0, 60, h, juce::Justification::centredRight);
+
+    // Draw duration
     int mins = (int)(file.duration) / 60;
     int secs = (int)(file.duration) % 60;
     juce::String durationStr = juce::String::formatted("%d:%02d", mins, secs);

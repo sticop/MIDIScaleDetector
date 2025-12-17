@@ -36,6 +36,7 @@ public:
         juce::String key;
         juce::String libraryName;
         double duration = 0.0;  // Duration in seconds
+        double bpm = 120.0;     // Tempo in BPM
         bool analyzed = false;
     };
 
