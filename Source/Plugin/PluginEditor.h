@@ -136,6 +136,8 @@ private:
     juce::Label fileCountLabel;
     juce::ComboBox keyFilterCombo;
     juce::ComboBox sortCombo;
+    juce::ComboBox quantizeCombo;
+    juce::TextButton quantizeButton{"Quantize"};
     juce::TextEditor searchBox;
     std::unique_ptr<DraggableListBox> fileListBox;
 
@@ -192,6 +194,7 @@ private:
     void toggleFavorite(int row);
     void saveFavorites();
     void loadFavorites();
+    void quantizeMidi();
     void selectAndPreview(int row);
 
     // Persistence

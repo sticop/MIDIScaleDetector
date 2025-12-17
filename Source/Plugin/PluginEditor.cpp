@@ -56,6 +56,55 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     sortCombo.onChange = [this]() { sortFiles(); filterFiles(); };
     addAndMakeVisible(sortCombo);
 
+    // Quantize dropdown and button
+    quantizeCombo.addSectionHeading("Straight Notes");
+    quantizeCombo.addItem("1/1 Note", 1);
+    quantizeCombo.addItem("1/2 Note", 2);
+    quantizeCombo.addItem("1/4 Note", 3);
+    quantizeCombo.addItem("1/8 Note", 4);
+    quantizeCombo.addItem("1/16 Note", 5);
+    quantizeCombo.addItem("1/32 Note", 6);
+    quantizeCombo.addItem("1/64 Note", 7);
+    quantizeCombo.addSectionHeading("Triplets");
+    quantizeCombo.addItem("1/2 Triplet (1/3)", 8);
+    quantizeCombo.addItem("1/4 Triplet (1/6)", 9);
+    quantizeCombo.addItem("1/8 Triplet (1/12)", 10);
+    quantizeCombo.addItem("1/16 Triplet (1/24)", 11);
+    quantizeCombo.addItem("1/32 Triplet (1/48)", 12);
+    quantizeCombo.addItem("1/64 Triplet (1/96)", 13);
+    quantizeCombo.addItem("1/128 Triplet (1/192)", 14);
+    quantizeCombo.addSectionHeading("1/16 Swing");
+    quantizeCombo.addItem("1/16 Swing A", 15);
+    quantizeCombo.addItem("1/16 Swing B", 16);
+    quantizeCombo.addItem("1/16 Swing C", 17);
+    quantizeCombo.addItem("1/16 Swing D", 18);
+    quantizeCombo.addItem("1/16 Swing E", 19);
+    quantizeCombo.addItem("1/16 Swing F", 20);
+    quantizeCombo.addSectionHeading("1/8 Swing");
+    quantizeCombo.addItem("1/8 Swing A", 21);
+    quantizeCombo.addItem("1/8 Swing B", 22);
+    quantizeCombo.addItem("1/8 Swing C", 23);
+    quantizeCombo.addItem("1/8 Swing D", 24);
+    quantizeCombo.addItem("1/8 Swing E", 25);
+    quantizeCombo.addItem("1/8 Swing F", 26);
+    quantizeCombo.addSectionHeading("Tuplets");
+    quantizeCombo.addItem("5-Tuplet/4", 27);
+    quantizeCombo.addItem("5-Tuplet/8", 28);
+    quantizeCombo.addItem("7-Tuplet", 29);
+    quantizeCombo.addItem("9-Tuplet", 30);
+    quantizeCombo.addSectionHeading("Mixed");
+    quantizeCombo.addItem("1/16 & 1/16 Triplet", 31);
+    quantizeCombo.addItem("1/16 & 1/8 Triplet", 32);
+    quantizeCombo.addItem("1/8 & 1/8 Triplet", 33);
+    quantizeCombo.setSelectedId(5);  // Default to 1/16 Note
+    quantizeCombo.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff3a3a3a));
+    addAndMakeVisible(quantizeCombo);
+    
+    quantizeButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a4a4a));
+    quantizeButton.setColour(juce::TextButton::textColourOffId, juce::Colours::cyan);
+    quantizeButton.onClick = [this]() { quantizeMidi(); };
+    addAndMakeVisible(quantizeButton);
+
     // Search box with modern rounded style
     searchBox.setTextToShowWhenEmpty("🔍 Search MIDI files...", juce::Colours::grey);
     searchBox.onTextChange = [this]() { filterFiles(); };
@@ -267,6 +316,9 @@ void MIDIXplorerEditor::resized() {
     fileCountLabel.setBounds(topBar.removeFromLeft(70));
     keyFilterCombo.setBounds(topBar.removeFromLeft(105).reduced(2));
     sortCombo.setBounds(topBar.removeFromLeft(110).reduced(2));
+    topBar.removeFromLeft(8);
+    quantizeCombo.setBounds(topBar.removeFromLeft(145).reduced(2));
+    quantizeButton.setBounds(topBar.removeFromLeft(70).reduced(2));
     topBar.removeFromLeft(8);
     syncToHostToggle.setBounds(topBar.removeFromRight(90));
 
@@ -1488,4 +1540,177 @@ void MIDIXplorerEditor::FileListModel::listBoxItemClicked(int row, const juce::M
         }
         // Otherwise selectedRowsChanged handles preview
     }
+}
+
+void MIDIXplorerEditor::quantizeMidi() {
+    if (selectedFileIndex < 0 || selectedFileIndex >= (int)filteredFiles.size()) return;
+    
+    juce::String filePath = filteredFiles[(size_t)selectedFileIndex].fullPath;
+    
+    int modeId = quantizeCombo.getSelectedId();
+    if (modeId == 0) return;
+    
+    // Get the grid interval in beats (4 beats = 1 bar in 4/4)
+    double gridBeats = 0.0;
+    double swingRatio = 0.5;  // 0.5 = no swing, >0.5 = swing (first note longer)
+    bool isSwing = false;
+    bool isMixed = false;
+    double secondaryGridBeats = 0.0;  // For mixed modes
+    
+    switch (modeId) {
+        // Straight notes
+        case 1: gridBeats = 4.0; break;       // 1/1 Note (whole note = 4 beats)
+        case 2: gridBeats = 2.0; break;       // 1/2 Note
+        case 3: gridBeats = 1.0; break;       // 1/4 Note
+        case 4: gridBeats = 0.5; break;       // 1/8 Note
+        case 5: gridBeats = 0.25; break;      // 1/16 Note
+        case 6: gridBeats = 0.125; break;     // 1/32 Note
+        case 7: gridBeats = 0.0625; break;    // 1/64 Note
+        
+        // Triplets (3 notes in space of 2)
+        case 8: gridBeats = 4.0 / 3.0; break;   // 1/2 Triplet (1/3)
+        case 9: gridBeats = 2.0 / 3.0; break;   // 1/4 Triplet (1/6)
+        case 10: gridBeats = 1.0 / 3.0; break;  // 1/8 Triplet (1/12)
+        case 11: gridBeats = 0.5 / 3.0; break;  // 1/16 Triplet (1/24)
+        case 12: gridBeats = 0.25 / 3.0; break; // 1/32 Triplet (1/48)
+        case 13: gridBeats = 0.125 / 3.0; break;// 1/64 Triplet (1/96)
+        case 14: gridBeats = 0.0625 / 3.0; break;// 1/128 Triplet (1/192)
+        
+        // 1/16 Swing (A=54%, B=58%, C=62%, D=66%, E=71%, F=75%)
+        case 15: gridBeats = 0.25; isSwing = true; swingRatio = 0.54; break;
+        case 16: gridBeats = 0.25; isSwing = true; swingRatio = 0.58; break;
+        case 17: gridBeats = 0.25; isSwing = true; swingRatio = 0.62; break;
+        case 18: gridBeats = 0.25; isSwing = true; swingRatio = 0.66; break;
+        case 19: gridBeats = 0.25; isSwing = true; swingRatio = 0.71; break;
+        case 20: gridBeats = 0.25; isSwing = true; swingRatio = 0.75; break;
+        
+        // 1/8 Swing (A=54%, B=58%, C=62%, D=66%, E=71%, F=75%)
+        case 21: gridBeats = 0.5; isSwing = true; swingRatio = 0.54; break;
+        case 22: gridBeats = 0.5; isSwing = true; swingRatio = 0.58; break;
+        case 23: gridBeats = 0.5; isSwing = true; swingRatio = 0.62; break;
+        case 24: gridBeats = 0.5; isSwing = true; swingRatio = 0.66; break;
+        case 25: gridBeats = 0.5; isSwing = true; swingRatio = 0.71; break;
+        case 26: gridBeats = 0.5; isSwing = true; swingRatio = 0.75; break;
+        
+        // Tuplets
+        case 27: gridBeats = 1.0 / 5.0; break;  // 5-Tuplet/4 (5 in space of 4)
+        case 28: gridBeats = 0.5 / 5.0; break;  // 5-Tuplet/8
+        case 29: gridBeats = 1.0 / 7.0; break;  // 7-Tuplet
+        case 30: gridBeats = 1.0 / 9.0; break;  // 9-Tuplet
+        
+        // Mixed modes
+        case 31: // 1/16 & 1/16 Triplet
+            isMixed = true; 
+            gridBeats = 0.25; 
+            secondaryGridBeats = 0.25 / 3.0;  // 1/16 triplet
+            break;
+        case 32: // 1/16 & 1/8 Triplet
+            isMixed = true;
+            gridBeats = 0.25;
+            secondaryGridBeats = 0.5 / 3.0;  // 1/8 triplet
+            break;
+        case 33: // 1/8 & 1/8 Triplet
+            isMixed = true;
+            gridBeats = 0.5;
+            secondaryGridBeats = 0.5 / 3.0;  // 1/8 triplet
+            break;
+            
+        default: return;
+    }
+    
+    if (gridBeats <= 0.0) return;
+    
+    // Load the original MIDI file
+    juce::File midiFile(filePath);
+    juce::FileInputStream inputStream(midiFile);
+    if (!inputStream.openedOk()) return;
+    
+    juce::MidiFile originalMidi;
+    if (!originalMidi.readFrom(inputStream)) return;
+    
+    // Create quantized MIDI file
+    juce::MidiFile quantizedMidi;
+    short timeFormat = originalMidi.getTimeFormat();
+    quantizedMidi.setTicksPerQuarterNote(timeFormat > 0 ? timeFormat : 480);
+    
+    double ticksPerBeat = (double)(timeFormat > 0 ? timeFormat : 480);
+    double gridTicks = gridBeats * ticksPerBeat;
+    double secondaryGridTicks = secondaryGridBeats * ticksPerBeat;
+    
+    for (int t = 0; t < originalMidi.getNumTracks(); t++) {
+        const juce::MidiMessageSequence* track = originalMidi.getTrack(t);
+        if (!track) continue;
+        
+        juce::MidiMessageSequence newTrack;
+        
+        for (int i = 0; i < track->getNumEvents(); i++) {
+            auto* event = track->getEventPointer(i);
+            if (!event) continue;
+            
+            juce::MidiMessage msg = event->message;
+            double originalTime = msg.getTimeStamp();
+            double newTime = originalTime;
+            
+            if (msg.isNoteOn() || msg.isNoteOff()) {
+                if (isMixed) {
+                    // For mixed modes, snap to nearest grid (primary or secondary)
+                    double nearestPrimary = std::round(originalTime / gridTicks) * gridTicks;
+                    double nearestSecondary = std::round(originalTime / secondaryGridTicks) * secondaryGridTicks;
+                    
+                    double diffPrimary = std::abs(originalTime - nearestPrimary);
+                    double diffSecondary = std::abs(originalTime - nearestSecondary);
+                    
+                    newTime = (diffPrimary <= diffSecondary) ? nearestPrimary : nearestSecondary;
+                } else if (isSwing) {
+                    // For swing, quantize to swing grid
+                    double pairLength = gridTicks * 2.0;  // Two notes form a swing pair
+                    double pairIndex = std::floor(originalTime / pairLength);
+                    double posInPair = originalTime - (pairIndex * pairLength);
+                    
+                    // First beat of pair is longer (swingRatio)
+                    double firstBeatEnd = pairLength * swingRatio;
+                    
+                    if (posInPair < firstBeatEnd) {
+                        // Snap to first beat (start of pair)
+                        double distToStart = posInPair;
+                        double distToSecond = firstBeatEnd - posInPair;
+                        newTime = (distToStart <= distToSecond) 
+                            ? pairIndex * pairLength 
+                            : pairIndex * pairLength + firstBeatEnd;
+                    } else {
+                        // Snap to second beat or next pair start
+                        double distToSecond = posInPair - firstBeatEnd;
+                        double distToNext = pairLength - posInPair;
+                        newTime = (distToSecond <= distToNext)
+                            ? pairIndex * pairLength + firstBeatEnd
+                            : (pairIndex + 1) * pairLength;
+                    }
+                } else {
+                    // Standard quantization - snap to nearest grid
+                    newTime = std::round(originalTime / gridTicks) * gridTicks;
+                }
+            }
+            
+            msg.setTimeStamp(newTime);
+            newTrack.addEvent(msg);
+        }
+        
+        newTrack.updateMatchedPairs();
+        quantizedMidi.addTrack(newTrack);
+    }
+    
+    // Save quantized file back (overwrite)
+    juce::FileOutputStream outputStream(midiFile);
+    if (!outputStream.openedOk()) return;
+    outputStream.setPosition(0);
+    outputStream.truncate();
+    quantizedMidi.writeTo(outputStream);
+    outputStream.flush();
+    
+    // Reload the file to update the display and playback
+    loadSelectedFile();
+    
+    // Show brief confirmation
+    juce::String modeName = quantizeCombo.getText();
+    DBG("Quantized MIDI to: " << modeName);
 }
