@@ -66,25 +66,37 @@ private:
         DraggableListBox(const juce::String& name, MIDIXplorerEditor& o) 
             : juce::ListBox(name), owner(o) {}
         
+        void mouseDown(const juce::MouseEvent& e) override {
+            dragStartRow = getRowContainingPosition(e.x, e.y);
+            juce::ListBox::mouseDown(e);
+        }
+        
         void mouseDrag(const juce::MouseEvent& e) override {
-            if (e.getDistanceFromDragStart() > 5 && !isDragging) {
-                int row = getRowContainingPosition(e.x, e.y);
-                if (row >= 0 && row < (int)owner.filteredFiles.size()) {
-                    auto file = juce::File(owner.filteredFiles[(size_t)row].fullPath);
+            if (e.getDistanceFromDragStart() > 10 && !isDragging && dragStartRow >= 0) {
+                if (dragStartRow < (int)owner.filteredFiles.size()) {
+                    isDragging = true;
+                    auto filePath = owner.filteredFiles[(size_t)dragStartRow].fullPath;
+                    juce::File file(filePath);
                     if (file.existsAsFile()) {
-                        isDragging = true;
                         juce::StringArray files;
                         files.add(file.getFullPathName());
-                        juce::DragAndDropContainer::performExternalDragDropOfFiles(files, false);
-                        isDragging = false;
+                        // Use copy mode for DAW compatibility
+                        juce::DragAndDropContainer::performExternalDragDropOfFiles(files, true);
                     }
+                    isDragging = false;
                 }
             }
-            juce::ListBox::mouseDrag(e);
+        }
+        
+        void mouseUp(const juce::MouseEvent& e) override {
+            isDragging = false;
+            dragStartRow = -1;
+            juce::ListBox::mouseUp(e);
         }
     private:
         MIDIXplorerEditor& owner;
         bool isDragging = false;
+        int dragStartRow = -1;
     };
 
     std::unique_ptr<LibraryListModel> libraryModel;
@@ -120,7 +132,7 @@ private:
     bool wasHostPlaying = false;
     double lastBeatPosition = 0;
     
-    // Pending file change (for beat-synced switching)
+    // Pending file change
     bool pendingFileChange = false;
     int pendingFileIndex = -1;
     
@@ -135,12 +147,18 @@ private:
     void scanLibrary(size_t index);
     void analyzeFile(size_t index);
     void filterFiles();
+    void sortFilesByKey();
     void updateKeyFilterFromDetectedScales();
     void loadSelectedFile();
     void scheduleFileChange();
     void stopPlayback();
     void revealInFinder(const juce::String& path);
     void selectAndPreview(int row);
+    
+    // Persistence
+    void saveLibraries();
+    void loadLibraries();
+    juce::File getSettingsFile();
     
     double getHostBpm();
     double getHostBeatPosition();
