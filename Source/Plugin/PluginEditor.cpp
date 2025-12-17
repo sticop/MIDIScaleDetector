@@ -190,6 +190,21 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     };
     addAndMakeVisible(dragButton);
 
+    // Shuffle button
+    shuffleButton.setButtonText(juce::String::fromUTF8("\U0001F500"));  // Shuffle icon 🔀
+    shuffleButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
+    shuffleButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff5a5a5a));
+    shuffleButton.setColour(juce::TextButton::textColourOffId, juce::Colours::grey);
+    shuffleButton.setColour(juce::TextButton::textColourOnId, juce::Colours::orange);
+    shuffleButton.setClickingTogglesState(true);
+    shuffleButton.setTooltip("Shuffle: play random files");
+    shuffleButton.onClick = [this]() {
+        shuffleEnabled = shuffleButton.getToggleState();
+        shuffleButton.setColour(juce::TextButton::textColourOffId, 
+                                shuffleEnabled ? juce::Colours::orange : juce::Colours::grey);
+    };
+    addAndMakeVisible(shuffleButton);
+
     syncToHostToggle.setToggleState(true, juce::dontSendNotification);
     syncToHostToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
     syncToHostToggle.setColour(juce::ToggleButton::tickColourId, juce::Colours::orange);
@@ -383,6 +398,8 @@ void MIDIXplorerEditor::resized() {
     playPauseButton.setBounds(transport.removeFromLeft(40));
     transport.removeFromLeft(4);
     dragButton.setBounds(transport.removeFromLeft(40));
+    transport.removeFromLeft(4);
+    shuffleButton.setBounds(transport.removeFromLeft(40));
     transport.removeFromLeft(10);
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
     transportSlider.setBounds(transport);
@@ -761,6 +778,27 @@ void MIDIXplorerEditor::restartPlayback() {
         playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
         playbackStartBeat = getHostBeatPosition();
     }
+}
+
+void MIDIXplorerEditor::playNextFile() {
+    if (filteredFiles.empty()) return;
+    
+    int nextIndex;
+    if (shuffleEnabled) {
+        // Random file (avoid same file if possible)
+        if (filteredFiles.size() > 1) {
+            do {
+                nextIndex = juce::Random::getSystemRandom().nextInt((int)filteredFiles.size());
+            } while (nextIndex == selectedFileIndex);
+        } else {
+            nextIndex = 0;
+        }
+    } else {
+        // Sequential next
+        nextIndex = (selectedFileIndex + 1) % (int)filteredFiles.size();
+    }
+    
+    selectAndPreview(nextIndex);
 }
 
 double MIDIXplorerEditor::getHostBpm() {
@@ -1442,15 +1480,15 @@ void MIDIXplorerEditor::addToRecentlyPlayed(const juce::String& filePath) {
         std::remove(recentlyPlayed.begin(), recentlyPlayed.end(), filePath),
         recentlyPlayed.end()
     );
-    
+
     // Add to front
     recentlyPlayed.insert(recentlyPlayed.begin(), filePath);
-    
+
     // Keep max 50 recent files
     if (recentlyPlayed.size() > 50) {
         recentlyPlayed.resize(50);
     }
-    
+
     saveRecentlyPlayed();
     libraryListBox.repaint();  // Update file count
 }
@@ -1514,10 +1552,16 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
             if (w < 2.0f) w = 2.0f;
             float y = bounds.getHeight() - (noteNum - lowestNote + 1) * noteHeight;
 
-            // Note color based on velocity
+            // Note color based on velocity, highlight if hovered
             int velocity = msg.getVelocity();
             float brightness = 0.5f + (velocity / 254.0f) * 0.5f;
-            g.setColour(juce::Colour::fromHSV(0.55f, 0.7f, brightness, 1.0f));
+            
+            if (noteNum == hoveredNote) {
+                // Highlighted note
+                g.setColour(juce::Colours::orange);
+            } else {
+                g.setColour(juce::Colour::fromHSV(0.55f, 0.7f, brightness, 1.0f));
+            }
             g.fillRoundedRectangle(x, y + 1, w, noteHeight - 2, 2.0f);
         }
     }
@@ -1527,6 +1571,32 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
         float xPos = playPosition * bounds.getWidth();
         g.setColour(juce::Colours::white);
         g.drawVerticalLine((int)xPos, 0.0f, (float)bounds.getHeight());
+    }
+    
+    // Draw note name tooltip if hovering
+    if (hoveredNote >= 0) {
+        juce::String noteName = getNoteNameFromMidi(hoveredNote);
+        
+        // Draw tooltip background
+        g.setFont(12.0f);
+        int textWidth = g.getCurrentFont().getStringWidth(noteName) + 10;
+        int textHeight = 18;
+        
+        int tooltipX = hoverPos.x + 10;
+        int tooltipY = hoverPos.y - textHeight - 5;
+        
+        // Keep tooltip in bounds
+        if (tooltipX + textWidth > bounds.getWidth()) {
+            tooltipX = hoverPos.x - textWidth - 10;
+        }
+        if (tooltipY < 0) {
+            tooltipY = hoverPos.y + 10;
+        }
+        
+        g.setColour(juce::Colour(0xff333333));
+        g.fillRoundedRectangle((float)tooltipX, (float)tooltipY, (float)textWidth, (float)textHeight, 4.0f);
+        g.setColour(juce::Colours::white);
+        g.drawText(noteName, tooltipX, tooltipY, textWidth, textHeight, juce::Justification::centred);
     }
 }
 
@@ -1560,12 +1630,74 @@ void MIDIXplorerEditor::MIDINoteViewer::setPlaybackPosition(double position) {
     repaint();
 }
 
+juce::String MIDIXplorerEditor::MIDINoteViewer::getNoteNameFromMidi(int midiNote) {
+    static const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    int octave = (midiNote / 12) - 1;
+    int noteIndex = midiNote % 12;
+    return juce::String(noteNames[noteIndex]) + juce::String(octave);
+}
+
+void MIDIXplorerEditor::MIDINoteViewer::mouseMove(const juce::MouseEvent& e) {
+    if (sequence == nullptr || sequence->getNumEvents() == 0) {
+        hoveredNote = -1;
+        return;
+    }
+    
+    auto bounds = getLocalBounds();
+    float noteRangeF = (float)(highestNote - lowestNote + 1);
+    if (noteRangeF < 1.0f) noteRangeF = 12.0f;
+    float noteHeight = (float)bounds.getHeight() / noteRangeF;
+    
+    // Find which note the mouse is over
+    int newHoveredNote = -1;
+    hoverPos = e.getPosition();
+    
+    for (int i = 0; i < sequence->getNumEvents(); i++) {
+        auto* event = sequence->getEventPointer(i);
+        if (!event->message.isNoteOn()) continue;
+        
+        int noteNumber = event->message.getNoteNumber();
+        double startTime = event->message.getTimeStamp();
+        double endTime = startTime + 0.1;  // Default duration
+        
+        if (event->noteOffObject != nullptr) {
+            endTime = event->noteOffObject->message.getTimeStamp();
+        }
+        
+        // Calculate note rectangle
+        float x = (float)(startTime / totalDuration) * bounds.getWidth();
+        float width = (float)((endTime - startTime) / totalDuration) * bounds.getWidth();
+        float y = (float)(highestNote - noteNumber) / noteRangeF * bounds.getHeight();
+        
+        if (width < 2.0f) width = 2.0f;
+        
+        // Check if mouse is inside this note
+        if (e.x >= x && e.x <= x + width && 
+            e.y >= y && e.y <= y + noteHeight) {
+            newHoveredNote = noteNumber;
+            break;
+        }
+    }
+    
+    if (newHoveredNote != hoveredNote) {
+        hoveredNote = newHoveredNote;
+        repaint();
+    }
+}
+
+void MIDIXplorerEditor::MIDINoteViewer::mouseExit(const juce::MouseEvent& /*e*/) {
+    if (hoveredNote != -1) {
+        hoveredNote = -1;
+        repaint();
+    }
+}
+
 void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) {
     // Special libraries: 0=All, 1=Favorites, 2=Recently Played
     juce::String name;
     int fileCount = 0;
     juce::String icon;
-    
+
     if (row == 0) {
         name = "All";
         fileCount = (int)owner.allFiles.size();
@@ -1591,7 +1723,7 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
     }
 
     bool isSelected = (row == owner.selectedLibraryIndex);
-    
+
     if (isSelected) {
         g.setColour(juce::Colour(0xff0078d4));  // Blue highlight for selected
         g.fillRect(0, 0, w, h);
@@ -1632,7 +1764,7 @@ void MIDIXplorerEditor::LibraryListModel::listBoxItemClicked(int row, const juce
     if (e.mods.isRightButtonDown() && row >= 3) {
         int libIndex = row - 3;
         if (libIndex < 0 || libIndex >= (int)owner.libraries.size()) return;
-        
+
         juce::PopupMenu menu;
         menu.addItem(1, "Reveal in Finder");
         menu.addItem(2, "Refresh");
@@ -1682,12 +1814,12 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     for (int i = 0; i < 5; i++) {
         float outerAngle = juce::MathConstants<float>::twoPi * i / 5.0f - juce::MathConstants<float>::halfPi;
         float innerAngle = outerAngle + juce::MathConstants<float>::twoPi / 10.0f;
-        
+
         float outerX = starX + starSize * std::cos(outerAngle);
         float outerY = starY + starSize * std::sin(outerAngle);
         float innerX = starX + starSize * 0.4f * std::cos(innerAngle);
         float innerY = starY + starSize * 0.4f * std::sin(innerAngle);
-        
+
         if (i == 0) {
             starPath.startNewSubPath(outerX, outerY);
         } else {

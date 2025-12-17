@@ -129,16 +129,22 @@ private:
     // MIDI Note Viewer (Piano Roll)
     class MIDINoteViewer : public juce::Component {
     public:
-        MIDINoteViewer() {}
+        MIDINoteViewer() { setMouseCursor(juce::MouseCursor::CrosshairCursor); }
         void paint(juce::Graphics& g) override;
         void setSequence(const juce::MidiMessageSequence* seq, double duration);
         void setPlaybackPosition(double position);
+        void mouseMove(const juce::MouseEvent& e) override;
+        void mouseExit(const juce::MouseEvent& e) override;
+        
+        static juce::String getNoteNameFromMidi(int midiNote);
     private:
         const juce::MidiMessageSequence* sequence = nullptr;
         double totalDuration = 1.0;
         double playPosition = 0.0;
         int lowestNote = 127;
         int highestNote = 0;
+        int hoveredNote = -1;
+        juce::Point<int> hoverPos;
     };
 
     std::unique_ptr<LibraryListModel> libraryModel;
@@ -157,6 +163,7 @@ private:
 
     juce::TextButton playPauseButton;
     juce::TextButton dragButton;  // Drag to DAW button
+    juce::TextButton shuffleButton;  // Shuffle/random play
     bool isPlaying = true;
     juce::ToggleButton syncToHostToggle{"DAW Sync"};
     juce::Slider transportSlider;
@@ -176,6 +183,7 @@ private:
     juce::String pendingSelectedFilePath;
     bool fileLoaded = false;
     bool isQuantized = false;
+    bool shuffleEnabled = false;  // Random play mode
     double playbackStartTime = 0;
     double playbackStartBeat = 0;
     int playbackNoteIndex = 0;
@@ -211,6 +219,7 @@ private:
     void scheduleFileChange();
     void stopPlayback();
     void restartPlayback();
+    void playNextFile();  // Play next or random file
     void revealInFinder(const juce::String& path);
     void toggleFavorite(int row);
     void saveFavorites();
