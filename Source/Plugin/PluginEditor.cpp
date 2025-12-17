@@ -265,6 +265,9 @@ void MIDIXplorerEditor::timerCallback() {
                 }
             }
             playbackNoteIndex = 0;
+            // Pause playback - user can resume by clicking a file
+            isPlaying = false;
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Show pause icon
         }
         wasHostPlaying = hostPlaying;
 
@@ -323,7 +326,7 @@ void MIDIXplorerEditor::timerCallback() {
         double overshoot = currentTime - totalDuration;
         currentTime = overshoot;
         playbackNoteIndex = 0;
-        
+
         if (synced) {
             // Calculate how many beats the file duration represents
             double fileDurationInBeats = (totalDuration * midiFileBpm) / 60.0;
@@ -385,6 +388,10 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
     fileListBox->selectRow(row);
     fileListBox->scrollToEnsureRowIsOnscreen(row);
     selectedFileIndex = row;
+    
+    // Resume playback when selecting a file
+    isPlaying = true;
+    playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
 
     if (syncToHostToggle.getToggleState() && isHostPlaying()) {
         // Queue the file change for the next beat
