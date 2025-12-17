@@ -198,12 +198,13 @@ void MIDIXplorerEditor::resized() {
     fileCountLabel.setBounds(topBar.removeFromLeft(80));
     keyFilterCombo.setBounds(topBar.removeFromLeft(100).reduced(2));
     topBar.removeFromLeft(8);
+    syncToHostToggle.setBounds(topBar.removeFromRight(90));
+    topBar.removeFromRight(8);
     searchBox.setBounds(topBar);
 
     // Bottom transport bar
     auto transport = area.removeFromBottom(40).reduced(8, 4);
     playPauseButton.setBounds(transport.removeFromLeft(40));
-    syncToHostToggle.setBounds(transport.removeFromLeft(60));
     transport.removeFromLeft(10);
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
     transportSlider.setBounds(transport);

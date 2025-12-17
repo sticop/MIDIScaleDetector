@@ -113,7 +113,7 @@ private:
 
     juce::TextButton playPauseButton;
     bool isPlaying = true;
-    juce::ToggleButton syncToHostToggle{"Sync"};
+    juce::ToggleButton syncToHostToggle{"DAW Sync"};
     juce::Slider transportSlider;
     juce::Label timeDisplayLabel;  // Shows elapsed / total time
 
