@@ -1351,16 +1351,30 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
         g.fillRect(0, 0, w, h);
     }
 
-    // Favorite star icon (drawn as a filled/empty circle)
-    float starX = 12.0f;
-    float starY = h / 2.0f;
-    float starRadius = 6.0f;
+    // Favorite heart icon
+    float heartX = 12.0f;
+    float heartY = h / 2.0f;
+    float heartSize = 7.0f;
+    
+    juce::Path heartPath;
+    // Draw heart shape using bezier curves
+    heartPath.startNewSubPath(heartX, heartY + heartSize * 0.3f);
+    // Left curve
+    heartPath.cubicTo(heartX - heartSize, heartY - heartSize * 0.3f,
+                      heartX - heartSize, heartY - heartSize * 0.9f,
+                      heartX, heartY - heartSize * 0.5f);
+    // Right curve
+    heartPath.cubicTo(heartX + heartSize, heartY - heartSize * 0.9f,
+                      heartX + heartSize, heartY - heartSize * 0.3f,
+                      heartX, heartY + heartSize * 0.3f);
+    heartPath.closeSubPath();
+    
     if (file.favorite) {
         g.setColour(juce::Colour(0xffff4466));  // Red for favorites
-        g.fillEllipse(starX - starRadius, starY - starRadius, starRadius * 2, starRadius * 2);
+        g.fillPath(heartPath);
     } else {
-        g.setColour(juce::Colour(0xff555555));  // Grey outline
-        g.drawEllipse(starX - starRadius, starY - starRadius, starRadius * 2, starRadius * 2, 1.5f);
+        g.setColour(juce::Colour(0xff666666));  // Grey outline
+        g.strokePath(heartPath, juce::PathStrokeType(1.2f));
     }
 
     // Key badge
