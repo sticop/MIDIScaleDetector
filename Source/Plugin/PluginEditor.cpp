@@ -1834,9 +1834,19 @@ void MIDIXplorerEditor::quantizeMidi() {
     currentPlaybackPosition = 0.0;
 
     if (pluginProcessor) {
+        // Preserve the current playback timing when quantizing during playback
+        double currentStartBeat = playbackStartBeat;
+        double currentStartTime = playbackStartTime;
+        bool wasPlaying = isPlaying;
+        
         pluginProcessor->loadPlaybackSequence(playbackSequence, midiFileDuration, midiFileBpm, filteredFiles[(size_t)selectedFileIndex].fullPath);
-        if (isPlaying) {
-            pluginProcessor->resetPlayback();
+        
+        if (wasPlaying) {
+            // Restore timing so playback continues from same position
+            playbackStartBeat = currentStartBeat;
+            playbackStartTime = currentStartTime;
+            // Don't call resetPlayback() - just continue playing
+            pluginProcessor->setPlaybackPlaying(true);
         }
     }
 
