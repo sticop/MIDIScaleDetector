@@ -152,6 +152,7 @@ private:
     juce::StringArray detectedKeys;
 
     int selectedFileIndex = -1;
+    juce::String pendingSelectedFilePath;
     bool fileLoaded = false;
     double playbackStartTime = 0;
     double playbackStartBeat = 0;

@@ -168,6 +168,11 @@ void MIDIXplorerEditor::saveLibraries() {
         libsArray.add(juce::var(libObj.get()));
     }
     root->setProperty("libraries", libsArray);
+    
+    // Save selected file path
+    if (selectedFileIndex >= 0 && selectedFileIndex < (int)filteredFiles.size()) {
+        root->setProperty("selectedFilePath", filteredFiles[(size_t)selectedFileIndex].fullPath);
+    }
 
     juce::var jsonVar(root.get());
     auto jsonStr = juce::JSON::toString(jsonVar);
@@ -196,6 +201,12 @@ void MIDIXplorerEditor::loadLibraries() {
             }
             libraryListBox.updateContent();
             scanLibraries();
+        }
+        
+        // Restore selected file
+        auto savedPath = obj->getProperty("selectedFilePath").toString();
+        if (savedPath.isNotEmpty()) {
+            pendingSelectedFilePath = savedPath;
         }
     }
 }
@@ -775,10 +786,23 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
     filterFiles();
     updateKeyFilterFromDetectedScales();
     
-    // Preselect first file so it's ready to play immediately
+    // Restore previously selected file, or preselect first file
     if (!filteredFiles.empty() && selectedFileIndex < 0) {
-        fileListBox->selectRow(0);
-        selectAndPreview(0);
+        int indexToSelect = 0;
+        
+        // Check if we have a pending file path to restore
+        if (pendingSelectedFilePath.isNotEmpty()) {
+            for (size_t i = 0; i < filteredFiles.size(); i++) {
+                if (filteredFiles[i].fullPath == pendingSelectedFilePath) {
+                    indexToSelect = (int)i;
+                    break;
+                }
+            }
+            pendingSelectedFilePath = "";  // Clear after using
+        }
+        
+        fileListBox->selectRow(indexToSelect);
+        selectAndPreview(indexToSelect);
     }
 }
 
