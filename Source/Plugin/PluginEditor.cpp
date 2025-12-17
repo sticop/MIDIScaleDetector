@@ -269,12 +269,8 @@ void MIDIXplorerEditor::timerCallback() {
         currentTime = (juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackStartTime) * speedRatio;
     }
     
-    // Get total duration of MIDI file
-    double totalDuration = 0.0;
-    if (playbackSequence.getNumEvents() > 0) {
-        totalDuration = playbackSequence.getEventTime(playbackSequence.getNumEvents() - 1);
-    }
-    
+    // Use pre-calculated file duration
+    double totalDuration = midiFileDuration;
     if (totalDuration <= 0) totalDuration = 1.0;
     
     // Update transport slider
@@ -415,6 +411,10 @@ void MIDIXplorerEditor::loadSelectedFile() {
     }
     playbackSequence.sort();
     playbackSequence.updateMatchedPairs();
+    
+    // Calculate actual file duration (use the end time of all events)
+    midiFileDuration = playbackSequence.getEndTime();
+    if (midiFileDuration <= 0) midiFileDuration = 1.0;
     
     // Reset playback position
     playbackNoteIndex = 0;

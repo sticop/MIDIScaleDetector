@@ -129,6 +129,7 @@ private:
     // Host sync state
     double lastHostBpm = 120.0;
     double midiFileBpm = 120.0;
+    double midiFileDuration = 0.0;  // Actual duration of the MIDI file in seconds
     bool wasHostPlaying = false;
     double lastBeatPosition = 0;
     
