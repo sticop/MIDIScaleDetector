@@ -34,6 +34,7 @@ public:
         juce::String fileName;
         juce::String fullPath;
         juce::String key;
+        juce::String relativeKey;  // Circle of Fifths relative major/minor
         juce::String libraryName;
         double duration = 0.0;  // Duration in seconds
         double bpm = 120.0;     // Tempo in BPM

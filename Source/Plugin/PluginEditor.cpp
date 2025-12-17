@@ -879,6 +879,26 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     }
 
     info.key = juce::String(noteNames[bestKey]) + " " + scales[bestScaleIdx].name;
+    
+    // Calculate Circle of Fifths relative key
+    // Relative major/minor pairs (3 semitones apart)
+    juce::String scaleName = scales[bestScaleIdx].name;
+    bool isMinorType = scaleName.containsIgnoreCase("Minor") || 
+                       scaleName.containsIgnoreCase("Dorian") ||
+                       scaleName.containsIgnoreCase("Phrygian") ||
+                       scaleName.containsIgnoreCase("Locrian") ||
+                       scaleName.containsIgnoreCase("Aeolian");
+    
+    if (isMinorType) {
+        // Relative major is 3 semitones up
+        int relativeMajorRoot = (bestKey + 3) % 12;
+        info.relativeKey = juce::String(noteNames[relativeMajorRoot]) + " Maj";
+    } else {
+        // Relative minor is 3 semitones down (or 9 up)
+        int relativeMinorRoot = (bestKey + 9) % 12;
+        info.relativeKey = juce::String(noteNames[relativeMinorRoot]) + "m";
+    }
+    
     // Extract tempo from MIDI file
     info.bpm = 120.0;  // Default
     for (int track = 0; track < midiFile.getNumTracks(); track++) {
@@ -1288,11 +1308,16 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     g.setColour(juce::Colours::cyan);
     g.setFont(11.0f);
     g.drawText(file.key, 28, 6, 70, 20, juce::Justification::centred);
+    
+    // Circle of Fifths relative key (shown in parentheses)
+    g.setColour(juce::Colour(0xffff9944));  // Orange for relative key
+    g.setFont(10.0f);
+    g.drawText("(" + file.relativeKey + ")", 100, 6, 40, 20, juce::Justification::centredLeft);
 
     // File name
     g.setColour(juce::Colours::white);
     g.setFont(13.0f);
-    g.drawText(file.fileName, 108, 0, w - 360, h, juce::Justification::centredLeft);
+    g.drawText(file.fileName, 142, 0, w - 394, h, juce::Justification::centredLeft);
 
     // Instrument name
     g.setColour(juce::Colour(0xffaaaaff));
