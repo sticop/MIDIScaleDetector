@@ -418,8 +418,22 @@ void MIDIXplorerEditor::loadSelectedFile() {
     playbackSequence.sort();
     playbackSequence.updateMatchedPairs();
     
-    // Calculate actual file duration (use the end time of all events)
-    midiFileDuration = playbackSequence.getEndTime();
+    // Calculate actual file duration (find the last note-off time)
+    midiFileDuration = 0.0;
+    for (int i = 0; i < playbackSequence.getNumEvents(); i++) {
+        auto* event = playbackSequence.getEventPointer(i);
+        double eventTime = event->message.getTimeStamp();
+        if (eventTime > midiFileDuration) {
+            midiFileDuration = eventTime;
+        }
+        // For note-on events, check if there is a matched note-off
+        if (event->message.isNoteOn() && event->noteOffObject != nullptr) {
+            double noteOffTime = event->noteOffObject->message.getTimeStamp();
+            if (noteOffTime > midiFileDuration) {
+                midiFileDuration = noteOffTime;
+            }
+        }
+    }
     if (midiFileDuration <= 0) midiFileDuration = 1.0;
     
     // Reset playback position
