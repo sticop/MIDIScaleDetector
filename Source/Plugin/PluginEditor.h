@@ -111,8 +111,7 @@ private:
     juce::TextEditor searchBox;
     std::unique_ptr<DraggableListBox> fileListBox;
 
-    juce::TextButton playButton;
-    juce::TextButton pauseButton;
+    juce::TextButton playPauseButton;
     bool isPlaying = true;
     juce::ToggleButton syncToHostToggle{"DAW Sync"};
     juce::Slider transportSlider;

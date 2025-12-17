@@ -62,34 +62,32 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     fileListBox->setMultipleSelectionEnabled(false);
     addAndMakeVisible(fileListBox.get());
 
-    // Transport controls - Play button
-    playButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play symbol
-    playButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
-    playButton.setColour(juce::TextButton::textColourOffId, juce::Colours::limegreen);
-    playButton.onClick = [this]() {
-        isPlaying = true;
-        // Reset playback to beginning if stopped
-        if (playbackNoteIndex == 0 && fileLoaded) {
-            playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
-            playbackStartBeat = getHostBeatPosition();
-        }
-    };
-    addAndMakeVisible(playButton);
-
-    // Pause button
-    pauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause symbol
-    pauseButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
-    pauseButton.setColour(juce::TextButton::textColourOffId, juce::Colours::orange);
-    pauseButton.onClick = [this]() {
-        isPlaying = false;
-        // Send all notes off when pausing
-        if (pluginProcessor) {
-            for (int ch = 1; ch <= 16; ch++) {
-                pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+    // Transport controls - Play/Pause toggle button
+    playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Show pause when playing
+    playPauseButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
+    playPauseButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff5a5a5a));  // Hover highlight
+    playPauseButton.setColour(juce::TextButton::textColourOffId, juce::Colours::cyan);
+    playPauseButton.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
+    playPauseButton.onClick = [this]() {
+        isPlaying = !isPlaying;
+        if (isPlaying) {
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
+            // Resume playback
+            if (playbackNoteIndex == 0 && fileLoaded) {
+                playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+                playbackStartBeat = getHostBeatPosition();
+            }
+        } else {
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
+            // Send all notes off when pausing
+            if (pluginProcessor) {
+                for (int ch = 1; ch <= 16; ch++) {
+                    pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+                }
             }
         }
     };
-    addAndMakeVisible(pauseButton);
+    addAndMakeVisible(playPauseButton);
 
     syncToHostToggle.setToggleState(true, juce::dontSendNotification);
     syncToHostToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
@@ -213,8 +211,7 @@ void MIDIXplorerEditor::resized() {
 
     // Bottom transport bar
     auto transport = area.removeFromBottom(40).reduced(8, 4);
-    playButton.setBounds(transport.removeFromLeft(36));
-    pauseButton.setBounds(transport.removeFromLeft(36));
+    playPauseButton.setBounds(transport.removeFromLeft(40));
     transport.removeFromLeft(10);
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
     transportSlider.setBounds(transport);
@@ -259,6 +256,7 @@ void MIDIXplorerEditor::timerCallback() {
         if (hostPlaying && !wasHostPlaying) {
             // Host just started playing - start playback immediately
             isPlaying = true;
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
             playbackNoteIndex = 0;
             playbackStartBeat = hostBeat;
             playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
@@ -278,6 +276,7 @@ void MIDIXplorerEditor::timerCallback() {
             playbackNoteIndex = 0;
             // Pause playback - user can resume by clicking a file
             isPlaying = false;
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
         }
         wasHostPlaying = hostPlaying;
 
@@ -383,6 +382,7 @@ bool MIDIXplorerEditor::keyPressed(const juce::KeyPress& key) {
     } else if (key == juce::KeyPress::returnKey) {
         if (currentRow >= 0 && currentRow < (int)filteredFiles.size()) {
             isPlaying = true;
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
             selectAndPreview(currentRow);
             return true;
         }
@@ -400,6 +400,7 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
 
     // Resume playback when selecting a file
     isPlaying = true;
+    playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
 
     if (syncToHostToggle.getToggleState() && isHostPlaying()) {
         // Queue the file change for the next beat
