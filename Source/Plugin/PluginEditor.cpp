@@ -770,6 +770,12 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
     sortFiles();
     filterFiles();
     updateKeyFilterFromDetectedScales();
+    
+    // Preselect first file so it's ready to play immediately
+    if (!filteredFiles.empty() && selectedFileIndex < 0) {
+        fileListBox->selectRow(0);
+        selectAndPreview(0);
+    }
 }
 
 void MIDIXplorerEditor::refreshLibrary(size_t index) {
