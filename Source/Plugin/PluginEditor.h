@@ -154,6 +154,7 @@ private:
     void loadSelectedFile();
     void scheduleFileChange();
     void stopPlayback();
+    void restartPlayback();
     void revealInFinder(const juce::String& path);
     void selectAndPreview(int row);
     
