@@ -750,8 +750,10 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
 }
 
 void MIDIXplorerEditor::FileListModel::selectedRowsChanged(int lastRowSelected) {
+    // Trigger preview when selection changes (arrow keys, click, etc.)
     if (lastRowSelected >= 0 && lastRowSelected < (int)owner.filteredFiles.size()) {
-        owner.selectedFileIndex = lastRowSelected;
+        owner.selectAndPreview(lastRowSelected);
+        return;
     }
 }
 
@@ -777,11 +779,11 @@ void MIDIXplorerEditor::FileListModel::listBoxItemClicked(int row, const juce::M
             if (result == 1) {
                 owner.revealInFinder(owner.filteredFiles[(size_t)row].fullPath);
             } else if (result == 2) {
-                owner.selectAndPreview(row);
+                // selectedRowsChanged handles preview
             }
         });
     } else {
-        // Left click - select and optionally preview
-        owner.selectAndPreview(row);
+        // Left click - selection change triggers preview via selectedRowsChanged
+        // selectedRowsChanged handles preview
     }
 }
