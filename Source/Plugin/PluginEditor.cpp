@@ -245,7 +245,8 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
             pluginProcessor->setSyncToHost(syncToHostToggle.getToggleState());
         }
     };
-    addAndMakeVisible(syncToHostToggle);
+    // syncToHostToggle hidden but functionality preserved
+    addChildComponent(syncToHostToggle);
 
     // Velocity slider for volume control
     velocityLabel.setText("Vol:", juce::dontSendNotification);
@@ -422,8 +423,7 @@ void MIDIXplorerEditor::resized() {
     topBar.removeFromLeft(8);
     velocityLabel.setBounds(topBar.removeFromLeft(28));
     velocitySlider.setBounds(topBar.removeFromLeft(100).reduced(2));
-    topBar.removeFromLeft(8);
-    syncToHostToggle.setBounds(topBar.removeFromRight(90));
+    // syncToHostToggle hidden
 
     // Bottom transport bar
     auto transport = area.removeFromBottom(40).reduced(8, 4);
