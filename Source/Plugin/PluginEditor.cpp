@@ -257,7 +257,8 @@ void MIDIXplorerEditor::timerCallback() {
     }
     
     double currentTime;
-    double bpm = synced ? hostBpm : 120.0;
+    // When synced, use host BPM; otherwise use MIDI file's original tempo
+    double bpm = synced ? hostBpm : midiFileBpm;
     double speedRatio = bpm / midiFileBpm;
     
     if (synced) {
