@@ -253,9 +253,9 @@ void MIDIXplorerEditor::timerCallback() {
         }
         wasHostPlaying = hostPlaying;
         
-        // When host is stopped in sync mode, fall back to freerun playback
+        // When host is stopped in sync mode, stop preview entirely
         if (!hostPlaying) {
-            synced = false;  // Use freerun timing when host is stopped
+            return;  // Don't play preview when DAW is stopped and sync is enabled
         }
     }
     
