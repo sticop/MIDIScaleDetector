@@ -653,6 +653,9 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
 
     auto files = dir.findChildFiles(juce::File::findFiles, true, "*.mid;*.midi");
 
+    // Count total MIDI files in folder (regardless of whether already imported)
+    lib.fileCount = (int)files.size();
+
     for (const auto& file : files) {
         // Check for duplicates - skip if file already exists in library
         bool isDuplicate = false;
@@ -670,7 +673,6 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
         info.libraryName = lib.name;
         info.key = "---";
         allFiles.push_back(info);
-        lib.fileCount++;
     }
 
     lib.isScanning = false;
