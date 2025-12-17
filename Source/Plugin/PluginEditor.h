@@ -111,7 +111,8 @@ private:
     juce::TextEditor searchBox;
     std::unique_ptr<DraggableListBox> fileListBox;
 
-    juce::ToggleButton previewToggle{"Preview"};
+    juce::TextButton playPauseButton;
+    bool isPlaying = true;
     juce::ToggleButton syncToHostToggle{"Sync"};
     juce::Slider transportSlider;
     juce::Label timeDisplayLabel;  // Shows elapsed / total time

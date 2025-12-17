@@ -63,10 +63,24 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     addAndMakeVisible(fileListBox.get());
 
     // Transport controls
-    previewToggle.setToggleState(true, juce::dontSendNotification);
-    previewToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
-    previewToggle.setColour(juce::ToggleButton::tickColourId, juce::Colours::cyan);
-    addAndMakeVisible(previewToggle);
+    playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play symbol
+    playPauseButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
+    playPauseButton.setColour(juce::TextButton::textColourOffId, juce::Colours::cyan);
+    playPauseButton.onClick = [this]() {
+        isPlaying = !isPlaying;
+        if (isPlaying) {
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play
+        } else {
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause
+            // Send all notes off when pausing
+            if (pluginProcessor) {
+                for (int ch = 1; ch <= 16; ch++) {
+                    pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+                }
+            }
+        }
+    };
+    addAndMakeVisible(playPauseButton);
 
     syncToHostToggle.setToggleState(true, juce::dontSendNotification);
     syncToHostToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
@@ -188,7 +202,7 @@ void MIDIXplorerEditor::resized() {
 
     // Bottom transport bar
     auto transport = area.removeFromBottom(40).reduced(8, 4);
-    previewToggle.setBounds(transport.removeFromLeft(80));
+    playPauseButton.setBounds(transport.removeFromLeft(40));
     syncToHostToggle.setBounds(transport.removeFromLeft(60));
     transport.removeFromLeft(10);
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
@@ -199,7 +213,7 @@ void MIDIXplorerEditor::resized() {
 }
 
 void MIDIXplorerEditor::timerCallback() {
-    if (!previewToggle.getToggleState() || !fileLoaded) {
+    if (!isPlaying || !fileLoaded) {
         return;
     }
 
@@ -350,7 +364,8 @@ bool MIDIXplorerEditor::keyPressed(const juce::KeyPress& key) {
         return true;
     } else if (key == juce::KeyPress::returnKey) {
         if (currentRow >= 0 && currentRow < (int)filteredFiles.size()) {
-            previewToggle.setToggleState(true, juce::dontSendNotification);
+            isPlaying = true;
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));
             selectAndPreview(currentRow);
             return true;
         }
