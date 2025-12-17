@@ -91,25 +91,6 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     };
     addAndMakeVisible(pauseButton);
 
-    // Stop button
-    stopButton.setButtonText(juce::String::fromUTF8("\u23F9"));  // Stop symbol
-    stopButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
-    stopButton.setColour(juce::TextButton::textColourOffId, juce::Colours::red);
-    stopButton.onClick = [this]() {
-        isPlaying = false;
-        playbackNoteIndex = 0;
-        // Send all notes off
-        if (pluginProcessor) {
-            for (int ch = 1; ch <= 16; ch++) {
-                pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-            }
-        }
-        // Reset playback position
-        playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
-        playbackStartBeat = getHostBeatPosition();
-    };
-    addAndMakeVisible(stopButton);
-
     syncToHostToggle.setToggleState(true, juce::dontSendNotification);
     syncToHostToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
     syncToHostToggle.setColour(juce::ToggleButton::tickColourId, juce::Colours::orange);
@@ -234,7 +215,6 @@ void MIDIXplorerEditor::resized() {
     auto transport = area.removeFromBottom(40).reduced(8, 4);
     playButton.setBounds(transport.removeFromLeft(36));
     pauseButton.setBounds(transport.removeFromLeft(36));
-    stopButton.setBounds(transport.removeFromLeft(36));
     transport.removeFromLeft(10);
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
     transportSlider.setBounds(transport);

@@ -113,7 +113,6 @@ private:
 
     juce::TextButton playButton;
     juce::TextButton pauseButton;
-    juce::TextButton stopButton;
     bool isPlaying = true;
     juce::ToggleButton syncToHostToggle{"DAW Sync"};
     juce::Slider transportSlider;
