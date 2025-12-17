@@ -114,6 +114,7 @@ private:
     juce::ToggleButton previewToggle{"Preview"};
     juce::ToggleButton syncToHostToggle{"Sync"};
     juce::Slider transportSlider;
+    juce::Label timeDisplayLabel;  // Shows elapsed / total time
     
     std::vector<Library> libraries;
     std::vector<MIDIFileInfo> allFiles;

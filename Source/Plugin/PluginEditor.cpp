@@ -80,6 +80,12 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     transportSlider.setColour(juce::Slider::trackColourId, juce::Colour(0xff3a3a3a));
     addAndMakeVisible(transportSlider);
     
+
+    timeDisplayLabel.setFont(juce::Font(14.0f));
+    timeDisplayLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+    timeDisplayLabel.setJustificationType(juce::Justification::centredRight);
+    timeDisplayLabel.setText("0:00 / 0:00", juce::dontSendNotification);
+    addAndMakeVisible(timeDisplayLabel);
     setSize(700, 500);
     
     // Load saved libraries
@@ -185,6 +191,7 @@ void MIDIXplorerEditor::resized() {
     previewToggle.setBounds(transport.removeFromLeft(80));
     syncToHostToggle.setBounds(transport.removeFromLeft(60));
     transport.removeFromLeft(10);
+    timeDisplayLabel.setBounds(transport.removeFromRight(80));
     transportSlider.setBounds(transport);
     
     // File list fills the rest
@@ -278,6 +285,14 @@ void MIDIXplorerEditor::timerCallback() {
     double position = std::fmod(currentTime, totalDuration) / totalDuration;
     if (position >= 0 && position <= 1) {
         transportSlider.setValue(position, juce::dontSendNotification);
+
+        // Update time display
+        double displayTime = std::fmod(currentTime, totalDuration);
+        int elapsedMin = (int)(displayTime) / 60;
+        int elapsedSec = (int)(displayTime) % 60;
+        int totalMin = (int)(totalDuration) / 60;
+        int totalSec = (int)(totalDuration) % 60;
+        timeDisplayLabel.setText(juce::String::formatted("%d:%02d / %d:%02d", elapsedMin, elapsedSec, totalMin, totalSec), juce::dontSendNotification);
     }
     
     // Handle looping
