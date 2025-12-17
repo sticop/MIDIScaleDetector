@@ -124,6 +124,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     timeDisplayLabel.setJustificationType(juce::Justification::centredRight);
     timeDisplayLabel.setText("0:00 / 0:00", juce::dontSendNotification);
     addAndMakeVisible(timeDisplayLabel);
+    addAndMakeVisible(midiNoteViewer);
     setSize(700, 500);
 
     // Load saved libraries
@@ -233,6 +234,10 @@ void MIDIXplorerEditor::resized() {
     transport.removeFromLeft(10);
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
     transportSlider.setBounds(transport);
+
+    // MIDI Note Viewer
+    auto noteViewerArea = area.removeFromBottom(120);
+    midiNoteViewer.setBounds(noteViewerArea.reduced(4));
 
     // File list fills the rest
     fileListBox->setBounds(area.reduced(4));
@@ -367,6 +372,7 @@ void MIDIXplorerEditor::timerCallback() {
     double position = std::fmod(currentTime, totalDuration) / totalDuration;
     if (position >= 0 && position <= 1) {
         transportSlider.setValue(position, juce::dontSendNotification);
+        midiNoteViewer.setPlaybackPosition(position);
 
         // Update time display
         double displayTime = std::fmod(currentTime, totalDuration);
@@ -543,6 +549,9 @@ void MIDIXplorerEditor::loadSelectedFile() {
         }
     }
     if (midiFileDuration <= 0) midiFileDuration = 1.0;
+
+    // Update MIDI note viewer
+    midiNoteViewer.setSequence(&playbackSequence, midiFileDuration);
 
     // Reset playback position
     playbackNoteIndex = 0;
@@ -929,6 +938,111 @@ void MIDIXplorerEditor::revealInFinder(const juce::String& path) {
 }
 
 // Library list model implementation
+
+// MIDI Note Viewer implementation
+void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
+    auto bounds = getLocalBounds();
+    
+    // Background
+    g.setColour(juce::Colour(0xff1e1e1e));
+    g.fillRect(bounds);
+    
+    // Border
+    g.setColour(juce::Colour(0xff3a3a3a));
+    g.drawRect(bounds);
+    
+    if (sequence == nullptr || sequence->getNumEvents() == 0) {
+        g.setColour(juce::Colours::grey);
+        g.drawText("No MIDI loaded", bounds, juce::Justification::centred);
+        return;
+    }
+    
+    int noteRange = highestNote - lowestNote + 1;
+    if (noteRange <= 0) noteRange = 1;
+    
+    float noteHeight = (float)bounds.getHeight() / (float)noteRange;
+    float pixelsPerSecond = (float)bounds.getWidth() / (float)totalDuration;
+    
+    // Draw piano key background hints
+    for (int note = lowestNote; note <= highestNote; note++) {
+        float y = bounds.getHeight() - (note - lowestNote + 1) * noteHeight;
+        int noteInOctave = note % 12;
+        bool isBlackKey = (noteInOctave == 1 || noteInOctave == 3 || noteInOctave == 6 || noteInOctave == 8 || noteInOctave == 10);
+        if (isBlackKey) {
+            g.setColour(juce::Colour(0xff161616));
+            g.fillRect(0.0f, y, (float)bounds.getWidth(), noteHeight);
+        }
+    }
+    
+    // Draw notes
+    for (int i = 0; i < sequence->getNumEvents(); i++) {
+        auto* event = sequence->getEventPointer(i);
+        auto& msg = event->message;
+        
+        if (msg.isNoteOn()) {
+            int noteNum = msg.getNoteNumber();
+            double startTime = msg.getTimeStamp();
+            double endTime = startTime + 0.1; // Default duration
+            
+            // Find matching note-off
+            for (int j = i + 1; j < sequence->getNumEvents(); j++) {
+                auto* offEvent = sequence->getEventPointer(j);
+                if (offEvent->message.isNoteOff() && offEvent->message.getNoteNumber() == noteNum) {
+                    endTime = offEvent->message.getTimeStamp();
+                    break;
+                }
+            }
+            
+            float x = (float)(startTime * pixelsPerSecond);
+            float w = (float)((endTime - startTime) * pixelsPerSecond);
+            if (w < 2.0f) w = 2.0f;
+            float y = bounds.getHeight() - (noteNum - lowestNote + 1) * noteHeight;
+            
+            // Note color based on velocity
+            int velocity = msg.getVelocity();
+            float brightness = 0.5f + (velocity / 254.0f) * 0.5f;
+            g.setColour(juce::Colour::fromHSV(0.55f, 0.7f, brightness, 1.0f));
+            g.fillRoundedRectangle(x, y + 1, w, noteHeight - 2, 2.0f);
+        }
+    }
+    
+    // Draw playhead
+    if (playPosition >= 0 && playPosition <= 1.0) {
+        float xPos = playPosition * bounds.getWidth();
+        g.setColour(juce::Colours::white);
+        g.drawVerticalLine((int)xPos, 0.0f, (float)bounds.getHeight());
+    }
+}
+
+void MIDIXplorerEditor::MIDINoteViewer::setSequence(const juce::MidiMessageSequence* seq, double duration) {
+    sequence = seq;
+    totalDuration = duration > 0 ? duration : 1.0;
+    
+    // Calculate note range
+    lowestNote = 127;
+    highestNote = 0;
+    if (seq != nullptr) {
+        for (int i = 0; i < seq->getNumEvents(); i++) {
+            auto& msg = seq->getEventPointer(i)->message;
+            if (msg.isNoteOn()) {
+                int note = msg.getNoteNumber();
+                if (note < lowestNote) lowestNote = note;
+                if (note > highestNote) highestNote = note;
+            }
+        }
+    }
+    // Add some padding
+    if (lowestNote > 0) lowestNote--;
+    if (highestNote < 127) highestNote++;
+    if (lowestNote > highestNote) { lowestNote = 60; highestNote = 72; }
+    
+    repaint();
+}
+
+void MIDIXplorerEditor::MIDINoteViewer::setPlaybackPosition(double position) {
+    playPosition = position;
+    repaint();
+}
 void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) {
     if (row < 0 || row >= (int)owner.libraries.size()) return;
 

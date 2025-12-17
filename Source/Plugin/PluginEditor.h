@@ -101,6 +101,21 @@ private:
         int dragStartRow = -1;
     };
 
+    // MIDI Note Viewer (Piano Roll)
+    class MIDINoteViewer : public juce::Component {
+    public:
+        MIDINoteViewer() {}
+        void paint(juce::Graphics& g) override;
+        void setSequence(const juce::MidiMessageSequence* seq, double duration);
+        void setPlaybackPosition(double position);
+    private:
+        const juce::MidiMessageSequence* sequence = nullptr;
+        double totalDuration = 1.0;
+        double playPosition = 0.0;
+        int lowestNote = 127;
+        int highestNote = 0;
+    };
+
     std::unique_ptr<LibraryListModel> libraryModel;
     std::unique_ptr<FileListModel> fileModel;
 
@@ -119,6 +134,7 @@ private:
     juce::ToggleButton syncToHostToggle{"DAW Sync"};
     juce::Slider transportSlider;
     juce::Label timeDisplayLabel;  // Shows elapsed / total time
+    MIDINoteViewer midiNoteViewer;
 
     std::vector<Library> libraries;
     std::vector<MIDIFileInfo> allFiles;
@@ -174,3 +190,4 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MIDIXplorerEditor)
 };
+
