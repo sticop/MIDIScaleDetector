@@ -61,7 +61,6 @@ private:
         MIDIXplorerEditor& owner;
     };
 
-    // Custom ListBox for external drag and drop
     class DraggableListBox : public juce::ListBox {
     public:
         DraggableListBox(const juce::String& name, MIDIXplorerEditor& o) 
@@ -110,16 +109,20 @@ private:
     juce::StringArray detectedKeys;
     
     int selectedFileIndex = -1;
-    bool isPlaying = false;
+    bool fileLoaded = false;
     double playbackStartTime = 0;
-    double playbackStartBeat = 0;   // Beat position when playback started
+    double playbackStartBeat = 0;
     int playbackNoteIndex = 0;
     
     // Host sync state
     double lastHostBpm = 120.0;
     double midiFileBpm = 120.0;
-    bool wasHostPlaying = false;    // Track host play state changes
-    double lastBeatsElapsed = 0;    // For detecting transport jumps
+    bool wasHostPlaying = false;
+    double lastBeatPosition = 0;
+    
+    // Pending file change (for beat-synced switching)
+    bool pendingFileChange = false;
+    int pendingFileIndex = -1;
     
     juce::MidiFile currentMidiFile;
     juce::MidiMessageSequence playbackSequence;
@@ -133,12 +136,12 @@ private:
     void analyzeFile(size_t index);
     void filterFiles();
     void updateKeyFilterFromDetectedScales();
-    void playSelectedFile();
+    void loadSelectedFile();
+    void scheduleFileChange();
     void stopPlayback();
     void revealInFinder(const juce::String& path);
     void selectAndPreview(int row);
     
-    // Tempo helpers
     double getHostBpm();
     double getHostBeatPosition();
     bool isHostPlaying();
