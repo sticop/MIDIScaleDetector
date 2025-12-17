@@ -277,7 +277,8 @@ void MIDIXplorerEditor::timerCallback() {
     // Handle host play/stop changes
     if (synced) {
         if (hostPlaying && !wasHostPlaying) {
-            // Host just started playing - start playback immediately from beat 0
+            // Host just started playing - start playback immediately
+            isPlaying = true;
             playbackNoteIndex = 0;
             playbackStartBeat = hostBeat;
             playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
