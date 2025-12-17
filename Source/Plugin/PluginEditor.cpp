@@ -48,6 +48,14 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     keyFilterCombo.onChange = [this]() { filterFiles(); };
     addAndMakeVisible(keyFilterCombo);
 
+    // Sort dropdown
+    sortCombo.addItem("Sort: Scale", 1);
+    sortCombo.addItem("Sort: Duration", 2);
+    sortCombo.addItem("Sort: Name", 3);
+    sortCombo.setSelectedId(1);
+    sortCombo.onChange = [this]() { sortFiles(); filterFiles(); };
+    addAndMakeVisible(sortCombo);
+
     // Search box
     searchBox.setTextToShowWhenEmpty("Search files...", juce::Colours::grey);
     searchBox.onTextChange = [this]() { filterFiles(); };
@@ -204,6 +212,7 @@ void MIDIXplorerEditor::resized() {
     topBar = topBar.reduced(8, 4);
     fileCountLabel.setBounds(topBar.removeFromLeft(80));
     keyFilterCombo.setBounds(topBar.removeFromLeft(100).reduced(2));
+    sortCombo.setBounds(topBar.removeFromLeft(110).reduced(2));
     topBar.removeFromLeft(8);
     syncToHostToggle.setBounds(topBar.removeFromRight(90));
     topBar.removeFromRight(8);
@@ -579,7 +588,7 @@ void MIDIXplorerEditor::scanLibraries() {
             scanLibrary(i);
         }
     }
-    sortFilesByKey();
+    sortFiles();
     filterFiles();
 }
 
@@ -625,7 +634,7 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
         }
     }
 
-    sortFilesByKey();
+    sortFiles();
     filterFiles();
     updateKeyFilterFromDetectedScales();
 }
@@ -697,16 +706,44 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     }
 
     info.key = juce::String(noteNames[bestKey]) + (bestIsMajor ? " Major" : " Minor");
+    
+    // Calculate duration
+    midiFile.convertTimestampTicksToSeconds();
+    double maxTime = 0.0;
+    for (int track = 0; track < midiFile.getNumTracks(); track++) {
+        auto* sequence = midiFile.getTrack(track);
+        if (sequence && sequence->getNumEvents() > 0) {
+            double lastTime = sequence->getEventPointer(sequence->getNumEvents() - 1)->message.getTimeStamp();
+            if (lastTime > maxTime) maxTime = lastTime;
+        }
+    }
+    info.duration = maxTime;
     info.analyzed = true;
 }
 
-void MIDIXplorerEditor::sortFilesByKey() {
-    std::sort(allFiles.begin(), allFiles.end(), [](const MIDIFileInfo& a, const MIDIFileInfo& b) {
-        int orderA = getKeyOrder(a.key);
-        int orderB = getKeyOrder(b.key);
-        if (orderA != orderB) return orderA < orderB;
-        return a.fileName.compareIgnoreCase(b.fileName) < 0;
-    });
+void MIDIXplorerEditor::sortFiles() {
+    int sortOption = sortCombo.getSelectedId();
+    
+    if (sortOption == 1) {
+        // Sort by Scale/Key
+        std::sort(allFiles.begin(), allFiles.end(), [](const MIDIFileInfo& a, const MIDIFileInfo& b) {
+            int orderA = getKeyOrder(a.key);
+            int orderB = getKeyOrder(b.key);
+            if (orderA != orderB) return orderA < orderB;
+            return a.fileName.compareIgnoreCase(b.fileName) < 0;
+        });
+    } else if (sortOption == 2) {
+        // Sort by Duration
+        std::sort(allFiles.begin(), allFiles.end(), [](const MIDIFileInfo& a, const MIDIFileInfo& b) {
+            if (a.duration != b.duration) return a.duration < b.duration;
+            return a.fileName.compareIgnoreCase(b.fileName) < 0;
+        });
+    } else {
+        // Sort by Name
+        std::sort(allFiles.begin(), allFiles.end(), [](const MIDIFileInfo& a, const MIDIFileInfo& b) {
+            return a.fileName.compareIgnoreCase(b.fileName) < 0;
+        });
+    }
 }
 
 void MIDIXplorerEditor::filterFiles() {
@@ -842,10 +879,13 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     g.setFont(13.0f);
     g.drawText(file.fileName, 88, 0, w - 180, h, juce::Justification::centredLeft);
 
-    // Library name
+    // Duration in seconds
     g.setColour(juce::Colours::grey);
     g.setFont(11.0f);
-    g.drawText(file.libraryName, w - 90, 0, 85, h, juce::Justification::centredRight);
+    int mins = (int)(file.duration) / 60;
+    int secs = (int)(file.duration) % 60;
+    juce::String durationStr = juce::String::formatted("%d:%02d", mins, secs);
+    g.drawText(durationStr, w - 60, 0, 55, h, juce::Justification::centredRight);
 }
 
 void MIDIXplorerEditor::FileListModel::selectedRowsChanged(int lastRowSelected) {

@@ -35,6 +35,7 @@ public:
         juce::String fullPath;
         juce::String key;
         juce::String libraryName;
+        double duration = 0.0;  // Duration in seconds
         bool analyzed = false;
     };
 
@@ -108,6 +109,7 @@ private:
 
     juce::Label fileCountLabel;
     juce::ComboBox keyFilterCombo;
+    juce::ComboBox sortCombo;
     juce::TextEditor searchBox;
     std::unique_ptr<DraggableListBox> fileListBox;
 
@@ -150,7 +152,7 @@ private:
     void scanLibrary(size_t index);
     void analyzeFile(size_t index);
     void filterFiles();
-    void sortFilesByKey();
+    void sortFiles();
     void updateKeyFilterFromDetectedScales();
     void loadSelectedFile();
     void scheduleFileChange();
