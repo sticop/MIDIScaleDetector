@@ -296,9 +296,9 @@ void MIDIScalePlugin::updatePlayback() {
         playbackState.playbackNoteIndex.store(0);
         
         if (synced) {
-            double fileDurationInBeats = (totalDuration * midiFileBpm) / 60.0;
-            double newStartBeat = playbackState.playbackStartBeat.load() + fileDurationInBeats;
-            playbackState.playbackStartBeat.store(newStartBeat);
+            // Recalculate start beat based on current host position to stay locked
+            double beatsForOvershoot = (wrappedTime * midiFileBpm) / 60.0;
+            playbackState.playbackStartBeat.store(hostBeat - beatsForOvershoot);
         } else {
             playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 - wrappedTime);
         }

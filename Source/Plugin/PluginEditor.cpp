@@ -462,13 +462,16 @@ void MIDIXplorerEditor::timerCallback() {
         playbackNoteIndex = 0;
 
         if (actuallySync) {
-            // Calculate how many beats the file duration represents
-            double fileDurationInBeats = (totalDuration * midiFileBpm) / 60.0;
-            // Advance start beat by file duration in beats (preserves fractional timing)
-            playbackStartBeat += fileDurationInBeats;
+            // When synced, recalculate start beat based on current host position
+            // This ensures we stay locked to the host even after multiple loops
+            double beatsForOvershoot = (overshoot * midiFileBpm) / 60.0;
+            playbackStartBeat = hostBeat - beatsForOvershoot;
         } else {
             playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - overshoot;
         }
+        
+        // Update currentTime to the wrapped value for note playback
+        currentTime = overshoot;
         
         // Immediately play notes at or near time 0 to prevent missing first beat
         while (playbackNoteIndex < playbackSequence.getNumEvents()) {
