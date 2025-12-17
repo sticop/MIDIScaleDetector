@@ -63,10 +63,12 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     addAndMakeVisible(fileListBox.get());
     
     // Transport controls
+    previewToggle.setToggleState(true, juce::dontSendNotification);
     previewToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
     previewToggle.setColour(juce::ToggleButton::tickColourId, juce::Colours::cyan);
     addAndMakeVisible(previewToggle);
     
+    syncToHostToggle.setToggleState(true, juce::dontSendNotification);
     syncToHostToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
     syncToHostToggle.setColour(juce::ToggleButton::tickColourId, juce::Colours::orange);
     addAndMakeVisible(syncToHostToggle);
