@@ -458,11 +458,9 @@ void MIDIXplorerEditor::loadSelectedFile() {
     playbackNoteIndex = 0;
     fileLoaded = true;
 
-    if (syncToHostToggle.getToggleState()) {
-        playbackStartBeat = getHostBeatPosition();
-    } else {
-        playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
-    }
+    // Always set both timing references for proper sync
+    playbackStartBeat = getHostBeatPosition();
+    playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
 
     if (pluginProcessor) {
         pluginProcessor->clearMidiQueue();
