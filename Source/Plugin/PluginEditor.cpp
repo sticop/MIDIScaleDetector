@@ -1184,16 +1184,9 @@ void MIDIXplorerEditor::filterFiles() {
         if (keyFilterCombo.getSelectedId() == 2) {
             if (!file.favorite) continue;
         }
-        // Check key/scale filter (IDs > 2)
+        // Check key filter (IDs > 2) - match key or relative key
         else if (keyFilterCombo.getSelectedId() > 2) {
-            // Check if it's an exact match (full key like "C Major")
-            // or a scale-only match (just "Major", "Minor", etc.)
-            bool matches = (file.key == keyFilter);
-            if (!matches) {
-                // Check if the file's key ends with the filter (scale name match)
-                juce::String fileScale = file.key.fromFirstOccurrenceOf(" ", false, false).trim();
-                matches = (fileScale == keyFilter);
-            }
+            bool matches = (file.key == keyFilter) || (file.relativeKey == keyFilter);
             if (!matches) continue;
         }
 
@@ -1215,27 +1208,25 @@ void MIDIXplorerEditor::filterFiles() {
 
 void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
     detectedKeys.clear();
-    juce::StringArray uniqueKeys;
-    juce::StringArray uniqueScales;
+    juce::StringArray allKeysAndRelatives;
 
     for (const auto& file : allFiles) {
-        if (file.key != "---") {
-            if (!uniqueKeys.contains(file.key)) {
-                uniqueKeys.add(file.key);
-            }
-            // Extract just the scale name (everything after the key letter)
-            juce::String scaleName = file.key.fromFirstOccurrenceOf(" ", false, false).trim();
-            if (scaleName.isNotEmpty() && !uniqueScales.contains(scaleName)) {
-                uniqueScales.add(scaleName);
-            }
+        // Add the detected key
+        if (file.key != "---" && !allKeysAndRelatives.contains(file.key)) {
+            allKeysAndRelatives.add(file.key);
+        }
+        // Add the relative key (from Circle of Fifths)
+        if (file.relativeKey.isNotEmpty() && file.relativeKey != "---" && 
+            !allKeysAndRelatives.contains(file.relativeKey)) {
+            allKeysAndRelatives.add(file.relativeKey);
         }
     }
 
-    // Bubble sort keys by musical key order
-    for (int i = 0; i < uniqueKeys.size() - 1; i++) {
-        for (int j = i + 1; j < uniqueKeys.size(); j++) {
-            if (getKeyOrder(uniqueKeys[i]) > getKeyOrder(uniqueKeys[j])) {
-                uniqueKeys.getReference(i).swapWith(uniqueKeys.getReference(j));
+    // Bubble sort keys by musical key order (C, C#, D, etc.)
+    for (int i = 0; i < allKeysAndRelatives.size() - 1; i++) {
+        for (int j = i + 1; j < allKeysAndRelatives.size(); j++) {
+            if (getKeyOrder(allKeysAndRelatives[i]) > getKeyOrder(allKeysAndRelatives[j])) {
+                allKeysAndRelatives.getReference(i).swapWith(allKeysAndRelatives.getReference(j));
             }
         }
     }
@@ -1244,16 +1235,8 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
     keyFilterCombo.addItem("All Keys", 1);
     keyFilterCombo.addItem("Favorites", 2);
     
-    // Add section for scale types
-    keyFilterCombo.addSectionHeading("Scales");
     int id = 3;
-    for (const auto& scale : uniqueScales) {
-        keyFilterCombo.addItem(scale, id++);
-    }
-    
-    // Add section for key + scale combinations
-    keyFilterCombo.addSectionHeading("Keys");
-    for (const auto& key : uniqueKeys) {
+    for (const auto& key : allKeysAndRelatives) {
         keyFilterCombo.addItem(key, id++);
     }
 
