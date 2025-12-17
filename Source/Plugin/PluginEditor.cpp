@@ -853,32 +853,53 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
     filterFiles();
     updateKeyFilterFromDetectedScales();
     
-    // Always ensure a file is selected and loaded
+    // Ensure the currently playing file stays selected
     if (!filteredFiles.empty()) {
-        int indexToSelect = 0;
-        bool foundPendingFile = false;
+        int indexToSelect = -1;
         
-        // Check if we have a pending file path to restore (from processor or saved state)
-        if (pendingSelectedFilePath.isNotEmpty()) {
+        // First priority: Keep the currently playing file from processor
+        juce::String currentProcessorPath = pluginProcessor ? pluginProcessor->getCurrentFilePath() : juce::String();
+        if (currentProcessorPath.isNotEmpty()) {
+            for (size_t i = 0; i < filteredFiles.size(); i++) {
+                if (filteredFiles[i].fullPath == currentProcessorPath) {
+                    indexToSelect = (int)i;
+                    break;
+                }
+            }
+        }
+        
+        // Second priority: Restore from pending path (e.g., from saved state)
+        if (indexToSelect < 0 && pendingSelectedFilePath.isNotEmpty()) {
             for (size_t i = 0; i < filteredFiles.size(); i++) {
                 if (filteredFiles[i].fullPath == pendingSelectedFilePath) {
                     indexToSelect = (int)i;
-                    foundPendingFile = true;
                     break;
                 }
             }
             pendingSelectedFilePath = "";  // Clear after using
-        } else if (selectedFileIndex >= 0 && selectedFileIndex < (int)filteredFiles.size()) {
-            // Keep current selection if valid
-            indexToSelect = selectedFileIndex;
-            foundPendingFile = true;
+        }
+        
+        // Third priority: Keep current selection if the file path matches
+        if (indexToSelect < 0 && selectedFileIndex >= 0 && selectedFileIndex < (int)allFiles.size()) {
+            juce::String currentPath = allFiles[selectedFileIndex].fullPath;
+            for (size_t i = 0; i < filteredFiles.size(); i++) {
+                if (filteredFiles[i].fullPath == currentPath) {
+                    indexToSelect = (int)i;
+                    break;
+                }
+            }
+        }
+        
+        // Last resort: select first file only if nothing is loaded
+        if (indexToSelect < 0) {
+            indexToSelect = 0;
         }
         
         fileListBox->selectRow(indexToSelect);
         selectedFileIndex = indexToSelect;
         
-        // Only load the file if not already loaded in the processor
-        bool processorHasFile = pluginProcessor && !pluginProcessor->getCurrentFilePath().isEmpty();
+        // Only load a new file if nothing is currently loaded in processor
+        bool processorHasFile = currentProcessorPath.isNotEmpty();
         if (!fileLoaded && !processorHasFile) {
             selectAndPreview(indexToSelect);
         } else if (processorHasFile) {
