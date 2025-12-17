@@ -49,6 +49,8 @@ void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     buffer.clear();
 
     // Update transport state from host playhead - this runs on the audio thread
+    bool wasHostPlaying = transportState.isPlaying.load();
+    
     if (auto* playhead = getPlayHead()) {
         if (auto pos = playhead->getPosition()) {
             transportState.isPlaying.store(pos->getIsPlaying(), std::memory_order_relaxed);
@@ -63,6 +65,20 @@ void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             
             if (auto timeInSec = pos->getTimeInSeconds()) {
                 transportState.timeInSeconds.store(*timeInSec, std::memory_order_relaxed);
+            }
+            
+            // Auto-start playback when host starts playing (if sync is enabled and file is loaded)
+            bool hostNowPlaying = pos->getIsPlaying();
+            if (hostNowPlaying && !wasHostPlaying && playbackState.syncToHost.load() && playbackState.fileLoaded.load()) {
+                playbackState.isPlaying.store(true);
+                resetPlayback();
+            }
+            // Auto-stop when host stops
+            else if (!hostNowPlaying && wasHostPlaying && playbackState.syncToHost.load()) {
+                // Send all notes off
+                for (int ch = 1; ch <= 16; ch++) {
+                    addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+                }
             }
         }
     }

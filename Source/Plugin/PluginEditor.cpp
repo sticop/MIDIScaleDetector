@@ -365,9 +365,11 @@ void MIDIXplorerEditor::timerCallback() {
             playbackStartBeat = hostBeat;
             playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
 
-            // Clear any pending notes
+            // Start processor playback and reset note index
             if (pluginProcessor) {
                 pluginProcessor->clearMidiQueue();
+                pluginProcessor->resetPlayback();
+                pluginProcessor->setPlaybackPlaying(true);
             }
         } else if (!hostPlaying && wasHostPlaying) {
             // Host stopped - pause playback and update button
