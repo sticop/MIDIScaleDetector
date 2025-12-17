@@ -10,7 +10,7 @@ namespace MIDIScaleDetector {
     class MIDIScalePlugin;
 }
 
-class MIDIXplorerEditor : public juce::AudioProcessorEditor, 
+class MIDIXplorerEditor : public juce::AudioProcessorEditor,
                           private juce::Timer,
                           public juce::DragAndDropContainer {
 public:
@@ -63,14 +63,14 @@ private:
 
     class DraggableListBox : public juce::ListBox {
     public:
-        DraggableListBox(const juce::String& name, MIDIXplorerEditor& o) 
+        DraggableListBox(const juce::String& name, MIDIXplorerEditor& o)
             : juce::ListBox(name), owner(o) {}
-        
+
         void mouseDown(const juce::MouseEvent& e) override {
             dragStartRow = getRowContainingPosition(e.x, e.y);
             juce::ListBox::mouseDown(e);
         }
-        
+
         void mouseDrag(const juce::MouseEvent& e) override {
             if (e.getDistanceFromDragStart() > 10 && !isDragging && dragStartRow >= 0) {
                 if (dragStartRow < (int)owner.filteredFiles.size()) {
@@ -87,7 +87,7 @@ private:
                 }
             }
         }
-        
+
         void mouseUp(const juce::MouseEvent& e) override {
             isDragging = false;
             dragStartRow = -1;
@@ -105,45 +105,45 @@ private:
     juce::TextButton addLibraryBtn{"+ Add Library"};
     juce::Label librariesLabel;
     juce::ListBox libraryListBox{"Libraries"};
-    
+
     juce::Label fileCountLabel;
     juce::ComboBox keyFilterCombo;
     juce::TextEditor searchBox;
     std::unique_ptr<DraggableListBox> fileListBox;
-    
+
     juce::ToggleButton previewToggle{"Preview"};
     juce::ToggleButton syncToHostToggle{"Sync"};
     juce::Slider transportSlider;
     juce::Label timeDisplayLabel;  // Shows elapsed / total time
-    
+
     std::vector<Library> libraries;
     std::vector<MIDIFileInfo> allFiles;
     std::vector<MIDIFileInfo> filteredFiles;
     juce::StringArray detectedKeys;
-    
+
     int selectedFileIndex = -1;
     bool fileLoaded = false;
     double playbackStartTime = 0;
     double playbackStartBeat = 0;
     int playbackNoteIndex = 0;
-    
+
     // Host sync state
     double lastHostBpm = 120.0;
     double midiFileBpm = 120.0;
     double midiFileDuration = 0.0;  // Actual duration of the MIDI file in seconds
     bool wasHostPlaying = false;
     double lastBeatPosition = 0;
-    
+
     // Pending file change
     bool pendingFileChange = false;
     int pendingFileIndex = -1;
-    
+
     juce::MidiFile currentMidiFile;
     juce::MidiMessageSequence playbackSequence;
     std::unique_ptr<juce::FileChooser> fileChooser;
-    
+
     MIDIScaleDetector::MIDIScalePlugin* pluginProcessor = nullptr;
-    
+
     void addLibrary();
     void scanLibraries();
     void scanLibrary(size_t index);
@@ -157,12 +157,12 @@ private:
     void restartPlayback();
     void revealInFinder(const juce::String& path);
     void selectAndPreview(int row);
-    
+
     // Persistence
     void saveLibraries();
     void loadLibraries();
     juce::File getSettingsFile();
-    
+
     double getHostBpm();
     double getHostBeatPosition();
     bool isHostPlaying();
