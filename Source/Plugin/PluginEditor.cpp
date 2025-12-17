@@ -190,21 +190,6 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     };
     addAndMakeVisible(dragButton);
 
-    // Shuffle button
-    shuffleButton.setButtonText(juce::String::fromUTF8("\U0001F500"));  // Shuffle icon 🔀
-    shuffleButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
-    shuffleButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff5a5a5a));
-    shuffleButton.setColour(juce::TextButton::textColourOffId, juce::Colours::grey);
-    shuffleButton.setColour(juce::TextButton::textColourOnId, juce::Colours::orange);
-    shuffleButton.setClickingTogglesState(true);
-    shuffleButton.setTooltip("Shuffle: play random files");
-    shuffleButton.onClick = [this]() {
-        shuffleEnabled = shuffleButton.getToggleState();
-        shuffleButton.setColour(juce::TextButton::textColourOffId, 
-                                shuffleEnabled ? juce::Colours::orange : juce::Colours::grey);
-    };
-    addAndMakeVisible(shuffleButton);
-
     syncToHostToggle.setToggleState(true, juce::dontSendNotification);
     syncToHostToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
     syncToHostToggle.setColour(juce::ToggleButton::tickColourId, juce::Colours::orange);
@@ -398,8 +383,6 @@ void MIDIXplorerEditor::resized() {
     playPauseButton.setBounds(transport.removeFromLeft(40));
     transport.removeFromLeft(4);
     dragButton.setBounds(transport.removeFromLeft(40));
-    transport.removeFromLeft(4);
-    shuffleButton.setBounds(transport.removeFromLeft(40));
     transport.removeFromLeft(10);
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
     transportSlider.setBounds(transport);
@@ -782,22 +765,10 @@ void MIDIXplorerEditor::restartPlayback() {
 
 void MIDIXplorerEditor::playNextFile() {
     if (filteredFiles.empty()) return;
-    
-    int nextIndex;
-    if (shuffleEnabled) {
-        // Random file (avoid same file if possible)
-        if (filteredFiles.size() > 1) {
-            do {
-                nextIndex = juce::Random::getSystemRandom().nextInt((int)filteredFiles.size());
-            } while (nextIndex == selectedFileIndex);
-        } else {
-            nextIndex = 0;
-        }
-    } else {
-        // Sequential next
-        nextIndex = (selectedFileIndex + 1) % (int)filteredFiles.size();
-    }
-    
+
+    // Sequential next
+    int nextIndex = (selectedFileIndex + 1) % (int)filteredFiles.size();
+
     selectAndPreview(nextIndex);
 }
 
@@ -1555,7 +1526,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
             // Note color based on velocity, highlight if hovered
             int velocity = msg.getVelocity();
             float brightness = 0.5f + (velocity / 254.0f) * 0.5f;
-            
+
             if (noteNum == hoveredNote) {
                 // Highlighted note
                 g.setColour(juce::Colours::orange);
@@ -1572,19 +1543,19 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
         g.setColour(juce::Colours::white);
         g.drawVerticalLine((int)xPos, 0.0f, (float)bounds.getHeight());
     }
-    
+
     // Draw note name tooltip if hovering
     if (hoveredNote >= 0) {
         juce::String noteName = getNoteNameFromMidi(hoveredNote);
-        
+
         // Draw tooltip background
         g.setFont(12.0f);
         int textWidth = g.getCurrentFont().getStringWidth(noteName) + 10;
         int textHeight = 18;
-        
+
         int tooltipX = hoverPos.x + 10;
         int tooltipY = hoverPos.y - textHeight - 5;
-        
+
         // Keep tooltip in bounds
         if (tooltipX + textWidth > bounds.getWidth()) {
             tooltipX = hoverPos.x - textWidth - 10;
@@ -1592,7 +1563,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
         if (tooltipY < 0) {
             tooltipY = hoverPos.y + 10;
         }
-        
+
         g.setColour(juce::Colour(0xff333333));
         g.fillRoundedRectangle((float)tooltipX, (float)tooltipY, (float)textWidth, (float)textHeight, 4.0f);
         g.setColour(juce::Colours::white);
@@ -1642,43 +1613,43 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseMove(const juce::MouseEvent& e) {
         hoveredNote = -1;
         return;
     }
-    
+
     auto bounds = getLocalBounds();
     float noteRangeF = (float)(highestNote - lowestNote + 1);
     if (noteRangeF < 1.0f) noteRangeF = 12.0f;
     float noteHeight = (float)bounds.getHeight() / noteRangeF;
-    
+
     // Find which note the mouse is over
     int newHoveredNote = -1;
     hoverPos = e.getPosition();
-    
+
     for (int i = 0; i < sequence->getNumEvents(); i++) {
         auto* event = sequence->getEventPointer(i);
         if (!event->message.isNoteOn()) continue;
-        
+
         int noteNumber = event->message.getNoteNumber();
         double startTime = event->message.getTimeStamp();
         double endTime = startTime + 0.1;  // Default duration
-        
+
         if (event->noteOffObject != nullptr) {
             endTime = event->noteOffObject->message.getTimeStamp();
         }
-        
+
         // Calculate note rectangle
         float x = (float)(startTime / totalDuration) * bounds.getWidth();
         float width = (float)((endTime - startTime) / totalDuration) * bounds.getWidth();
         float y = (float)(highestNote - noteNumber) / noteRangeF * bounds.getHeight();
-        
+
         if (width < 2.0f) width = 2.0f;
-        
+
         // Check if mouse is inside this note
-        if (e.x >= x && e.x <= x + width && 
+        if (e.x >= x && e.x <= x + width &&
             e.y >= y && e.y <= y + noteHeight) {
             newHoveredNote = noteNumber;
             break;
         }
     }
-    
+
     if (newHoveredNote != hoveredNote) {
         hoveredNote = newHoveredNote;
         repaint();

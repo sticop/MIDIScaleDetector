@@ -135,7 +135,7 @@ private:
         void setPlaybackPosition(double position);
         void mouseMove(const juce::MouseEvent& e) override;
         void mouseExit(const juce::MouseEvent& e) override;
-        
+
         static juce::String getNoteNameFromMidi(int midiNote);
     private:
         const juce::MidiMessageSequence* sequence = nullptr;
@@ -163,7 +163,6 @@ private:
 
     juce::TextButton playPauseButton;
     juce::TextButton dragButton;  // Drag to DAW button
-    juce::TextButton shuffleButton;  // Shuffle/random play
     bool isPlaying = true;
     juce::ToggleButton syncToHostToggle{"DAW Sync"};
     juce::Slider transportSlider;
@@ -183,7 +182,6 @@ private:
     juce::String pendingSelectedFilePath;
     bool fileLoaded = false;
     bool isQuantized = false;
-    bool shuffleEnabled = false;  // Random play mode
     double playbackStartTime = 0;
     double playbackStartBeat = 0;
     int playbackNoteIndex = 0;
