@@ -275,6 +275,12 @@ void MIDIXplorerEditor::timerCallback() {
             // Host just started playing - start playback immediately
             isPlaying = true;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
+            
+            // If no file is loaded, load the first file
+            if (!fileLoaded && !filteredFiles.empty()) {
+                selectAndPreview(0);
+            }
+            
             playbackNoteIndex = 0;
             playbackStartBeat = hostBeat;
             playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
@@ -961,13 +967,10 @@ void MIDIXplorerEditor::FileListModel::listBoxItemClicked(int row, const juce::M
     if (e.mods.isRightButtonDown()) {
         juce::PopupMenu menu;
         menu.addItem(1, "Reveal in Finder");
-        menu.addItem(2, "Preview");
 
         menu.showMenuAsync(juce::PopupMenu::Options(), [this, row](int result) {
             if (result == 1) {
                 owner.revealInFinder(owner.filteredFiles[(size_t)row].fullPath);
-            } else if (result == 2) {
-                // selectedRowsChanged handles preview
             }
         });
     } else {
