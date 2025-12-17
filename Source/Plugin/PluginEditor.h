@@ -93,19 +93,19 @@ private:
             // Start native file drag when mouse moves enough
             if (!isDragging && dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
                 auto distance = e.getPosition().getDistanceFrom(dragStartPos);
-                if (distance > 4) {
+                if (distance > 8) {  // Slightly larger threshold
                     isDragging = true;
                     auto filePath = owner.filteredFiles[(size_t)dragStartRow].fullPath;
                     juce::File file(filePath);
                     if (file.existsAsFile()) {
-                        // Native OS file drag - this is the standard way
+                        // Use StringArray with full path for macOS compatibility
                         juce::StringArray files;
                         files.add(file.getFullPathName());
-
-                        // canMoveFiles = false means copy only (safer for DAWs)
-                        auto result = juce::DragAndDropContainer::performExternalDragDropOfFiles(files, false);
-                        (void)result;  // Ignore result, drag started
+                        
+                        // Perform the drag - canMoveFiles=true works better with Logic Pro
+                        juce::DragAndDropContainer::performExternalDragDropOfFiles(files, true);
                     }
+                    // Reset after drag completes or is cancelled
                     isDragging = false;
                     dragStartRow = -1;
                 }
