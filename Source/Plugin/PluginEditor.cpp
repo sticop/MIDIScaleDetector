@@ -239,48 +239,23 @@ void MIDIXplorerEditor::resized() {
 }
 
 void MIDIXplorerEditor::timerCallback() {
-    if (!isPlaying || !fileLoaded) {
-        return;
-    }
-
     bool synced = syncToHostToggle.getToggleState();
     bool hostPlaying = isHostPlaying();
     double hostBpm = getHostBpm();
     double hostBeat = getHostBeatPosition();
 
-    // Handle pending file changes on beat boundary
-    if (synced && pendingFileChange && hostPlaying) {
-        int currentBeat = (int)std::floor(hostBeat);
-        double currentBeatFrac = hostBeat - currentBeat;
-
-        // Check if we crossed a beat boundary
-        if (currentBeatFrac < 0.15 || (int)std::floor(lastBeatPosition) != currentBeat) {
-            // Apply pending file change
-            if (pendingFileIndex >= 0 && pendingFileIndex < (int)filteredFiles.size()) {
-                fileListBox->selectRow(pendingFileIndex);
-                selectedFileIndex = pendingFileIndex;
-                loadSelectedFile();
-                playbackStartBeat = std::floor(hostBeat); // Start from this beat
-            }
-            pendingFileChange = false;
-            pendingFileIndex = -1;
-        }
-    }
-
-    lastBeatPosition = hostBeat;
-
-    // Handle host play/stop changes
+    // Handle host play/stop changes - check this BEFORE early return
     if (synced) {
         if (hostPlaying && !wasHostPlaying) {
             // Host just started playing - start playback immediately
             isPlaying = true;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
-            
+
             // If no file is loaded, load the first file
             if (!fileLoaded && !filteredFiles.empty()) {
                 selectAndPreview(0);
             }
-            
+
             playbackNoteIndex = 0;
             playbackStartBeat = hostBeat;
             playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
@@ -303,12 +278,32 @@ void MIDIXplorerEditor::timerCallback() {
             playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
         }
         wasHostPlaying = hostPlaying;
+    }
 
-        // When host is stopped in sync mode, switch to freerun for browsing
-        if (!hostPlaying) {
-            synced = false;  // Use freerun timing when host is stopped
+    if (!isPlaying || !fileLoaded) {
+        return;
+    }
+
+    // Handle pending file changes on beat boundary
+    if (synced && pendingFileChange && hostPlaying) {
+        int currentBeat = (int)std::floor(hostBeat);
+        double currentBeatFrac = hostBeat - currentBeat;
+
+        // Check if we crossed a beat boundary
+        if (currentBeatFrac < 0.15 || (int)std::floor(lastBeatPosition) != currentBeat) {
+            // Apply pending file change
+            if (pendingFileIndex >= 0 && pendingFileIndex < (int)filteredFiles.size()) {
+                fileListBox->selectRow(pendingFileIndex);
+                selectedFileIndex = pendingFileIndex;
+                loadSelectedFile();
+                playbackStartBeat = std::floor(hostBeat); // Start from this beat
+            }
+            pendingFileChange = false;
+            pendingFileIndex = -1;
         }
     }
+
+    lastBeatPosition = hostBeat;
 
     if (playbackSequence.getNumEvents() == 0) {
         return;
