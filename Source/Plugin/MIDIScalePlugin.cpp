@@ -305,13 +305,14 @@ void MIDIScalePlugin::updatePlayback() {
         currentTime = wrappedTime;
     }
     
-    // Play notes
+    // Play notes - use tight timing to avoid double triggers
     int noteIndex = playbackState.playbackNoteIndex.load();
     while (noteIndex < playbackSequence.getNumEvents()) {
         auto* event = playbackSequence.getEventPointer(noteIndex);
         double eventTime = event->message.getTimeStamp();
         
-        if (eventTime <= currentTime + 0.01) {
+        // Only play notes that are at or before current time (no lookahead)
+        if (eventTime <= currentTime) {
             auto msg = event->message;
             if (msg.isNoteOn() || msg.isNoteOff()) {
                 addMidiMessage(msg);

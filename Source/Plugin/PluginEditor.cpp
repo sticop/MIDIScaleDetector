@@ -463,41 +463,11 @@ void MIDIXplorerEditor::timerCallback() {
         // Update currentTime to the wrapped value for note playback
         currentTime = overshoot;
         
-        // Immediately play notes at or near time 0 to prevent missing first beat
-        while (playbackNoteIndex < playbackSequence.getNumEvents()) {
-            auto* event = playbackSequence.getEventPointer(playbackNoteIndex);
-            double eventTime = event->message.getTimeStamp();
-            if (eventTime <= overshoot + 0.005) {  // Small tolerance for timing
-                auto msg = event->message;
-                if (msg.isNoteOn() || msg.isNoteOff()) {
-                    if (pluginProcessor) {
-                        pluginProcessor->addMidiMessage(msg);
-                    }
-                }
-                playbackNoteIndex++;
-            } else {
-                break;
-            }
-        }
+        // Note index tracking is now handled by the processor
     }
 
-    // Play notes that should have started by now
-    while (playbackNoteIndex < playbackSequence.getNumEvents()) {
-        auto* event = playbackSequence.getEventPointer(playbackNoteIndex);
-        double eventTime = event->message.getTimeStamp();
-
-        if (eventTime <= currentTime) {
-            auto msg = event->message;
-            if (msg.isNoteOn() || msg.isNoteOff()) {
-                if (pluginProcessor) {
-                    pluginProcessor->addMidiMessage(msg);
-                }
-            }
-            playbackNoteIndex++;
-        } else {
-            break;
-        }
-    }
+    // Note: Actual note playback is handled by the processor's updatePlayback()
+    // The editor only handles UI updates (transport slider, time display, etc.)
 }
 
 bool MIDIXplorerEditor::keyPressed(const juce::KeyPress& key) {
