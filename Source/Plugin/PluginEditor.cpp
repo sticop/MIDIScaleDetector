@@ -71,21 +71,30 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     addAndMakeVisible(fileListBox.get());
 
     // Transport controls - Play/Pause toggle button
-    playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Show pause when playing
+    playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Show play icon initially
     playPauseButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
     playPauseButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff5a5a5a));  // Hover highlight
     playPauseButton.setColour(juce::TextButton::textColourOffId, juce::Colours::cyan);
     playPauseButton.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
+    isPlaying = false;  // Start with playback stopped
     playPauseButton.onClick = [this]() {
-        isPlaying = !isPlaying;
-        if (isPlaying) {
+        if (!isPlaying) {
+            // Start playing
+            isPlaying = true;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
-            // Resume playback
-            if (playbackNoteIndex == 0 && fileLoaded) {
-                playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
-                playbackStartBeat = getHostBeatPosition();
+            // If no file is loaded, play the first file
+            if (!fileLoaded && !filteredFiles.empty()) {
+                selectAndPreview(0);
+            } else if (fileLoaded) {
+                // Resume playback
+                if (playbackNoteIndex == 0) {
+                    playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+                    playbackStartBeat = getHostBeatPosition();
+                }
             }
         } else {
+            // Pause
+            isPlaying = false;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
             // Send all notes off when pausing
             if (pluginProcessor) {
@@ -569,13 +578,52 @@ void MIDIXplorerEditor::addLibrary() {
     fileChooser->launchAsync(flags, [this](const juce::FileChooser& fc) {
         auto result = fc.getResult();
         if (result.isDirectory()) {
+            juce::String newPath = result.getFullPathName();
+            
+            // Check if this folder or a parent already exists in libraries
+            for (size_t i = 0; i < libraries.size(); i++) {
+                juce::String existingPath = libraries[i].path;
+                
+                // Check if exact same folder
+                if (newPath == existingPath) {
+                    // Refresh existing library instead
+                    scanLibrary(i);
+                    sortFiles();
+                    filterFiles();
+                    return;
+                }
+                
+                // Check if new path is a subfolder of existing library
+                if (newPath.startsWith(existingPath + "/") || newPath.startsWith(existingPath + "\\")) {
+                    // Subfolder of existing - refresh parent library instead
+                    scanLibrary(i);
+                    sortFiles();
+                    filterFiles();
+                    return;
+                }
+                
+                // Check if existing library is a subfolder of new path (new is parent)
+                if (existingPath.startsWith(newPath + "/") || existingPath.startsWith(newPath + "\\")) {
+                    // Replace the subfolder entry with the parent
+                    libraries[i].path = newPath;
+                    libraries[i].name = result.getFileName();
+                    libraryListBox.updateContent();
+                    saveLibraries();
+                    scanLibrary(i);
+                    sortFiles();
+                    filterFiles();
+                    return;
+                }
+            }
+            
+            // No duplicates found, add new library
             Library lib;
             lib.name = result.getFileName();
             lib.path = result.getFullPathName();
             lib.enabled = true;
             libraries.push_back(lib);
             libraryListBox.updateContent();
-            saveLibraries(); // Save immediately
+            saveLibraries();
             scanLibrary(libraries.size() - 1);
         }
     });
@@ -706,7 +754,7 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     }
 
     info.key = juce::String(noteNames[bestKey]) + (bestIsMajor ? " Major" : " Minor");
-    
+
     // Calculate duration
     midiFile.convertTimestampTicksToSeconds();
     double maxTime = 0.0;
@@ -723,7 +771,7 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
 
 void MIDIXplorerEditor::sortFiles() {
     int sortOption = sortCombo.getSelectedId();
-    
+
     if (sortOption == 1) {
         // Sort by Scale/Key
         std::sort(allFiles.begin(), allFiles.end(), [](const MIDIFileInfo& a, const MIDIFileInfo& b) {
