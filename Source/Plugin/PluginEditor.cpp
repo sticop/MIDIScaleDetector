@@ -315,26 +315,16 @@ void MIDIXplorerEditor::timerCallback() {
                 pluginProcessor->clearMidiQueue();
             }
         } else if (!hostPlaying && wasHostPlaying) {
-            // Host stopped - switch to free-run mode but keep playing
-            // Don't stop playback, just note-off and reset for smooth transition
+            // Host stopped - pause playback and update button
             if (pluginProcessor) {
                 for (int ch = 1; ch <= 16; ch++) {
                     pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
                 }
+                pluginProcessor->setPlaybackPlaying(false);
             }
-            // Reset to free-run timing from current position
-            double currentPos = transportSlider.getValue();
-            playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - (currentPos * midiFileDuration);
+            isPlaying = false;
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
             playbackNoteIndex = 0;
-            // Find the note index that matches current position
-            double targetTime = currentPos * midiFileDuration;
-            for (int i = 0; i < playbackSequence.getNumEvents(); i++) {
-                if (playbackSequence.getEventPointer(i)->message.getTimeStamp() > targetTime) {
-                    playbackNoteIndex = i;
-                    break;
-                }
-            }
-            // Keep playing - don't stop!
         }
 
         // Detect DAW loop: if host beat jumped backwards significantly, DAW looped
