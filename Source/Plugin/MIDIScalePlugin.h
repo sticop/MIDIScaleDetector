@@ -6,6 +6,7 @@
 #include "../Core/ScaleDetector/ScaleDetector.h"
 #include "../Core/Database/Database.h"
 #include <mutex>
+#include <atomic>
 
 namespace MIDIScaleDetector {
 
@@ -63,6 +64,16 @@ public:
     void addMidiMessage(const juce::MidiMessage& msg);
     void clearMidiQueue();
     double getSampleRate() const { return currentSampleRate; }
+
+    // Host transport state - updated in processBlock, read from editor
+    struct TransportState {
+        std::atomic<bool> isPlaying{false};
+        std::atomic<double> bpm{120.0};
+        std::atomic<double> ppqPosition{0.0};
+        std::atomic<double> timeInSeconds{0.0};
+    };
+    
+    TransportState transportState;
 
 private:
     ScaleDetector detector;

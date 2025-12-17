@@ -48,6 +48,25 @@ void MIDIScalePlugin::clearMidiQueue() {
 void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) {
     buffer.clear();
 
+    // Update transport state from host playhead - this runs on the audio thread
+    if (auto* playhead = getPlayHead()) {
+        if (auto pos = playhead->getPosition()) {
+            transportState.isPlaying.store(pos->getIsPlaying(), std::memory_order_relaxed);
+            
+            if (auto bpm = pos->getBpm()) {
+                transportState.bpm.store(*bpm, std::memory_order_relaxed);
+            }
+            
+            if (auto ppq = pos->getPpqPosition()) {
+                transportState.ppqPosition.store(*ppq, std::memory_order_relaxed);
+            }
+            
+            if (auto timeInSec = pos->getTimeInSeconds()) {
+                transportState.timeInSeconds.store(*timeInSec, std::memory_order_relaxed);
+            }
+        }
+    }
+
     // First, add any queued MIDI messages from the editor (file playback)
     {
         std::lock_guard<std::mutex> lock(midiQueueMutex);

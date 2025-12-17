@@ -223,7 +223,7 @@ void MIDIXplorerEditor::timerCallback() {
     // Handle host play/stop changes
     if (synced) {
         if (hostPlaying && !wasHostPlaying) {
-            // Host just started playing - start playback immediately
+            // Host just started playing - start playback immediately from beat 0
             playbackNoteIndex = 0;
             playbackStartBeat = hostBeat;
             playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
@@ -233,9 +233,12 @@ void MIDIXplorerEditor::timerCallback() {
                 pluginProcessor->clearMidiQueue();
             }
         } else if (!hostPlaying && wasHostPlaying) {
-            // Host stopped - stop playback
+            // Host stopped - stop playback and send note-offs
             if (pluginProcessor) {
-                pluginProcessor->clearMidiQueue();
+                // Send all notes off on all channels
+                for (int ch = 1; ch <= 16; ch++) {
+                    pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+                }
             }
             playbackNoteIndex = 0;
         }
@@ -256,9 +259,10 @@ void MIDIXplorerEditor::timerCallback() {
     double speedRatio = bpm / midiFileBpm;
     
     if (synced) {
-        // Calculate position based on host beat position
+        // Calculate position based on host beat position relative to when we started
         double beatsElapsed = hostBeat - playbackStartBeat;
-        currentTime = (beatsElapsed / bpm) * 60.0; // Convert beats to seconds at host tempo
+        // Convert beats to seconds at the original MIDI file tempo
+        currentTime = (beatsElapsed * 60.0) / bpm * speedRatio;
     } else {
         currentTime = (juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackStartTime) * speedRatio;
     }
@@ -273,14 +277,18 @@ void MIDIXplorerEditor::timerCallback() {
     
     // Update transport slider
     double position = std::fmod(currentTime, totalDuration) / totalDuration;
-    transportSlider.setValue(position, juce::dontSendNotification);
+    if (position >= 0 && position <= 1) {
+        transportSlider.setValue(position, juce::dontSendNotification);
+    }
     
     // Handle looping
     if (currentTime >= totalDuration) {
         currentTime = std::fmod(currentTime, totalDuration);
         playbackNoteIndex = 0;
         if (synced) {
-            playbackStartBeat = hostBeat - (currentTime * bpm / 60.0);
+            // Calculate new start beat for the loop
+            double beatsInFile = (totalDuration * bpm) / 60.0;
+            playbackStartBeat = hostBeat - (currentTime * bpm) / (60.0 * speedRatio);
         } else {
             playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - currentTime / speedRatio;
         }
@@ -416,39 +424,22 @@ void MIDIXplorerEditor::stopPlayback() {
 }
 
 double MIDIXplorerEditor::getHostBpm() {
-    if (auto* proc = getAudioProcessor()) {
-        if (auto* playhead = proc->getPlayHead()) {
-            if (auto posInfo = playhead->getPosition()) {
-                if (auto bpm = posInfo->getBpm()) {
-                    lastHostBpm = *bpm;
-                    return *bpm;
-                }
-            }
-        }
+    if (pluginProcessor) {
+        return pluginProcessor->transportState.bpm.load(std::memory_order_relaxed);
     }
     return lastHostBpm;
 }
 
 double MIDIXplorerEditor::getHostBeatPosition() {
-    if (auto* proc = getAudioProcessor()) {
-        if (auto* playhead = proc->getPlayHead()) {
-            if (auto posInfo = playhead->getPosition()) {
-                if (auto ppq = posInfo->getPpqPosition()) {
-                    return *ppq;
-                }
-            }
-        }
+    if (pluginProcessor) {
+        return pluginProcessor->transportState.ppqPosition.load(std::memory_order_relaxed);
     }
     return 0.0;
 }
 
 bool MIDIXplorerEditor::isHostPlaying() {
-    if (auto* proc = getAudioProcessor()) {
-        if (auto* playhead = proc->getPlayHead()) {
-            if (auto posInfo = playhead->getPosition()) {
-                return posInfo->getIsPlaying();
-            }
-        }
+    if (pluginProcessor) {
+        return pluginProcessor->transportState.isPlaying.load(std::memory_order_relaxed);
     }
     return false;
 }
