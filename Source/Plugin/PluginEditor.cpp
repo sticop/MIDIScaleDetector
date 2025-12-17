@@ -137,8 +137,14 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     playPauseButton.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
     isPlaying = false;  // Start with playback stopped
     playPauseButton.onClick = [this]() {
+        // When synced to host, playback is controlled by DAW transport only
+        // The button does nothing when sync is enabled
+        if (syncToHostToggle.getToggleState()) {
+            return;  // Ignore button clicks when synced to host
+        }
+        
         if (!isPlaying) {
-            // Start playing
+            // Start playing (manual mode only)
             isPlaying = true;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
             // If no file is loaded, play the first file
@@ -157,7 +163,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
                 pluginProcessor->resetPlayback();
             }
         } else {
-            // Pause
+            // Pause (manual mode only)
             isPlaying = false;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
             // Send all notes off when pausing
@@ -209,7 +215,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
             playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
         }
         syncToHostToggle.setToggleState(pluginProcessor->isSyncToHost(), juce::dontSendNotification);
-        
+
         // Restore the selected file path from processor
         juce::String lastPath = pluginProcessor->getCurrentFilePath();
         if (lastPath.isNotEmpty()) {
@@ -247,7 +253,7 @@ void MIDIXplorerEditor::saveLibraries() {
         libsArray.add(juce::var(libObj.get()));
     }
     root->setProperty("libraries", libsArray);
-    
+
     // Save selected file path
     if (selectedFileIndex >= 0 && selectedFileIndex < (int)filteredFiles.size()) {
         root->setProperty("selectedFilePath", filteredFiles[(size_t)selectedFileIndex].fullPath);
@@ -281,7 +287,7 @@ void MIDIXplorerEditor::loadLibraries() {
             libraryListBox.updateContent();
             scanLibraries();
         }
-        
+
         // Restore selected file
         auto savedPath = obj->getProperty("selectedFilePath").toString();
         if (savedPath.isNotEmpty()) {
@@ -319,7 +325,7 @@ void MIDIXplorerEditor::resized() {
     auto searchRow = area.removeFromTop(40);
     searchRow = searchRow.reduced(8, 6);
     searchBox.setBounds(searchRow);
-    
+
     // Controls bar with filters and options
     auto topBar = area.removeFromTop(32);
     topBar = topBar.reduced(8, 2);
@@ -401,20 +407,20 @@ void MIDIXplorerEditor::timerCallback() {
                         pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
                     }
                 }
-                
+
                 // Calculate where in the MIDI file we should be based on host beat fraction
                 double beatFraction = hostBeat - std::floor(hostBeat);
-                
+
                 // Convert to time offset in MIDI file
                 double timeOffsetInFile = (beatFraction * 60.0) / midiFileBpm;
-                
+
                 // Find the note index that corresponds to this time
                 playbackNoteIndex = 0;
-                
+
                 // Set start beat to align with current host position
                 playbackStartBeat = hostBeat - (timeOffsetInFile * midiFileBpm / 60.0);
                 playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - timeOffsetInFile;
-                
+
                 // Immediately play any notes at time 0 or very start
                 while (playbackNoteIndex < playbackSequence.getNumEvents()) {
                     auto* event = playbackSequence.getEventPointer(playbackNoteIndex);
@@ -470,7 +476,7 @@ void MIDIXplorerEditor::timerCallback() {
     double currentTime;
     // Only actually sync when host is playing - otherwise use free-run mode
     bool actuallySync = synced && hostPlaying;
-    
+
     if (actuallySync) {
         // Calculate position based on host beat position relative to when we started
         double beatsElapsed = hostBeat - playbackStartBeat;
@@ -522,10 +528,10 @@ void MIDIXplorerEditor::timerCallback() {
         } else {
             playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - overshoot;
         }
-        
+
         // Update currentTime to the wrapped value for note playback
         currentTime = overshoot;
-        
+
         // Note index tracking is now handled by the processor
     }
 
@@ -656,7 +662,7 @@ void MIDIXplorerEditor::loadSelectedFile() {
             }
         }
     }
-    
+
     // Round duration to nearest bar (4 beats) for clean looping that matches DAW
     double beatsPerSecond = midiFileBpm / 60.0;
     double totalBeats = maxEventTime * beatsPerSecond;
@@ -852,11 +858,11 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
     sortFiles();
     filterFiles();
     updateKeyFilterFromDetectedScales();
-    
+
     // Ensure the currently playing file stays selected
     if (!filteredFiles.empty()) {
         int indexToSelect = -1;
-        
+
         // First priority: Keep the currently playing file from processor
         juce::String currentProcessorPath = pluginProcessor ? pluginProcessor->getCurrentFilePath() : juce::String();
         if (currentProcessorPath.isNotEmpty()) {
@@ -867,7 +873,7 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
                 }
             }
         }
-        
+
         // Second priority: Restore from pending path (e.g., from saved state)
         if (indexToSelect < 0 && pendingSelectedFilePath.isNotEmpty()) {
             for (size_t i = 0; i < filteredFiles.size(); i++) {
@@ -878,7 +884,7 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
             }
             pendingSelectedFilePath = "";  // Clear after using
         }
-        
+
         // Third priority: Keep current selection if the file path matches
         if (indexToSelect < 0 && selectedFileIndex >= 0 && selectedFileIndex < (int)allFiles.size()) {
             juce::String currentPath = allFiles[selectedFileIndex].fullPath;
@@ -889,15 +895,15 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
                 }
             }
         }
-        
+
         // Last resort: select first file only if nothing is loaded
         if (indexToSelect < 0) {
             indexToSelect = 0;
         }
-        
+
         fileListBox->selectRow(indexToSelect);
         selectedFileIndex = indexToSelect;
-        
+
         // Only load a new file if nothing is currently loaded in processor
         bool processorHasFile = currentProcessorPath.isNotEmpty();
         if (!fileLoaded && !processorHasFile) {
@@ -974,7 +980,7 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         const char* name;
         int intervals[12];
     };
-    
+
     static const ScaleTemplate scales[] = {
         // Major modes
         {"Major",           {1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1}},
@@ -984,19 +990,19 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         {"Mixolydian",      {1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0}},
         {"Minor",           {1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0}},  // Natural minor/Aeolian
         {"Locrian",         {1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0}},
-        
+
         // Other minor variants
         {"Harmonic Min",    {1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1}},
         {"Melodic Min",     {1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1}},
-        
+
         // Pentatonic
         {"Major Pent",      {1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0}},
         {"Minor Pent",      {1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0}},
-        
+
         // Blues
         {"Blues",           {1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0}},
         {"Major Blues",     {1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0}},
-        
+
         // Exotic/World scales
         {"Hungarian Min",   {1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1}},
         {"Spanish",         {1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0}},
@@ -1004,22 +1010,22 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         {"Japanese",        {1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0}},
         {"Egyptian",        {1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0}},
         {"Persian",         {1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 0}},
-        
+
         // Jazz/Bebop
         {"Bebop Dom",       {1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1}},
         {"Bebop Major",     {1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1}},
         {"Altered",         {1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0}},
-        
+
         // Symmetric
         {"Whole Tone",      {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}},
         {"Diminished",      {1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1}},
         {"Aug",             {1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1}},
         {"Chromatic",       {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}},
     };
-    
+
     const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
     const int numScales = sizeof(scales) / sizeof(scales[0]);
-    
+
     int bestKey = 0;
     int bestScaleIdx = 0;
     int bestScore = -1;
@@ -1029,7 +1035,7 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
             int score = 0;
             int templateNotes = 0;
             int matchedNotes = 0;
-            
+
             for (int i = 0; i < 12; i++) {
                 int idx = (i + root) % 12;
                 if (scales[s].intervals[i] == 1) {
@@ -1040,7 +1046,7 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
                     score -= noteHistogram[(size_t)idx];  // Penalty for non-scale notes
                 }
             }
-            
+
             // Prefer scales where more template notes are actually used
             if (templateNotes > 0) {
                 score += (matchedNotes * 10) / templateNotes;
@@ -1055,12 +1061,12 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     }
 
     info.key = juce::String(noteNames[bestKey]) + " " + scales[bestScaleIdx].name;
-    
+
     // Calculate Circle of Fifths - show parent major key and relative minor
     // Each mode has a specific relationship to its parent major scale
     juce::String scaleName = scales[bestScaleIdx].name;
     int parentMajorRoot = bestKey;  // Default: same as detected root
-    
+
     // Calculate parent major key based on mode (semitones from mode root to parent major)
     if (scaleName == "Major" || scaleName == "Major Pent" || scaleName == "Major Blues") {
         parentMajorRoot = bestKey;  // Ionian - root IS the parent major
@@ -1082,13 +1088,13 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         // For exotic scales, show parallel major/minor relationship
         parentMajorRoot = bestKey;
     }
-    
+
     // Relative minor is always 3 semitones below the parent major (or +9)
     int relativeMinorRoot = (parentMajorRoot + 9) % 12;
-    
+
     // Format: "Parent Maj / Rel m" e.g., "G Maj / Em"
     info.relativeKey = juce::String(noteNames[parentMajorRoot]) + "/" + juce::String(noteNames[relativeMinorRoot]) + "m";
-    
+
     // Extract tempo from MIDI file
     info.bpm = 120.0;  // Default
     for (int track = 0; track < midiFile.getNumTracks(); track++) {
@@ -1122,7 +1128,7 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
             }
         }
     }
-    
+
     // Round duration to nearest bar (4 beats) for clean looping
     double bpm = info.bpm > 0 ? info.bpm : 120.0;
     double beatsPerSecond = bpm / 60.0;
@@ -1167,7 +1173,7 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         "Guitar Fret Noise", "Breath Noise", "Seashore", "Bird Tweet",
         "Telephone Ring", "Helicopter", "Applause", "Gunshot"
     };
-    
+
     info.instrument = "---";
     for (int track = 0; track < midiFile.getNumTracks(); track++) {
         auto* trackSeq = midiFile.getTrack(track);
@@ -1185,7 +1191,7 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         }
         if (info.instrument != "---") break;
     }
-    
+
     info.analyzed = true;
 }
 
@@ -1257,7 +1263,7 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
             allKeysAndRelatives.add(file.key);
         }
         // Add the relative key (from Circle of Fifths)
-        if (file.relativeKey.isNotEmpty() && file.relativeKey != "---" && 
+        if (file.relativeKey.isNotEmpty() && file.relativeKey != "---" &&
             !allKeysAndRelatives.contains(file.relativeKey)) {
             allKeysAndRelatives.add(file.relativeKey);
         }
@@ -1275,7 +1281,7 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
     keyFilterCombo.clear();
     keyFilterCombo.addItem("All Keys", 1);
     keyFilterCombo.addItem("Favorites", 2);
-    
+
     int id = 3;
     for (const auto& key : allKeysAndRelatives) {
         keyFilterCombo.addItem(key, id++);
@@ -1290,10 +1296,10 @@ void MIDIXplorerEditor::revealInFinder(const juce::String& path) {
 
 void MIDIXplorerEditor::toggleFavorite(int row) {
     if (row < 0 || row >= (int)filteredFiles.size()) return;
-    
+
     auto& filteredFile = filteredFiles[(size_t)row];
     filteredFile.favorite = !filteredFile.favorite;
-    
+
     // Also update in allFiles
     for (auto& f : allFiles) {
         if (f.fullPath == filteredFile.fullPath) {
@@ -1301,10 +1307,10 @@ void MIDIXplorerEditor::toggleFavorite(int row) {
             break;
         }
     }
-    
+
     // Save favorites
     saveFavorites();
-    
+
     // Refresh list
     fileListBox->repaint();
 }
@@ -1313,7 +1319,7 @@ void MIDIXplorerEditor::saveFavorites() {
     auto settingsDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
         .getChildFile("MIDIXplorer");
     auto favFile = settingsDir.getChildFile("favorites.txt");
-    
+
     juce::String content;
     for (const auto& f : allFiles) {
         if (f.favorite) {
@@ -1327,12 +1333,12 @@ void MIDIXplorerEditor::loadFavorites() {
     auto settingsDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
         .getChildFile("MIDIXplorer");
     auto favFile = settingsDir.getChildFile("favorites.txt");
-    
+
     if (!favFile.existsAsFile()) return;
-    
+
     juce::StringArray favPaths;
     favFile.readLines(favPaths);
-    
+
     for (auto& f : allFiles) {
         f.favorite = favPaths.contains(f.fullPath);
     }
@@ -1343,25 +1349,25 @@ void MIDIXplorerEditor::loadFavorites() {
 // MIDI Note Viewer implementation
 void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
     auto bounds = getLocalBounds();
-    
+
     // Background
     g.setColour(juce::Colour(0xff1e1e1e));
     g.fillRect(bounds);
-    
+
     // Border
     g.setColour(juce::Colour(0xff3a3a3a));
     g.drawRect(bounds);
-    
+
     if (sequence == nullptr || sequence->getNumEvents() == 0) {
         return;  // Just show empty view, no message
     }
-    
+
     int noteRange = highestNote - lowestNote + 1;
     if (noteRange <= 0) noteRange = 1;
-    
+
     float noteHeight = (float)bounds.getHeight() / (float)noteRange;
     float pixelsPerSecond = (float)bounds.getWidth() / (float)totalDuration;
-    
+
     // Draw piano key background hints
     for (int note = lowestNote; note <= highestNote; note++) {
         float y = bounds.getHeight() - (note - lowestNote + 1) * noteHeight;
@@ -1372,17 +1378,17 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
             g.fillRect(0.0f, y, (float)bounds.getWidth(), noteHeight);
         }
     }
-    
+
     // Draw notes
     for (int i = 0; i < sequence->getNumEvents(); i++) {
         auto* event = sequence->getEventPointer(i);
         auto& msg = event->message;
-        
+
         if (msg.isNoteOn()) {
             int noteNum = msg.getNoteNumber();
             double startTime = msg.getTimeStamp();
             double endTime = startTime + 0.1; // Default duration
-            
+
             // Find matching note-off
             for (int j = i + 1; j < sequence->getNumEvents(); j++) {
                 auto* offEvent = sequence->getEventPointer(j);
@@ -1391,12 +1397,12 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
                     break;
                 }
             }
-            
+
             float x = (float)(startTime * pixelsPerSecond);
             float w = (float)((endTime - startTime) * pixelsPerSecond);
             if (w < 2.0f) w = 2.0f;
             float y = bounds.getHeight() - (noteNum - lowestNote + 1) * noteHeight;
-            
+
             // Note color based on velocity
             int velocity = msg.getVelocity();
             float brightness = 0.5f + (velocity / 254.0f) * 0.5f;
@@ -1404,7 +1410,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
             g.fillRoundedRectangle(x, y + 1, w, noteHeight - 2, 2.0f);
         }
     }
-    
+
     // Draw playhead
     if (playPosition >= 0 && playPosition <= 1.0) {
         float xPos = playPosition * bounds.getWidth();
@@ -1416,7 +1422,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
 void MIDIXplorerEditor::MIDINoteViewer::setSequence(const juce::MidiMessageSequence* seq, double duration) {
     sequence = seq;
     totalDuration = duration > 0 ? duration : 1.0;
-    
+
     // Calculate note range
     lowestNote = 127;
     highestNote = 0;
@@ -1434,7 +1440,7 @@ void MIDIXplorerEditor::MIDINoteViewer::setSequence(const juce::MidiMessageSeque
     if (lowestNote > 0) lowestNote--;
     if (highestNote < 127) highestNote++;
     if (lowestNote > highestNote) { lowestNote = 60; highestNote = 72; }
-    
+
     repaint();
 }
 
@@ -1508,7 +1514,7 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     float heartX = 12.0f;
     float heartY = h / 2.0f;
     float heartSize = 7.0f;
-    
+
     juce::Path heartPath;
     // Draw heart shape using bezier curves
     heartPath.startNewSubPath(heartX, heartY + heartSize * 0.3f);
@@ -1521,7 +1527,7 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
                       heartX + heartSize, heartY - heartSize * 0.3f,
                       heartX, heartY + heartSize * 0.3f);
     heartPath.closeSubPath();
-    
+
     if (file.favorite) {
         g.setColour(juce::Colour(0xffff4466));  // Red for favorites
         g.fillPath(heartPath);
@@ -1536,7 +1542,7 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     g.setColour(juce::Colours::cyan);
     g.setFont(11.0f);
     g.drawText(file.key, 28, 6, 70, 20, juce::Justification::centred);
-    
+
     // Circle of Fifths relative key (Parent Major / Relative minor)
     if (file.relativeKey.isNotEmpty()) {
         g.setColour(juce::Colour(0xffff9944));  // Orange for relative key
@@ -1626,19 +1632,19 @@ void MIDIXplorerEditor::FileListModel::listBoxItemClicked(int row, const juce::M
 
 void MIDIXplorerEditor::quantizeMidi() {
     if (selectedFileIndex < 0 || selectedFileIndex >= (int)filteredFiles.size()) return;
-    
+
     juce::String filePath = filteredFiles[(size_t)selectedFileIndex].fullPath;
-    
+
     int modeId = quantizeCombo.getSelectedId();
     if (modeId == 0) return;
-    
+
     // Get the grid interval in beats (4 beats = 1 bar in 4/4)
     double gridBeats = 0.0;
     double swingRatio = 0.5;  // 0.5 = no swing, >0.5 = swing (first note longer)
     bool isSwing = false;
     bool isMixed = false;
     double secondaryGridBeats = 0.0;  // For mixed modes
-    
+
     switch (modeId) {
         // Straight notes
         case 1: gridBeats = 4.0; break;       // 1/1 Note (whole note = 4 beats)
@@ -1648,7 +1654,7 @@ void MIDIXplorerEditor::quantizeMidi() {
         case 5: gridBeats = 0.25; break;      // 1/16 Note
         case 6: gridBeats = 0.125; break;     // 1/32 Note
         case 7: gridBeats = 0.0625; break;    // 1/64 Note
-        
+
         // Triplets (3 notes in space of 2)
         case 8: gridBeats = 4.0 / 3.0; break;   // 1/2 Triplet (1/3)
         case 9: gridBeats = 2.0 / 3.0; break;   // 1/4 Triplet (1/6)
@@ -1657,7 +1663,7 @@ void MIDIXplorerEditor::quantizeMidi() {
         case 12: gridBeats = 0.25 / 3.0; break; // 1/32 Triplet (1/48)
         case 13: gridBeats = 0.125 / 3.0; break;// 1/64 Triplet (1/96)
         case 14: gridBeats = 0.0625 / 3.0; break;// 1/128 Triplet (1/192)
-        
+
         // 1/16 Swing (A=54%, B=58%, C=62%, D=66%, E=71%, F=75%)
         case 15: gridBeats = 0.25; isSwing = true; swingRatio = 0.54; break;
         case 16: gridBeats = 0.25; isSwing = true; swingRatio = 0.58; break;
@@ -1665,7 +1671,7 @@ void MIDIXplorerEditor::quantizeMidi() {
         case 18: gridBeats = 0.25; isSwing = true; swingRatio = 0.66; break;
         case 19: gridBeats = 0.25; isSwing = true; swingRatio = 0.71; break;
         case 20: gridBeats = 0.25; isSwing = true; swingRatio = 0.75; break;
-        
+
         // 1/8 Swing (A=54%, B=58%, C=62%, D=66%, E=71%, F=75%)
         case 21: gridBeats = 0.5; isSwing = true; swingRatio = 0.54; break;
         case 22: gridBeats = 0.5; isSwing = true; swingRatio = 0.58; break;
@@ -1673,17 +1679,17 @@ void MIDIXplorerEditor::quantizeMidi() {
         case 24: gridBeats = 0.5; isSwing = true; swingRatio = 0.66; break;
         case 25: gridBeats = 0.5; isSwing = true; swingRatio = 0.71; break;
         case 26: gridBeats = 0.5; isSwing = true; swingRatio = 0.75; break;
-        
+
         // Tuplets
         case 27: gridBeats = 1.0 / 5.0; break;  // 5-Tuplet/4 (5 in space of 4)
         case 28: gridBeats = 0.5 / 5.0; break;  // 5-Tuplet/8
         case 29: gridBeats = 1.0 / 7.0; break;  // 7-Tuplet
         case 30: gridBeats = 1.0 / 9.0; break;  // 9-Tuplet
-        
+
         // Mixed modes
         case 31: // 1/16 & 1/16 Triplet
-            isMixed = true; 
-            gridBeats = 0.25; 
+            isMixed = true;
+            gridBeats = 0.25;
             secondaryGridBeats = 0.25 / 3.0;  // 1/16 triplet
             break;
         case 32: // 1/16 & 1/8 Triplet
@@ -1696,68 +1702,68 @@ void MIDIXplorerEditor::quantizeMidi() {
             gridBeats = 0.5;
             secondaryGridBeats = 0.5 / 3.0;  // 1/8 triplet
             break;
-            
+
         default: return;
     }
-    
+
     if (gridBeats <= 0.0) return;
-    
+
     // Load the original MIDI file
     juce::File midiFile(filePath);
     juce::FileInputStream inputStream(midiFile);
     if (!inputStream.openedOk()) return;
-    
+
     juce::MidiFile originalMidi;
     if (!originalMidi.readFrom(inputStream)) return;
-    
+
     // Create quantized MIDI file
     juce::MidiFile quantizedMidi;
     short timeFormat = originalMidi.getTimeFormat();
     quantizedMidi.setTicksPerQuarterNote(timeFormat > 0 ? timeFormat : 480);
-    
+
     double ticksPerBeat = (double)(timeFormat > 0 ? timeFormat : 480);
     double gridTicks = gridBeats * ticksPerBeat;
     double secondaryGridTicks = secondaryGridBeats * ticksPerBeat;
-    
+
     for (int t = 0; t < originalMidi.getNumTracks(); t++) {
         const juce::MidiMessageSequence* track = originalMidi.getTrack(t);
         if (!track) continue;
-        
+
         juce::MidiMessageSequence newTrack;
-        
+
         for (int i = 0; i < track->getNumEvents(); i++) {
             auto* event = track->getEventPointer(i);
             if (!event) continue;
-            
+
             juce::MidiMessage msg = event->message;
             double originalTime = msg.getTimeStamp();
             double newTime = originalTime;
-            
+
             if (msg.isNoteOn() || msg.isNoteOff()) {
                 if (isMixed) {
                     // For mixed modes, snap to nearest grid (primary or secondary)
                     double nearestPrimary = std::round(originalTime / gridTicks) * gridTicks;
                     double nearestSecondary = std::round(originalTime / secondaryGridTicks) * secondaryGridTicks;
-                    
+
                     double diffPrimary = std::abs(originalTime - nearestPrimary);
                     double diffSecondary = std::abs(originalTime - nearestSecondary);
-                    
+
                     newTime = (diffPrimary <= diffSecondary) ? nearestPrimary : nearestSecondary;
                 } else if (isSwing) {
                     // For swing, quantize to swing grid
                     double pairLength = gridTicks * 2.0;  // Two notes form a swing pair
                     double pairIndex = std::floor(originalTime / pairLength);
                     double posInPair = originalTime - (pairIndex * pairLength);
-                    
+
                     // First beat of pair is longer (swingRatio)
                     double firstBeatEnd = pairLength * swingRatio;
-                    
+
                     if (posInPair < firstBeatEnd) {
                         // Snap to first beat (start of pair)
                         double distToStart = posInPair;
                         double distToSecond = firstBeatEnd - posInPair;
-                        newTime = (distToStart <= distToSecond) 
-                            ? pairIndex * pairLength 
+                        newTime = (distToStart <= distToSecond)
+                            ? pairIndex * pairLength
                             : pairIndex * pairLength + firstBeatEnd;
                     } else {
                         // Snap to second beat or next pair start
@@ -1772,19 +1778,19 @@ void MIDIXplorerEditor::quantizeMidi() {
                     newTime = std::round(originalTime / gridTicks) * gridTicks;
                 }
             }
-            
+
             msg.setTimeStamp(newTime);
             newTrack.addEvent(msg);
         }
-        
+
         newTrack.updateMatchedPairs();
         quantizedMidi.addTrack(newTrack);
     }
-    
+
     // Apply quantization only to the playback sequence (temporary, not saved to file)
     // Convert to seconds for playback
     quantizedMidi.convertTimestampTicksToSeconds();
-    
+
     // Merge all tracks into playback sequence
     playbackSequence.clear();
     for (int t = 0; t < quantizedMidi.getNumTracks(); t++) {
@@ -1797,28 +1803,28 @@ void MIDIXplorerEditor::quantizeMidi() {
     }
     playbackSequence.updateMatchedPairs();
     playbackSequence.sort();
-    
+
     // Update duration from quantized sequence
     midiFileDuration = 0.0;
     for (int i = 0; i < playbackSequence.getNumEvents(); i++) {
         double t = playbackSequence.getEventPointer(i)->message.getTimeStamp();
         if (t > midiFileDuration) midiFileDuration = t;
     }
-    
+
     // Reset playback position and send sequence to processor
     playbackNoteIndex = 0;
     currentPlaybackPosition = 0.0;
-    
+
     if (pluginProcessor) {
         pluginProcessor->loadPlaybackSequence(playbackSequence, midiFileDuration, midiFileBpm, filteredFiles[(size_t)selectedFileIndex].fullPath);
         if (isPlaying) {
             pluginProcessor->resetPlayback();
         }
     }
-    
+
     // Update the MIDI note viewer with quantized sequence
     midiNoteViewer.setSequence(&playbackSequence, midiFileDuration);
-    
+
     // Show brief confirmation
     juce::String modeName = quantizeCombo.getText();
     isQuantized = true;
