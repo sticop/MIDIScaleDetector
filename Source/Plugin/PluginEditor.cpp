@@ -117,11 +117,12 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     syncToHostToggle.setColour(juce::ToggleButton::tickColourId, juce::Colours::orange);
     addAndMakeVisible(syncToHostToggle);
 
-    transportSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+    transportSlider.setSliderStyle(juce::Slider::LinearBar);
     transportSlider.setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
     transportSlider.setRange(0.0, 1.0);
-    transportSlider.setColour(juce::Slider::thumbColourId, juce::Colours::cyan);
+    transportSlider.setVelocityBasedMode(false);
     transportSlider.setColour(juce::Slider::trackColourId, juce::Colour(0xff3a3a3a));
+    transportSlider.setColour(juce::Slider::thumbColourId, juce::Colour(0xff00aaff));
     addAndMakeVisible(transportSlider);
 
 
