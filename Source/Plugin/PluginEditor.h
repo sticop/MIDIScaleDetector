@@ -129,6 +129,10 @@ private:
     // MIDI Note Viewer (Piano Roll)
     class MIDINoteViewer : public juce::Component {
     public:
+        void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
+        float getZoomLevel() const { return zoomLevel; }
+        void setZoomLevel(float newZoom) { zoomLevel = juce::jlimit(0.5f, 4.0f, newZoom); repaint(); }
+    public:
         MIDINoteViewer() { setMouseCursor(juce::MouseCursor::CrosshairCursor); }
         void paint(juce::Graphics& g) override;
         void setSequence(const juce::MidiMessageSequence* seq, double duration);
@@ -145,6 +149,8 @@ private:
         int highestNote = 0;
         int hoveredNote = -1;
         juce::Point<int> hoverPos;
+        float zoomLevel = 1.0f;
+        float scrollOffset = 0.0f;
     };
 
     std::unique_ptr<LibraryListModel> libraryModel;
@@ -163,6 +169,9 @@ private:
 
     juce::TextButton playPauseButton;
     juce::TextButton dragButton;  // Drag to DAW button
+    juce::TextButton addToDAWButton;  // Add to DAW at playhead
+    juce::TextButton zoomInButton;
+    juce::TextButton zoomOutButton;
     bool isPlaying = true;
     juce::ToggleButton syncToHostToggle{"DAW Sync"};
     juce::Slider transportSlider;

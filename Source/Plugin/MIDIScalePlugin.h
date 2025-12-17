@@ -109,6 +109,9 @@ public:
     void setVelocityScale(float scale) { playbackState.velocityScale = scale; }
     float getVelocityScale() const { return playbackState.velocityScale; }
     juce::String getCurrentFilePath() const { return playbackState.currentFilePath; }
+    
+    // Queue MIDI for insertion at DAW playhead
+    void queueMidiForInsertion(const juce::MidiFile& midiFile);
 
 private:
     ScaleDetector detector;
@@ -126,6 +129,11 @@ private:
     // MIDI queue for playback from editor
     std::vector<juce::MidiMessage> midiQueue;
     std::mutex midiQueueMutex;
+    
+    // MIDI insertion queue
+    juce::MidiMessageSequence insertionQueue;
+    std::atomic<bool> hasQueuedInsertion{false};
+    std::mutex insertionMutex;
 
     // Parameters
     juce::AudioParameterFloat* scaleConfidence;

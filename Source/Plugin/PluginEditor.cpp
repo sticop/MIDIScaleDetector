@@ -190,6 +190,53 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     };
     addAndMakeVisible(dragButton);
 
+    // Add to DAW button
+    addToDAWButton.setButtonText("Add to DAW");
+    addToDAWButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a5a3a));
+    addToDAWButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff4a7a4a));
+    addToDAWButton.setColour(juce::TextButton::textColourOffId, juce::Colours::lightgreen);
+    addToDAWButton.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
+    addToDAWButton.setTooltip("Add MIDI at DAW playhead position");
+    addToDAWButton.onClick = [this]() {
+        // Get the selected MIDI file and send it to DAW at playhead
+        int selectedRow = fileListBox->getLastRowSelected();
+        if (selectedRow >= 0 && selectedRow < static_cast<int>(filteredFiles.size())) {
+            auto& selectedFile = filteredFiles[static_cast<size_t>(selectedRow)];
+            if (pluginProcessor) {
+                // Load and queue MIDI data to be inserted at playhead
+                juce::File midiFile(selectedFile.fullPath);
+                if (midiFile.existsAsFile()) {
+                    juce::MidiFile midi;
+                    juce::FileInputStream fis(midiFile);
+                    if (fis.openedOk() && midi.readFrom(fis)) {
+                        // Queue MIDI for insertion at current playhead
+                        pluginProcessor->queueMidiForInsertion(midi);
+                    }
+                }
+            }
+        }
+    };
+    addAndMakeVisible(addToDAWButton);
+
+    // Zoom buttons
+    zoomOutButton.setButtonText(juce::String::fromUTF8("\u2796"));  // Minus sign
+    zoomOutButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
+    zoomOutButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    zoomOutButton.setTooltip("Zoom out");
+    zoomOutButton.onClick = [this]() {
+        midiNoteViewer.setZoomLevel(midiNoteViewer.getZoomLevel() - 0.25f);
+    };
+    addAndMakeVisible(zoomOutButton);
+
+    zoomInButton.setButtonText(juce::String::fromUTF8("\u2795"));  // Plus sign
+    zoomInButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
+    zoomInButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    zoomInButton.setTooltip("Zoom in");
+    zoomInButton.onClick = [this]() {
+        midiNoteViewer.setZoomLevel(midiNoteViewer.getZoomLevel() + 0.25f);
+    };
+    addAndMakeVisible(zoomInButton);
+
     syncToHostToggle.setToggleState(true, juce::dontSendNotification);
     syncToHostToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
     syncToHostToggle.setColour(juce::ToggleButton::tickColourId, juce::Colours::orange);
@@ -383,6 +430,11 @@ void MIDIXplorerEditor::resized() {
     playPauseButton.setBounds(transport.removeFromLeft(40));
     transport.removeFromLeft(4);
     dragButton.setBounds(transport.removeFromLeft(40));
+    transport.removeFromLeft(4);
+    addToDAWButton.setBounds(transport.removeFromLeft(80));
+    transport.removeFromLeft(8);
+    zoomOutButton.setBounds(transport.removeFromLeft(28));
+    zoomInButton.setBounds(transport.removeFromLeft(28));
     transport.removeFromLeft(10);
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
     transportSlider.setBounds(transport);
@@ -1486,7 +1538,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
     if (noteRange <= 0) noteRange = 1;
 
     float noteHeight = (float)bounds.getHeight() / (float)noteRange;
-    float pixelsPerSecond = (float)bounds.getWidth() / (float)totalDuration;
+    float pixelsPerSecond = (float)bounds.getWidth() * zoomLevel / (float)totalDuration;
 
     // Draw piano key background hints
     for (int note = lowestNote; note <= highestNote; note++) {
@@ -1659,6 +1711,15 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseMove(const juce::MouseEvent& e) {
 void MIDIXplorerEditor::MIDINoteViewer::mouseExit(const juce::MouseEvent& /*e*/) {
     if (hoveredNote != -1) {
         hoveredNote = -1;
+        repaint();
+    }
+}
+
+void MIDIXplorerEditor::MIDINoteViewer::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) {
+    // Zoom with mouse wheel
+    if (wheel.deltaY != 0) {
+        float zoomDelta = wheel.deltaY * 0.3f;
+        zoomLevel = juce::jlimit(0.5f, 4.0f, zoomLevel + zoomDelta);
         repaint();
     }
 }

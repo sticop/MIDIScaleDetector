@@ -98,6 +98,21 @@ void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         midiQueue.clear();
     }
 
+    // Handle MIDI insertion at DAW playhead
+    if (hasQueuedInsertion.load()) {
+        std::lock_guard<std::mutex> lock(insertionMutex);
+        for (int i = 0; i < insertionQueue.getNumEvents(); ++i) {
+            auto* event = insertionQueue.getEventPointer(i);
+            // Output all MIDI events at sample 0 (will play in sequence based on timestamps)
+            int samplePos = static_cast<int>(event->message.getTimeStamp() * currentSampleRate);
+            if (samplePos < buffer.getNumSamples()) {
+                midiMessages.addEvent(event->message, samplePos);
+            }
+        }
+        insertionQueue.clear();
+        hasQueuedInsertion = false;
+    }
+
     if (transformMode == TransformMode::Off) {
         return; // Pass through with any queued messages
     }
@@ -379,6 +394,33 @@ void MIDIScalePlugin::updatePlayback() {
         }
     }
     playbackState.playbackNoteIndex.store(noteIndex);
+}
+
+
+
+void MIDIScalePlugin::queueMidiForInsertion(const juce::MidiFile& midiFile) {
+    std::lock_guard<std::mutex> lock(insertionMutex);
+    
+    insertionQueue.clear();
+    
+    // Get all tracks and merge them
+    for (int track = 0; track < midiFile.getNumTracks(); ++track) {
+        const auto* trackSeq = midiFile.getTrack(track);
+        if (trackSeq) {
+            for (int i = 0; i < trackSeq->getNumEvents(); ++i) {
+                auto* event = trackSeq->getEventPointer(i);
+                if (event->message.isNoteOnOrOff()) {
+                    insertionQueue.addEvent(event->message);
+                }
+            }
+        }
+    }
+    
+    // Sort by timestamp
+    insertionQueue.sort();
+    insertionQueue.updateMatchedPairs();
+    
+    hasQueuedInsertion = true;
 }
 
 } // namespace MIDIScaleDetector
