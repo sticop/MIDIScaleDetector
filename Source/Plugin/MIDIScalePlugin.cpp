@@ -1,5 +1,6 @@
 #include "MIDIScalePlugin.h"
 #include "PluginEditor.h"
+#include <set>
 
 namespace MIDIScaleDetector {
 
@@ -257,7 +258,53 @@ std::vector<int> MIDIScalePlugin::arpeggiateNote(int midiNote) {
 
 void MIDIScalePlugin::loadPlaybackSequence(const juce::MidiMessageSequence& seq, double duration, double bpm, const juce::String& path) {
     std::lock_guard<std::mutex> lock(sequenceMutex);
-    playbackSequence = seq;
+    
+    // Clear and rebuild the sequence, truncating notes at the end boundary
+    playbackSequence.clear();
+    
+    // Track which notes are on at the end so we can add note-offs
+    std::set<std::pair<int, int>> activeNotes;  // channel, note number
+    
+    for (int i = 0; i < seq.getNumEvents(); i++) {
+        auto* event = seq.getEventPointer(i);
+        auto msg = event->message;
+        double eventTime = msg.getTimeStamp();
+        
+        // Skip events that start after the duration
+        if (eventTime >= duration) {
+            continue;
+        }
+        
+        if (msg.isNoteOn()) {
+            // Add the note-on
+            playbackSequence.addEvent(msg);
+            activeNotes.insert({msg.getChannel(), msg.getNoteNumber()});
+        } else if (msg.isNoteOff()) {
+            // Check if this note-off is within duration
+            if (eventTime < duration) {
+                playbackSequence.addEvent(msg);
+                activeNotes.erase({msg.getChannel(), msg.getNoteNumber()});
+            }
+            // If note-off is past duration, we'll add one at the end
+        } else {
+            // Other MIDI events (CC, etc.) - add if within duration
+            if (eventTime < duration) {
+                playbackSequence.addEvent(msg);
+            }
+        }
+    }
+    
+    // Add note-offs at the end boundary for any notes still active
+    double endTime = duration - 0.001;  // Slightly before end to ensure clean cutoff
+    for (const auto& note : activeNotes) {
+        auto noteOff = juce::MidiMessage::noteOff(note.first, note.second);
+        noteOff.setTimeStamp(endTime);
+        playbackSequence.addEvent(noteOff);
+    }
+    
+    // Sort by timestamp
+    playbackSequence.sort();
+    
     playbackState.fileDuration.store(duration);
     playbackState.fileBpm.store(bpm);
     playbackState.currentFilePath = path;
