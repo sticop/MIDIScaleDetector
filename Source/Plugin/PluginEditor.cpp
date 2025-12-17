@@ -171,6 +171,25 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     };
     addAndMakeVisible(playPauseButton);
 
+    // Drag to DAW button
+    dragButton.setButtonText(juce::String::fromUTF8("\u2B07"));  // Down arrow icon
+    dragButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
+    dragButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff5a5a5a));
+    dragButton.setColour(juce::TextButton::textColourOffId, juce::Colours::orange);
+    dragButton.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
+    dragButton.setTooltip("Drag selected MIDI file to DAW");
+    dragButton.onClick = [this]() {
+        // Start drag operation for selected file
+        int selectedRow = fileListBox->getLastRowSelected();
+        if (selectedRow >= 0 && selectedRow < static_cast<int>(filteredFiles.size())) {
+            auto& selectedFile = filteredFiles[static_cast<size_t>(selectedRow)];
+            juce::StringArray files;
+            files.add(selectedFile.fullPath);
+            juce::DragAndDropContainer::performExternalDragDropOfFiles(files, true);
+        }
+    };
+    addAndMakeVisible(dragButton);
+
     syncToHostToggle.setToggleState(true, juce::dontSendNotification);
     syncToHostToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
     syncToHostToggle.setColour(juce::ToggleButton::tickColourId, juce::Colours::orange);
@@ -361,6 +380,8 @@ void MIDIXplorerEditor::resized() {
     // Bottom transport bar
     auto transport = area.removeFromBottom(40).reduced(8, 4);
     playPauseButton.setBounds(transport.removeFromLeft(40));
+    transport.removeFromLeft(4);
+    dragButton.setBounds(transport.removeFromLeft(40));
     transport.removeFromLeft(10);
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
     transportSlider.setBounds(transport);

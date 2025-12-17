@@ -101,7 +101,7 @@ private:
                         // Use StringArray with full path for macOS compatibility
                         juce::StringArray files;
                         files.add(file.getFullPathName());
-                        
+
                         // Perform the drag - canMoveFiles=true works better with Logic Pro
                         juce::DragAndDropContainer::performExternalDragDropOfFiles(files, true);
                     }
@@ -156,6 +156,7 @@ private:
     std::unique_ptr<DraggableListBox> fileListBox;
 
     juce::TextButton playPauseButton;
+    juce::TextButton dragButton;  // Drag to DAW button
     bool isPlaying = true;
     juce::ToggleButton syncToHostToggle{"DAW Sync"};
     juce::Slider transportSlider;
