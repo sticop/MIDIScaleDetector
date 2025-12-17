@@ -277,24 +277,41 @@ void MIDIXplorerEditor::timerCallback() {
             isPlaying = false;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
         }
-        
+
         // Detect DAW loop: if host beat jumped backwards significantly, DAW looped
         if (hostPlaying && wasHostPlaying && lastBeatPosition > 0) {
             double beatDiff = hostBeat - lastBeatPosition;
             // If beat jumped backwards by more than 1 beat, DAW probably looped
             if (beatDiff < -0.5) {
-                // DAW looped back - restart MIDI from beginning
+                // DAW looped back - restart MIDI aligned to exact playhead position
                 if (pluginProcessor) {
                     for (int ch = 1; ch <= 16; ch++) {
                         pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
                     }
                 }
+                
+                // Calculate where in the MIDI file we should be based on host beat fraction
+                double beatFraction = hostBeat - std::floor(hostBeat);
+                
+                // Convert to time offset in MIDI file
+                double timeOffsetInFile = (beatFraction * 60.0) / midiFileBpm;
+                
+                // Find the note index that corresponds to this time
                 playbackNoteIndex = 0;
+                for (int i = 0; i < playbackSequence.getNumEvents(); i++) {
+                    if (playbackSequence.getEventPointer(i)->message.getTimeStamp() <= timeOffsetInFile) {
+                        playbackNoteIndex = i + 1;
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Set start beat to align with current host position
                 playbackStartBeat = hostBeat;
                 playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
             }
         }
-        
+
         wasHostPlaying = hostPlaying;
     }
 
