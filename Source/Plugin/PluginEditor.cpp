@@ -277,6 +277,24 @@ void MIDIXplorerEditor::timerCallback() {
             isPlaying = false;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
         }
+        
+        // Detect DAW loop: if host beat jumped backwards significantly, DAW looped
+        if (hostPlaying && wasHostPlaying && lastBeatPosition > 0) {
+            double beatDiff = hostBeat - lastBeatPosition;
+            // If beat jumped backwards by more than 1 beat, DAW probably looped
+            if (beatDiff < -0.5) {
+                // DAW looped back - restart MIDI from beginning
+                if (pluginProcessor) {
+                    for (int ch = 1; ch <= 16; ch++) {
+                        pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+                    }
+                }
+                playbackNoteIndex = 0;
+                playbackStartBeat = hostBeat;
+                playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+            }
+        }
+        
         wasHostPlaying = hostPlaying;
     }
 
@@ -694,18 +712,18 @@ void MIDIXplorerEditor::refreshLibrary(size_t index) {
     if (index >= libraries.size()) return;
 
     auto& lib = libraries[index];
-    
+
     // Remove all files from this library
     allFiles.erase(
         std::remove_if(allFiles.begin(), allFiles.end(),
             [&lib](const MIDIFileInfo& f) { return f.libraryName == lib.name; }),
         allFiles.end());
-    
+
     // Rescan the library
     if (lib.enabled) {
         scanLibrary(index);
     }
-    
+
     libraryListBox.repaint();
 }
 
