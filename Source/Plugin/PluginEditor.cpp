@@ -922,24 +922,38 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
 
     info.key = juce::String(noteNames[bestKey]) + " " + scales[bestScaleIdx].name;
     
-    // Calculate Circle of Fifths relative key
-    // Relative major/minor pairs (3 semitones apart)
+    // Calculate Circle of Fifths - show parent major key and relative minor
+    // Each mode has a specific relationship to its parent major scale
     juce::String scaleName = scales[bestScaleIdx].name;
-    bool isMinorType = scaleName.containsIgnoreCase("Minor") || 
-                       scaleName.containsIgnoreCase("Dorian") ||
-                       scaleName.containsIgnoreCase("Phrygian") ||
-                       scaleName.containsIgnoreCase("Locrian") ||
-                       scaleName.containsIgnoreCase("Aeolian");
+    int parentMajorRoot = bestKey;  // Default: same as detected root
     
-    if (isMinorType) {
-        // Relative major is 3 semitones up
-        int relativeMajorRoot = (bestKey + 3) % 12;
-        info.relativeKey = juce::String(noteNames[relativeMajorRoot]) + " Maj";
+    // Calculate parent major key based on mode (semitones from mode root to parent major)
+    if (scaleName == "Major" || scaleName == "Major Pent" || scaleName == "Major Blues") {
+        parentMajorRoot = bestKey;  // Ionian - root IS the parent major
+    } else if (scaleName == "Dorian") {
+        parentMajorRoot = (bestKey + 10) % 12;  // 2nd mode: go down 2 semitones (or +10)
+    } else if (scaleName == "Phrygian") {
+        parentMajorRoot = (bestKey + 8) % 12;   // 3rd mode: go down 4 semitones (or +8)
+    } else if (scaleName == "Lydian") {
+        parentMajorRoot = (bestKey + 7) % 12;   // 4th mode: go down 5 semitones (or +7)
+    } else if (scaleName == "Mixolydian") {
+        parentMajorRoot = (bestKey + 5) % 12;   // 5th mode: go down 7 semitones (or +5)
+    } else if (scaleName == "Minor" || scaleName == "Minor Pent" || scaleName.containsIgnoreCase("Harmonic") || scaleName.containsIgnoreCase("Melodic")) {
+        parentMajorRoot = (bestKey + 3) % 12;   // 6th mode (Aeolian): go up 3 semitones
+    } else if (scaleName == "Locrian") {
+        parentMajorRoot = (bestKey + 1) % 12;   // 7th mode: go up 1 semitone
+    } else if (scaleName == "Blues") {
+        parentMajorRoot = (bestKey + 3) % 12;   // Blues is based on minor pentatonic
     } else {
-        // Relative minor is 3 semitones down (or 9 up)
-        int relativeMinorRoot = (bestKey + 9) % 12;
-        info.relativeKey = juce::String(noteNames[relativeMinorRoot]) + "m";
+        // For exotic scales, show parallel major/minor relationship
+        parentMajorRoot = bestKey;
     }
+    
+    // Relative minor is always 3 semitones below the parent major (or +9)
+    int relativeMinorRoot = (parentMajorRoot + 9) % 12;
+    
+    // Format: "Parent Maj / Rel m" e.g., "G Maj / Em"
+    info.relativeKey = juce::String(noteNames[parentMajorRoot]) + "/" + juce::String(noteNames[relativeMinorRoot]) + "m";
     
     // Extract tempo from MIDI file
     info.bpm = 120.0;  // Default
@@ -1351,17 +1365,17 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     g.setFont(11.0f);
     g.drawText(file.key, 28, 6, 70, 20, juce::Justification::centred);
     
-    // Circle of Fifths relative key (shown in parentheses)
+    // Circle of Fifths relative key (Parent Major / Relative minor)
     if (file.relativeKey.isNotEmpty()) {
         g.setColour(juce::Colour(0xffff9944));  // Orange for relative key
-        g.setFont(10.0f);
-        g.drawText("(" + file.relativeKey + ")", 102, 6, 50, 20, juce::Justification::centredLeft);
+        g.setFont(9.0f);
+        g.drawText("(" + file.relativeKey + ")", 102, 6, 55, 20, juce::Justification::centredLeft);
     }
 
     // File name
     g.setColour(juce::Colours::white);
     g.setFont(13.0f);
-    g.drawText(file.fileName, 155, 0, w - 410, h, juce::Justification::centredLeft);
+    g.drawText(file.fileName, 160, 0, w - 415, h, juce::Justification::centredLeft);
 
     // Instrument name
     g.setColour(juce::Colour(0xffaaaaff));
