@@ -125,7 +125,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     timeDisplayLabel.setText("0:00 / 0:00", juce::dontSendNotification);
     addAndMakeVisible(timeDisplayLabel);
     addAndMakeVisible(midiNoteViewer);
-    setSize(1400, 1000);
+    setSize(900, 700);
 
     // Load saved libraries
     loadLibraries();
