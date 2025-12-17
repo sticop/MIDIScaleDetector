@@ -107,18 +107,19 @@ private:
     std::vector<Library> libraries;
     std::vector<MIDIFileInfo> allFiles;
     std::vector<MIDIFileInfo> filteredFiles;
-    juce::StringArray detectedKeys;  // All unique keys found in scanned files
+    juce::StringArray detectedKeys;
     
     int selectedFileIndex = -1;
     bool isPlaying = false;
     double playbackStartTime = 0;
-    double playbackBeatPosition = 0;  // For host sync
+    double playbackStartBeat = 0;   // Beat position when playback started
     int playbackNoteIndex = 0;
     
-    // Tempo sync
+    // Host sync state
     double lastHostBpm = 120.0;
-    double midiFileBpm = 120.0;  // Original tempo of MIDI file
-    double midiFileTicksPerQuarter = 480.0;
+    double midiFileBpm = 120.0;
+    bool wasHostPlaying = false;    // Track host play state changes
+    double lastBeatsElapsed = 0;    // For detecting transport jumps
     
     juce::MidiFile currentMidiFile;
     juce::MidiMessageSequence playbackSequence;
