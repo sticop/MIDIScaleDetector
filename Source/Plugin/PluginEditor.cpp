@@ -1149,9 +1149,17 @@ void MIDIXplorerEditor::filterFiles() {
         if (keyFilterCombo.getSelectedId() == 2) {
             if (!file.favorite) continue;
         }
-        // Check key filter (IDs > 2)
+        // Check key/scale filter (IDs > 2)
         else if (keyFilterCombo.getSelectedId() > 2) {
-            if (file.key != keyFilter) continue;
+            // Check if it's an exact match (full key like "C Major")
+            // or a scale-only match (just "Major", "Minor", etc.)
+            bool matches = (file.key == keyFilter);
+            if (!matches) {
+                // Check if the file's key ends with the filter (scale name match)
+                juce::String fileScale = file.key.fromFirstOccurrenceOf(" ", false, false).trim();
+                matches = (fileScale == keyFilter);
+            }
+            if (!matches) continue;
         }
 
         // Check search filter
@@ -1173,14 +1181,22 @@ void MIDIXplorerEditor::filterFiles() {
 void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
     detectedKeys.clear();
     juce::StringArray uniqueKeys;
+    juce::StringArray uniqueScales;
 
     for (const auto& file : allFiles) {
-        if (file.key != "---" && !uniqueKeys.contains(file.key)) {
-            uniqueKeys.add(file.key);
+        if (file.key != "---") {
+            if (!uniqueKeys.contains(file.key)) {
+                uniqueKeys.add(file.key);
+            }
+            // Extract just the scale name (everything after the key letter)
+            juce::String scaleName = file.key.fromFirstOccurrenceOf(" ", false, false).trim();
+            if (scaleName.isNotEmpty() && !uniqueScales.contains(scaleName)) {
+                uniqueScales.add(scaleName);
+            }
         }
     }
 
-    // Bubble sort by musical key order (JUCE StringArray doesn't support custom comparator)
+    // Bubble sort keys by musical key order
     for (int i = 0; i < uniqueKeys.size() - 1; i++) {
         for (int j = i + 1; j < uniqueKeys.size(); j++) {
             if (getKeyOrder(uniqueKeys[i]) > getKeyOrder(uniqueKeys[j])) {
@@ -1192,8 +1208,16 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
     keyFilterCombo.clear();
     keyFilterCombo.addItem("All Keys", 1);
     keyFilterCombo.addItem("Favorites", 2);
-
+    
+    // Add section for scale types
+    keyFilterCombo.addSectionHeading("Scales");
     int id = 3;
+    for (const auto& scale : uniqueScales) {
+        keyFilterCombo.addItem(scale, id++);
+    }
+    
+    // Add section for key + scale combinations
+    keyFilterCombo.addSectionHeading("Keys");
     for (const auto& key : uniqueKeys) {
         keyFilterCombo.addItem(key, id++);
     }
