@@ -281,6 +281,12 @@ void MIDIXplorerEditor::timerCallback() {
     
     // Handle looping
     if (currentTime >= totalDuration) {
+        // Send all notes off before looping to prevent overlapping notes
+        if (pluginProcessor) {
+            for (int ch = 1; ch <= 16; ch++) {
+                pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+            }
+        }
         currentTime = std::fmod(currentTime, totalDuration);
         playbackNoteIndex = 0;
         if (synced) {
