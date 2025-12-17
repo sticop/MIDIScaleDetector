@@ -313,17 +313,28 @@ void MIDIXplorerEditor::timerCallback() {
                 
                 // Find the note index that corresponds to this time
                 playbackNoteIndex = 0;
-                for (int i = 0; i < playbackSequence.getNumEvents(); i++) {
-                    if (playbackSequence.getEventPointer(i)->message.getTimeStamp() <= timeOffsetInFile) {
-                        playbackNoteIndex = i + 1;
+                
+                // Set start beat to align with current host position
+                playbackStartBeat = hostBeat - (timeOffsetInFile * midiFileBpm / 60.0);
+                playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - timeOffsetInFile;
+                
+                // Immediately play any notes at time 0 or very start
+                while (playbackNoteIndex < playbackSequence.getNumEvents()) {
+                    auto* event = playbackSequence.getEventPointer(playbackNoteIndex);
+                    double eventTime = event->message.getTimeStamp();
+                    // Play notes that should have started by now (with small tolerance)
+                    if (eventTime <= timeOffsetInFile + 0.01) {
+                        auto msg = event->message;
+                        if (msg.isNoteOn() || msg.isNoteOff()) {
+                            if (pluginProcessor) {
+                                pluginProcessor->addMidiMessage(msg);
+                            }
+                        }
+                        playbackNoteIndex++;
                     } else {
                         break;
                     }
                 }
-                
-                // Set start beat to align with current host position
-                playbackStartBeat = hostBeat;
-                playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
             }
         }
 
@@ -404,8 +415,7 @@ void MIDIXplorerEditor::timerCallback() {
             }
         }
         // Calculate how much we overshot and preserve it for smooth loop
-        double overshoot = currentTime - totalDuration;
-        currentTime = overshoot;
+        double overshoot = std::fmod(currentTime, totalDuration);
         playbackNoteIndex = 0;
 
         if (synced) {
@@ -416,7 +426,23 @@ void MIDIXplorerEditor::timerCallback() {
         } else {
             playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - overshoot;
         }
-        // Continue to play notes that should have started
+        
+        // Immediately play notes at or near time 0 to prevent missing first beat
+        while (playbackNoteIndex < playbackSequence.getNumEvents()) {
+            auto* event = playbackSequence.getEventPointer(playbackNoteIndex);
+            double eventTime = event->message.getTimeStamp();
+            if (eventTime <= overshoot + 0.005) {  // Small tolerance for timing
+                auto msg = event->message;
+                if (msg.isNoteOn() || msg.isNoteOff()) {
+                    if (pluginProcessor) {
+                        pluginProcessor->addMidiMessage(msg);
+                    }
+                }
+                playbackNoteIndex++;
+            } else {
+                break;
+            }
+        }
     }
 
     // Play notes that should have started by now
