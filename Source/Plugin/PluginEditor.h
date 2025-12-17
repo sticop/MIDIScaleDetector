@@ -48,7 +48,7 @@ private:
     class LibraryListModel : public juce::ListBoxModel {
     public:
         explicit LibraryListModel(MIDIXplorerEditor& o) : owner(o) {}
-        int getNumRows() override { return (int)owner.libraries.size(); }
+        int getNumRows() override { return 3 + (int)owner.libraries.size(); }  // All, Favorites, Recently Played + user libraries
         void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) override;
         void listBoxItemClicked(int row, const juce::MouseEvent& e) override;
     private:
@@ -76,19 +76,19 @@ private:
             dragStartRow = getRowContainingPosition(e.x, e.y);
             dragStartPos = e.getPosition();
 
-            // Check if clicking on heart area (first 24 pixels of the row)
+            // Check if clicking on star area (first 24 pixels of the row)
             if (e.x < 24 && dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
                 owner.toggleFavorite(dragStartRow);
-                heartClicked = true;
+                starClicked = true;
                 return;  // Don't process further
             }
-            heartClicked = false;
+            starClicked = false;
 
             juce::ListBox::mouseDown(e);
         }
 
         void mouseDrag(const juce::MouseEvent& e) override {
-            if (heartClicked) return;
+            if (starClicked) return;
 
             // Start native file drag when mouse moves enough
             if (!isDragging && dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
@@ -115,13 +115,13 @@ private:
         void mouseUp(const juce::MouseEvent& e) override {
             isDragging = false;
             dragStartRow = -1;
-            heartClicked = false;
+            starClicked = false;
             juce::ListBox::mouseUp(e);
         }
     private:
         MIDIXplorerEditor& owner;
         bool isDragging = false;
-        bool heartClicked = false;
+        bool starClicked = false;
         int dragStartRow = -1;
         juce::Point<int> dragStartPos;
     };
@@ -168,6 +168,8 @@ private:
     std::vector<Library> libraries;
     std::vector<MIDIFileInfo> allFiles;
     std::vector<MIDIFileInfo> filteredFiles;
+    std::vector<juce::String> recentlyPlayed;  // Recently played file paths
+    int selectedLibraryIndex = 0;  // 0=All, 1=Favorites, 2=Recently Played, 3+=user libraries
     juce::StringArray detectedKeys;
 
     int selectedFileIndex = -1;
@@ -213,6 +215,9 @@ private:
     void toggleFavorite(int row);
     void saveFavorites();
     void loadFavorites();
+    void saveRecentlyPlayed();
+    void loadRecentlyPlayed();
+    void addToRecentlyPlayed(const juce::String& filePath);
     void quantizeMidi();
     void selectAndPreview(int row);
 

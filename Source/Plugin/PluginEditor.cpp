@@ -239,11 +239,12 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     timeDisplayLabel.setText("0:00 / 0:00", juce::dontSendNotification);
     addAndMakeVisible(timeDisplayLabel);
     addAndMakeVisible(midiNoteViewer);
-    setSize(1000, 700);
+    setSize(1200, 750);
 
     // Load saved libraries
     loadLibraries();
     loadFavorites();
+    loadRecentlyPlayed();
 
     // Restore playback state from processor (in case editor was reopened while playing)
     if (pluginProcessor) {
@@ -612,6 +613,9 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
     fileListBox->selectRow(row);
     fileListBox->scrollToEnsureRowIsOnscreen(row);
     selectedFileIndex = row;
+
+    // Add to recently played
+    addToRecentlyPlayed(filteredFiles[(size_t)row].fullPath);
 
     // Resume playback when selecting a file
     isPlaying = true;
@@ -1270,12 +1274,32 @@ void MIDIXplorerEditor::filterFiles() {
     juce::String searchText = searchBox.getText().toLowerCase();
 
     for (const auto& file : allFiles) {
-        // Check favorites filter (ID 2)
-        if (keyFilterCombo.getSelectedId() == 2) {
+        // Filter by selected library
+        if (selectedLibraryIndex == 0) {
+            // "All" - show all files (no library filter)
+        } else if (selectedLibraryIndex == 1) {
+            // "Favorites" - only show favorites
             if (!file.favorite) continue;
+        } else if (selectedLibraryIndex == 2) {
+            // "Recently Played" - only show recently played
+            bool isRecent = false;
+            for (const auto& recentPath : recentlyPlayed) {
+                if (recentPath == file.fullPath) {
+                    isRecent = true;
+                    break;
+                }
+            }
+            if (!isRecent) continue;
+        } else {
+            // User library - filter by library name
+            int libIndex = selectedLibraryIndex - 3;
+            if (libIndex >= 0 && libIndex < (int)libraries.size()) {
+                if (file.libraryName != libraries[(size_t)libIndex].name) continue;
+            }
         }
-        // Check key filter (IDs > 2) - match key or relative key
-        else if (keyFilterCombo.getSelectedId() > 2) {
+
+        // Check key filter - match key or relative key
+        if (keyFilterCombo.getSelectedId() > 1) {
             bool matches = (file.key == keyFilter) || (file.relativeKey == keyFilter);
             if (!matches) continue;
         }
@@ -1319,9 +1343,8 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
 
     keyFilterCombo.clear();
     keyFilterCombo.addItem("All Keys", 1);
-    keyFilterCombo.addItem("Favorites", 2);
 
-    int id = 3;
+    int id = 2;
     for (const auto& key : allKeysAndRelatives) {
         keyFilterCombo.addItem(key, id++);
     }
@@ -1381,6 +1404,55 @@ void MIDIXplorerEditor::loadFavorites() {
     for (auto& f : allFiles) {
         f.favorite = favPaths.contains(f.fullPath);
     }
+}
+
+void MIDIXplorerEditor::saveRecentlyPlayed() {
+    auto settingsDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("MIDIXplorer");
+    auto recentFile = settingsDir.getChildFile("recently_played.txt");
+
+    juce::String content;
+    for (const auto& path : recentlyPlayed) {
+        content += path + "\n";
+    }
+    recentFile.replaceWithText(content);
+}
+
+void MIDIXplorerEditor::loadRecentlyPlayed() {
+    auto settingsDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("MIDIXplorer");
+    auto recentFile = settingsDir.getChildFile("recently_played.txt");
+
+    recentlyPlayed.clear();
+    if (!recentFile.existsAsFile()) return;
+
+    juce::StringArray paths;
+    recentFile.readLines(paths);
+
+    for (const auto& path : paths) {
+        if (path.isNotEmpty()) {
+            recentlyPlayed.push_back(path);
+        }
+    }
+}
+
+void MIDIXplorerEditor::addToRecentlyPlayed(const juce::String& filePath) {
+    // Remove if already exists (to move to front)
+    recentlyPlayed.erase(
+        std::remove(recentlyPlayed.begin(), recentlyPlayed.end(), filePath),
+        recentlyPlayed.end()
+    );
+    
+    // Add to front
+    recentlyPlayed.insert(recentlyPlayed.begin(), filePath);
+    
+    // Keep max 50 recent files
+    if (recentlyPlayed.size() > 50) {
+        recentlyPlayed.resize(50);
+    }
+    
+    saveRecentlyPlayed();
+    libraryListBox.repaint();  // Update file count
 }
 
 // Library list model implementation
@@ -1487,46 +1559,97 @@ void MIDIXplorerEditor::MIDINoteViewer::setPlaybackPosition(double position) {
     playPosition = position;
     repaint();
 }
+
 void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) {
-    if (row < 0 || row >= (int)owner.libraries.size()) return;
+    // Special libraries: 0=All, 1=Favorites, 2=Recently Played
+    juce::String name;
+    int fileCount = 0;
+    juce::String icon;
+    
+    if (row == 0) {
+        name = "All";
+        fileCount = (int)owner.allFiles.size();
+        icon = juce::String::fromUTF8("\u2630");  // Hamburger menu icon
+    } else if (row == 1) {
+        name = "Favorites";
+        fileCount = 0;
+        for (const auto& f : owner.allFiles) {
+            if (f.favorite) fileCount++;
+        }
+        icon = juce::String::fromUTF8("\u2605");  // Star icon
+    } else if (row == 2) {
+        name = "Recently Played";
+        fileCount = (int)owner.recentlyPlayed.size();
+        icon = juce::String::fromUTF8("\u23F1");  // Stopwatch icon
+    } else {
+        int libIndex = row - 3;
+        if (libIndex < 0 || libIndex >= (int)owner.libraries.size()) return;
+        auto& lib = owner.libraries[(size_t)libIndex];
+        name = lib.name;
+        fileCount = lib.fileCount;
+        icon = juce::String::fromUTF8("\u{1F4C1}");  // Folder icon
+    }
 
-    auto& lib = owner.libraries[(size_t)row];
-
-    if (selected) {
+    bool isSelected = (row == owner.selectedLibraryIndex);
+    
+    if (isSelected) {
+        g.setColour(juce::Colour(0xff0078d4));  // Blue highlight for selected
+        g.fillRect(0, 0, w, h);
+    } else if (selected) {
         g.setColour(juce::Colour(0xff3a3a3a));
         g.fillRect(0, 0, w, h);
     }
 
-    g.setColour(lib.enabled ? juce::Colours::white : juce::Colours::grey);
-    g.setFont(13.0f);
-    g.drawText(lib.name, 8, 0, w - 60, h, juce::Justification::centredLeft);
+    // Icon
+    g.setColour(row < 3 ? juce::Colours::orange : juce::Colours::grey);
+    g.setFont(14.0f);
+    g.drawText(icon, 4, 0, 20, h, juce::Justification::centred);
 
+    // Name
+    g.setColour(juce::Colours::white);
+    g.setFont(13.0f);
+    g.drawText(name, 26, 0, w - 80, h, juce::Justification::centredLeft);
+
+    // File count
     g.setColour(juce::Colours::grey);
     g.setFont(11.0f);
-    g.drawText(juce::String(lib.fileCount), w - 50, 0, 45, h, juce::Justification::centredRight);
+    g.drawText(juce::String(fileCount), w - 50, 0, 45, h, juce::Justification::centredRight);
 }
 
 void MIDIXplorerEditor::LibraryListModel::listBoxItemClicked(int row, const juce::MouseEvent& e) {
-    if (row < 0 || row >= (int)owner.libraries.size()) return;
+    int totalRows = 3 + (int)owner.libraries.size();
+    if (row < 0 || row >= totalRows) return;
 
-    if (e.mods.isRightButtonDown()) {
+    // Left click - select library and filter
+    if (e.mods.isLeftButtonDown()) {
+        owner.selectedLibraryIndex = row;
+        owner.filterFiles();
+        owner.libraryListBox.repaint();
+        return;
+    }
+
+    // Right click - context menu for user libraries only
+    if (e.mods.isRightButtonDown() && row >= 3) {
+        int libIndex = row - 3;
+        if (libIndex < 0 || libIndex >= (int)owner.libraries.size()) return;
+        
         juce::PopupMenu menu;
         menu.addItem(1, "Reveal in Finder");
         menu.addItem(2, "Refresh");
-        menu.addItem(3, owner.libraries[(size_t)row].enabled ? "Disable" : "Enable");
+        menu.addItem(3, owner.libraries[(size_t)libIndex].enabled ? "Disable" : "Enable");
         menu.addItem(4, "Remove");
 
-        menu.showMenuAsync(juce::PopupMenu::Options(), [this, row](int result) {
+        menu.showMenuAsync(juce::PopupMenu::Options(), [this, libIndex](int result) {
             if (result == 1) {
-                owner.revealInFinder(owner.libraries[(size_t)row].path);
+                owner.revealInFinder(owner.libraries[(size_t)libIndex].path);
             } else if (result == 2) {
-                owner.refreshLibrary((size_t)row);
+                owner.refreshLibrary((size_t)libIndex);
             } else if (result == 3) {
-                owner.libraries[(size_t)row].enabled = !owner.libraries[(size_t)row].enabled;
+                owner.libraries[(size_t)libIndex].enabled = !owner.libraries[(size_t)libIndex].enabled;
                 owner.saveLibraries();
                 owner.scanLibraries();
             } else if (result == 4) {
-                owner.libraries.erase(owner.libraries.begin() + row);
+                owner.libraries.erase(owner.libraries.begin() + libIndex);
                 owner.saveLibraries();
                 owner.libraryListBox.updateContent();
                 owner.scanLibraries();
@@ -1549,30 +1672,37 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
         g.fillRect(0, 0, w, h);
     }
 
-    // Favorite heart icon
-    float heartX = 12.0f;
-    float heartY = h / 2.0f;
-    float heartSize = 7.0f;
+    // Favorite star icon
+    float starX = 12.0f;
+    float starY = h / 2.0f;
+    float starSize = 7.0f;
 
-    juce::Path heartPath;
-    // Draw heart shape using bezier curves
-    heartPath.startNewSubPath(heartX, heartY + heartSize * 0.3f);
-    // Left curve
-    heartPath.cubicTo(heartX - heartSize, heartY - heartSize * 0.3f,
-                      heartX - heartSize, heartY - heartSize * 0.9f,
-                      heartX, heartY - heartSize * 0.5f);
-    // Right curve
-    heartPath.cubicTo(heartX + heartSize, heartY - heartSize * 0.9f,
-                      heartX + heartSize, heartY - heartSize * 0.3f,
-                      heartX, heartY + heartSize * 0.3f);
-    heartPath.closeSubPath();
+    juce::Path starPath;
+    // Draw 5-point star
+    for (int i = 0; i < 5; i++) {
+        float outerAngle = juce::MathConstants<float>::twoPi * i / 5.0f - juce::MathConstants<float>::halfPi;
+        float innerAngle = outerAngle + juce::MathConstants<float>::twoPi / 10.0f;
+        
+        float outerX = starX + starSize * std::cos(outerAngle);
+        float outerY = starY + starSize * std::sin(outerAngle);
+        float innerX = starX + starSize * 0.4f * std::cos(innerAngle);
+        float innerY = starY + starSize * 0.4f * std::sin(innerAngle);
+        
+        if (i == 0) {
+            starPath.startNewSubPath(outerX, outerY);
+        } else {
+            starPath.lineTo(outerX, outerY);
+        }
+        starPath.lineTo(innerX, innerY);
+    }
+    starPath.closeSubPath();
 
     if (file.favorite) {
-        g.setColour(juce::Colour(0xffff4466));  // Red for favorites
-        g.fillPath(heartPath);
+        g.setColour(juce::Colour(0xffffcc00));  // Gold/yellow for favorites
+        g.fillPath(starPath);
     } else {
         g.setColour(juce::Colour(0xff666666));  // Grey outline
-        g.strokePath(heartPath, juce::PathStrokeType(1.2f));
+        g.strokePath(starPath, juce::PathStrokeType(1.0f));
     }
 
     // Key badge
@@ -1645,7 +1775,7 @@ juce::var MIDIXplorerEditor::FileListModel::getDragSourceDescription(const juce:
 void MIDIXplorerEditor::FileListModel::listBoxItemClicked(int row, const juce::MouseEvent& e) {
     if (row < 0 || row >= (int)owner.filteredFiles.size()) return;
 
-    // Check if heart area clicked (first 24 pixels)
+    // Check if star area clicked (first 24 pixels)
     if (e.x < 24 && e.mods.isLeftButtonDown()) {
         owner.toggleFavorite(row);
         return;
