@@ -72,9 +72,9 @@ public:
         std::atomic<double> ppqPosition{0.0};
         std::atomic<double> timeInSeconds{0.0};
     };
-    
+
     TransportState transportState;
-    
+
     // MIDI file playback state - persists when editor is closed
     struct PlaybackState {
         std::atomic<bool> isPlaying{false};
@@ -89,11 +89,11 @@ public:
         std::atomic<float> velocityScale{1.0f};  // 0.0 to 2.0 (0% to 200%)
         juce::String currentFilePath;
     };
-    
+
     PlaybackState playbackState;
     juce::MidiMessageSequence playbackSequence;
     std::mutex sequenceMutex;
-    
+
     // Playback control methods
     void setPlaybackPlaying(bool playing) { playbackState.isPlaying = playing; }
     bool isPlaybackPlaying() const { return playbackState.isPlaying; }

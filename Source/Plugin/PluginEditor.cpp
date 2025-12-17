@@ -187,7 +187,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     velocityLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
     velocityLabel.setJustificationType(juce::Justification::centredRight);
     addAndMakeVisible(velocityLabel);
-    
+
     velocitySlider.setSliderStyle(juce::Slider::LinearHorizontal);
     velocitySlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 40, 20);
     velocitySlider.setRange(0.0, 200.0, 1.0);  // 0% to 200%

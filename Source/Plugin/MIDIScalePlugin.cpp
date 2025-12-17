@@ -1,6 +1,5 @@
 #include "MIDIScalePlugin.h"
 #include "PluginEditor.h"
-#include <set>
 
 namespace MIDIScaleDetector {
 
@@ -259,53 +258,8 @@ std::vector<int> MIDIScalePlugin::arpeggiateNote(int midiNote) {
 void MIDIScalePlugin::loadPlaybackSequence(const juce::MidiMessageSequence& seq, double duration, double bpm, const juce::String& path) {
     std::lock_guard<std::mutex> lock(sequenceMutex);
 
-    // Clear and rebuild the sequence, truncating notes at the end boundary
-    playbackSequence.clear();
-
-    // Leave a small gap at the end for clean loop transitions
-    double effectiveEnd = duration - 0.02;  // 20ms before the end
-    double noteOffTime = duration - 0.03;   // Note-offs 30ms before end
-
-    // Track which notes are on at the end so we can add note-offs
-    std::set<std::pair<int, int>> activeNotes;  // channel, note number
-
-    for (int i = 0; i < seq.getNumEvents(); i++) {
-        auto* event = seq.getEventPointer(i);
-        auto msg = event->message;
-        double eventTime = msg.getTimeStamp();
-
-        // Skip events that start after the effective end
-        if (eventTime >= effectiveEnd) {
-            continue;
-        }
-
-        if (msg.isNoteOn()) {
-            // Add the note-on
-            playbackSequence.addEvent(msg);
-            activeNotes.insert({msg.getChannel(), msg.getNoteNumber()});
-        } else if (msg.isNoteOff()) {
-            // Check if this note-off is within effective end
-            if (eventTime < effectiveEnd) {
-                playbackSequence.addEvent(msg);
-                activeNotes.erase({msg.getChannel(), msg.getNoteNumber()});
-            }
-            // If note-off is past effective end, we'll add one earlier
-        } else {
-            // Other MIDI events (CC, etc.) - add if within effective end
-            if (eventTime < effectiveEnd) {
-                playbackSequence.addEvent(msg);
-            }
-        }
-    }
-
-    // Add note-offs before the end for any notes still active
-    for (const auto& note : activeNotes) {
-        auto noteOff = juce::MidiMessage::noteOff(note.first, note.second);
-        noteOff.setTimeStamp(noteOffTime);
-        playbackSequence.addEvent(noteOff);
-    }
-
-    // Sort by timestamp
+    // Copy the sequence as-is - no truncation
+    playbackSequence = seq;
     playbackSequence.sort();
 
     playbackState.fileDuration.store(duration);
@@ -337,9 +291,6 @@ void MIDIScalePlugin::updatePlayback() {
     double totalDuration = playbackState.fileDuration.load();
     if (totalDuration <= 0) totalDuration = 1.0;
 
-    // Add a tiny gap at the end to ensure clean loop transitions
-    double loopEndTime = totalDuration - 0.01;  // 10ms gap before loop
-
     double midiFileBpm = playbackState.fileBpm.load();
     if (midiFileBpm <= 0) midiFileBpm = 120.0;  // Fallback
 
@@ -366,8 +317,8 @@ void MIDIScalePlugin::updatePlayback() {
         if (currentTime < 0) currentTime = 0;
     }
 
-    // Check if we've reached the end (with gap) - do a clean reset
-    if (currentTime >= loopEndTime) {
+    // Check if we've reached the end - do a clean reset
+    if (currentTime >= totalDuration) {
         // Send all notes off for a clean slate
         for (int ch = 1; ch <= 16; ch++) {
             addMidiMessage(juce::MidiMessage::allNotesOff(ch));
@@ -404,7 +355,7 @@ void MIDIScalePlugin::updatePlayback() {
     int noteIndex = playbackState.playbackNoteIndex.load();
     // Get velocity scale
     float velScale = playbackState.velocityScale.load();
-    
+
     while (noteIndex < playbackSequence.getNumEvents()) {
         auto* event = playbackSequence.getEventPointer(noteIndex);
         double eventTime = event->message.getTimeStamp();

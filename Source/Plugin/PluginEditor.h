@@ -75,7 +75,7 @@ private:
         void mouseDown(const juce::MouseEvent& e) override {
             dragStartRow = getRowContainingPosition(e.x, e.y);
             dragStartPos = e.getPosition();
-            
+
             // Check if clicking on heart area (first 24 pixels of the row)
             if (e.x < 24 && dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
                 owner.toggleFavorite(dragStartRow);
@@ -83,13 +83,13 @@ private:
                 return;  // Don't process further
             }
             heartClicked = false;
-            
+
             juce::ListBox::mouseDown(e);
         }
 
         void mouseDrag(const juce::MouseEvent& e) override {
             if (heartClicked) return;
-            
+
             // Start native file drag when mouse moves enough
             if (!isDragging && dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
                 auto distance = e.getPosition().getDistanceFrom(dragStartPos);
@@ -101,7 +101,7 @@ private:
                         // Native OS file drag - this is the standard way
                         juce::StringArray files;
                         files.add(file.getFullPathName());
-                        
+
                         // canMoveFiles = false means copy only (safer for DAWs)
                         auto result = juce::DragAndDropContainer::performExternalDragDropOfFiles(files, false);
                         (void)result;  // Ignore result, drag started
