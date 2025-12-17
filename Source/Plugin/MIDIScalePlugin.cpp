@@ -66,6 +66,9 @@ void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             }
         }
     }
+    
+    // Update MIDI file playback (runs even when editor is closed)
+    updatePlayback();
 
     // First, add any queued MIDI messages from the editor (file playback)
     {
@@ -231,6 +234,94 @@ std::vector<int> MIDIScalePlugin::arpeggiateNote(int midiNote) {
     }
 
     return notes;
+}
+
+void MIDIScalePlugin::loadPlaybackSequence(const juce::MidiMessageSequence& seq, double duration, double bpm, const juce::String& path) {
+    std::lock_guard<std::mutex> lock(sequenceMutex);
+    playbackSequence = seq;
+    playbackState.fileDuration.store(duration);
+    playbackState.fileBpm.store(bpm);
+    playbackState.currentFilePath = path;
+    playbackState.fileLoaded.store(true);
+    playbackState.playbackNoteIndex.store(0);
+    playbackState.playbackPosition.store(0.0);
+}
+
+void MIDIScalePlugin::resetPlayback() {
+    playbackState.playbackNoteIndex.store(0);
+    playbackState.playbackPosition.store(0.0);
+    playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0);
+    playbackState.playbackStartBeat.store(transportState.ppqPosition.load());
+}
+
+void MIDIScalePlugin::updatePlayback() {
+    if (!playbackState.isPlaying.load() || !playbackState.fileLoaded.load()) {
+        return;
+    }
+    
+    std::lock_guard<std::mutex> lock(sequenceMutex);
+    
+    if (playbackSequence.getNumEvents() == 0) {
+        return;
+    }
+    
+    double totalDuration = playbackState.fileDuration.load();
+    if (totalDuration <= 0) totalDuration = 1.0;
+    
+    double currentTime;
+    double midiFileBpm = playbackState.fileBpm.load();
+    bool synced = playbackState.syncToHost.load() && transportState.isPlaying.load();
+    double hostBeat = transportState.ppqPosition.load();
+    
+    if (synced) {
+        double beatsElapsed = hostBeat - playbackState.playbackStartBeat.load();
+        currentTime = (beatsElapsed * 60.0) / midiFileBpm;
+    } else {
+        currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackState.playbackStartTime.load();
+    }
+    
+    // Handle wrapping
+    double wrappedTime = std::fmod(currentTime, totalDuration);
+    if (wrappedTime < 0) wrappedTime += totalDuration;
+    
+    // Update position
+    playbackState.playbackPosition.store(wrappedTime / totalDuration);
+    
+    // Handle looping
+    if (currentTime >= totalDuration) {
+        // Send all notes off
+        for (int ch = 1; ch <= 16; ch++) {
+            addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+        }
+        playbackState.playbackNoteIndex.store(0);
+        
+        if (synced) {
+            double fileDurationInBeats = (totalDuration * midiFileBpm) / 60.0;
+            double newStartBeat = playbackState.playbackStartBeat.load() + fileDurationInBeats;
+            playbackState.playbackStartBeat.store(newStartBeat);
+        } else {
+            playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 - wrappedTime);
+        }
+        currentTime = wrappedTime;
+    }
+    
+    // Play notes
+    int noteIndex = playbackState.playbackNoteIndex.load();
+    while (noteIndex < playbackSequence.getNumEvents()) {
+        auto* event = playbackSequence.getEventPointer(noteIndex);
+        double eventTime = event->message.getTimeStamp();
+        
+        if (eventTime <= currentTime + 0.01) {
+            auto msg = event->message;
+            if (msg.isNoteOn() || msg.isNoteOff()) {
+                addMidiMessage(msg);
+            }
+            noteIndex++;
+        } else {
+            break;
+        }
+    }
+    playbackState.playbackNoteIndex.store(noteIndex);
 }
 
 } // namespace MIDIScaleDetector

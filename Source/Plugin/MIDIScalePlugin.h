@@ -74,6 +74,38 @@ public:
     };
     
     TransportState transportState;
+    
+    // MIDI file playback state - persists when editor is closed
+    struct PlaybackState {
+        std::atomic<bool> isPlaying{false};
+        std::atomic<bool> fileLoaded{false};
+        std::atomic<double> playbackPosition{0.0};  // 0.0 to 1.0
+        std::atomic<double> playbackStartTime{0.0};
+        std::atomic<double> playbackStartBeat{0.0};
+        std::atomic<int> playbackNoteIndex{0};
+        std::atomic<double> fileDuration{0.0};
+        std::atomic<double> fileBpm{120.0};
+        std::atomic<bool> syncToHost{true};
+        juce::String currentFilePath;
+    };
+    
+    PlaybackState playbackState;
+    juce::MidiMessageSequence playbackSequence;
+    std::mutex sequenceMutex;
+    
+    // Playback control methods
+    void setPlaybackPlaying(bool playing) { playbackState.isPlaying = playing; }
+    bool isPlaybackPlaying() const { return playbackState.isPlaying; }
+    void setPlaybackPosition(double pos) { playbackState.playbackPosition = pos; }
+    double getPlaybackPosition() const { return playbackState.playbackPosition; }
+    void loadPlaybackSequence(const juce::MidiMessageSequence& seq, double duration, double bpm, const juce::String& path);
+    void resetPlayback();
+    void updatePlayback();  // Called from processBlock
+    double getFileDuration() const { return playbackState.fileDuration; }
+    double getFileBpm() const { return playbackState.fileBpm; }
+    void setSyncToHost(bool sync) { playbackState.syncToHost = sync; }
+    bool isSyncToHost() const { return playbackState.syncToHost; }
+    juce::String getCurrentFilePath() const { return playbackState.currentFilePath; }
 
 private:
     ScaleDetector detector;

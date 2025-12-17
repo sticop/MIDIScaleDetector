@@ -98,12 +98,18 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
                     playbackStartBeat = getHostBeatPosition();
                 }
             }
+            // Set processor playback state so it continues when editor closes
+            if (pluginProcessor) {
+                pluginProcessor->setPlaybackPlaying(true);
+                pluginProcessor->resetPlayback();
+            }
         } else {
             // Pause
             isPlaying = false;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
             // Send all notes off when pausing
             if (pluginProcessor) {
+                pluginProcessor->setPlaybackPlaying(false);
                 for (int ch = 1; ch <= 16; ch++) {
                     pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
                 }
@@ -115,6 +121,11 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     syncToHostToggle.setToggleState(true, juce::dontSendNotification);
     syncToHostToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
     syncToHostToggle.setColour(juce::ToggleButton::tickColourId, juce::Colours::orange);
+    syncToHostToggle.onClick = [this]() {
+        if (pluginProcessor) {
+            pluginProcessor->setSyncToHost(syncToHostToggle.getToggleState());
+        }
+    };
     addAndMakeVisible(syncToHostToggle);
 
     transportSlider.setSliderStyle(juce::Slider::LinearBar);
@@ -137,6 +148,15 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     // Load saved libraries
     loadLibraries();
     loadFavorites();
+
+    // Restore playback state from processor (in case editor was reopened while playing)
+    if (pluginProcessor) {
+        isPlaying = pluginProcessor->isPlaybackPlaying();
+        if (isPlaying) {
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
+        }
+        syncToHostToggle.setToggleState(pluginProcessor->isSyncToHost(), juce::dontSendNotification);
+    }
 
     startTimer(20); // 50 fps for smooth sync
 }
@@ -616,6 +636,9 @@ void MIDIXplorerEditor::loadSelectedFile() {
 
     if (pluginProcessor) {
         pluginProcessor->clearMidiQueue();
+        // Load sequence into processor so playback continues when editor is closed
+        pluginProcessor->loadPlaybackSequence(playbackSequence, midiFileDuration, midiFileBpm, info.fullPath);
+        pluginProcessor->resetPlayback();
     }
 }
 
