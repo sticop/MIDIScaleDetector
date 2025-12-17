@@ -246,9 +246,12 @@ void MIDIXplorerEditor::resized() {
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
     transportSlider.setBounds(transport);
 
-    // MIDI Note Viewer
+    // MIDI Note Viewer - aligned with transport bar below
     auto noteViewerArea = area.removeFromBottom(120);
-    midiNoteViewer.setBounds(noteViewerArea.reduced(4));
+    auto noteViewerBounds = noteViewerArea.reduced(4);
+    noteViewerBounds.removeFromLeft(50);  // Match play button + spacing
+    noteViewerBounds.removeFromRight(80); // Match time display
+    midiNoteViewer.setBounds(noteViewerBounds);
 
     // File list fills the rest
     fileListBox->setBounds(area.reduced(4));
