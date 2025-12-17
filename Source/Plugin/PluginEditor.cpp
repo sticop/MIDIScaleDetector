@@ -56,9 +56,15 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     sortCombo.onChange = [this]() { sortFiles(); filterFiles(); };
     addAndMakeVisible(sortCombo);
 
-    // Search box
-    searchBox.setTextToShowWhenEmpty("Search files...", juce::Colours::grey);
+    // Search box with modern rounded style
+    searchBox.setTextToShowWhenEmpty("🔍 Search MIDI files...", juce::Colours::grey);
     searchBox.onTextChange = [this]() { filterFiles(); };
+    searchBox.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff2a2a2a));
+    searchBox.setColour(juce::TextEditor::outlineColourId, juce::Colour(0xff444444));
+    searchBox.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(0xff0078d4));
+    searchBox.setColour(juce::TextEditor::textColourId, juce::Colours::white);
+    searchBox.setFont(juce::Font(14.0f));
+    searchBox.setJustification(juce::Justification::centredLeft);
     addAndMakeVisible(searchBox);
 
     // File list with custom draggable listbox
@@ -218,16 +224,19 @@ void MIDIXplorerEditor::resized() {
     // Main content area
     area.removeFromLeft(1); // separator
 
-    // Top bar with key filter and search
-    auto topBar = area.removeFromTop(36);
-    topBar = topBar.reduced(8, 4);
-    fileCountLabel.setBounds(topBar.removeFromLeft(80));
-    keyFilterCombo.setBounds(topBar.removeFromLeft(100).reduced(2));
+    // Search bar row (prominent, full width)
+    auto searchRow = area.removeFromTop(40);
+    searchRow = searchRow.reduced(8, 6);
+    searchBox.setBounds(searchRow);
+    
+    // Controls bar with filters and options
+    auto topBar = area.removeFromTop(32);
+    topBar = topBar.reduced(8, 2);
+    fileCountLabel.setBounds(topBar.removeFromLeft(70));
+    keyFilterCombo.setBounds(topBar.removeFromLeft(105).reduced(2));
     sortCombo.setBounds(topBar.removeFromLeft(110).reduced(2));
     topBar.removeFromLeft(8);
     syncToHostToggle.setBounds(topBar.removeFromRight(90));
-    topBar.removeFromRight(8);
-    searchBox.setBounds(topBar);
 
     // Bottom transport bar
     auto transport = area.removeFromBottom(40).reduced(8, 4);
