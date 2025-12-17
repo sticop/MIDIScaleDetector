@@ -579,11 +579,11 @@ void MIDIXplorerEditor::addLibrary() {
         auto result = fc.getResult();
         if (result.isDirectory()) {
             juce::String newPath = result.getFullPathName();
-            
+
             // Check if this folder or a parent already exists in libraries
             for (size_t i = 0; i < libraries.size(); i++) {
                 juce::String existingPath = libraries[i].path;
-                
+
                 // Check if exact same folder
                 if (newPath == existingPath) {
                     // Refresh existing library instead
@@ -592,7 +592,7 @@ void MIDIXplorerEditor::addLibrary() {
                     filterFiles();
                     return;
                 }
-                
+
                 // Check if new path is a subfolder of existing library
                 if (newPath.startsWith(existingPath + "/") || newPath.startsWith(existingPath + "\\")) {
                     // Subfolder of existing - refresh parent library instead
@@ -601,7 +601,7 @@ void MIDIXplorerEditor::addLibrary() {
                     filterFiles();
                     return;
                 }
-                
+
                 // Check if existing library is a subfolder of new path (new is parent)
                 if (existingPath.startsWith(newPath + "/") || existingPath.startsWith(newPath + "\\")) {
                     // Replace the subfolder entry with the parent
@@ -615,7 +615,7 @@ void MIDIXplorerEditor::addLibrary() {
                     return;
                 }
             }
-            
+
             // No duplicates found, add new library
             Library lib;
             lib.name = result.getFileName();
@@ -819,6 +819,7 @@ void MIDIXplorerEditor::filterFiles() {
 
     fileCountLabel.setText(juce::String((int)filteredFiles.size()) + " files", juce::dontSendNotification);
     fileListBox->updateContent();
+    fileListBox->repaint();
 }
 
 void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
