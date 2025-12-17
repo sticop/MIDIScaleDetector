@@ -315,17 +315,26 @@ void MIDIXplorerEditor::timerCallback() {
                 pluginProcessor->clearMidiQueue();
             }
         } else if (!hostPlaying && wasHostPlaying) {
-            // Host stopped - stop playback and send note-offs
+            // Host stopped - switch to free-run mode but keep playing
+            // Don't stop playback, just note-off and reset for smooth transition
             if (pluginProcessor) {
-                // Send all notes off on all channels
                 for (int ch = 1; ch <= 16; ch++) {
                     pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
                 }
             }
+            // Reset to free-run timing from current position
+            double currentPos = transportSlider.getValue();
+            playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - (currentPos * midiFileDuration);
             playbackNoteIndex = 0;
-            // Pause playback - user can resume by clicking a file
-            isPlaying = false;
-            playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
+            // Find the note index that matches current position
+            double targetTime = currentPos * midiFileDuration;
+            for (int i = 0; i < playbackSequence.getNumEvents(); i++) {
+                if (playbackSequence.getEventPointer(i)->message.getTimeStamp() > targetTime) {
+                    playbackNoteIndex = i;
+                    break;
+                }
+            }
+            // Keep playing - don't stop!
         }
 
         // Detect DAW loop: if host beat jumped backwards significantly, DAW looped
@@ -406,14 +415,13 @@ void MIDIXplorerEditor::timerCallback() {
     }
 
     double currentTime;
-    // When synced, use host BPM; otherwise use MIDI file's original tempo
-    double bpm = synced ? hostBpm : midiFileBpm;
-
-    if (synced) {
+    // Only actually sync when host is playing - otherwise use free-run mode
+    bool actuallySync = synced && hostPlaying;
+    
+    if (actuallySync) {
         // Calculate position based on host beat position relative to when we started
         double beatsElapsed = hostBeat - playbackStartBeat;
         // Convert beats to MIDI file time (seconds at MIDI file's tempo)
-        // beatsElapsed beats = beatsElapsed * 60 / midiFileBpm seconds in MIDI file time
         currentTime = (beatsElapsed * 60.0) / midiFileBpm;
     } else {
         // Freerun mode: use real time directly (MIDI file plays at its original tempo)
@@ -453,7 +461,7 @@ void MIDIXplorerEditor::timerCallback() {
         double overshoot = std::fmod(currentTime, totalDuration);
         playbackNoteIndex = 0;
 
-        if (synced) {
+        if (actuallySync) {
             // Calculate how many beats the file duration represents
             double fileDurationInBeats = (totalDuration * midiFileBpm) / 60.0;
             // Advance start beat by file duration in beats (preserves fractional timing)
@@ -639,6 +647,8 @@ void MIDIXplorerEditor::loadSelectedFile() {
         // Load sequence into processor so playback continues when editor is closed
         pluginProcessor->loadPlaybackSequence(playbackSequence, midiFileDuration, midiFileBpm, info.fullPath);
         pluginProcessor->resetPlayback();
+        // Start playback in processor (will use free-run if DAW is stopped)
+        pluginProcessor->setPlaybackPlaying(true);
     }
 }
 
