@@ -356,6 +356,12 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
 }
 
 void MIDIXplorerEditor::scheduleFileChange() {
+    // Send all notes off immediately when scheduling a file change
+    if (auto* pluginProcessor = dynamic_cast<MIDIScaleDetector::MIDIScalePlugin*>(&processor)) {
+        for (int ch = 1; ch <= 16; ch++) {
+            pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+        }
+    }
     pendingFileChange = true;
     pendingFileIndex = selectedFileIndex;
 }
@@ -367,6 +373,13 @@ void MIDIXplorerEditor::loadSelectedFile() {
     juce::File file(info.fullPath);
     
     if (!file.existsAsFile()) return;
+    
+    // Send all notes off to stop any playing notes from previous file
+    if (auto* pluginProcessor = dynamic_cast<MIDIScaleDetector::MIDIScalePlugin*>(&processor)) {
+        for (int ch = 1; ch <= 16; ch++) {
+            pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+        }
+    }
     
     juce::FileInputStream stream(file);
     if (!stream.openedOk()) return;
@@ -525,6 +538,13 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     juce::File file(info.fullPath);
     
     if (!file.existsAsFile()) return;
+    
+    // Send all notes off to stop any playing notes from previous file
+    if (auto* pluginProcessor = dynamic_cast<MIDIScaleDetector::MIDIScalePlugin*>(&processor)) {
+        for (int ch = 1; ch <= 16; ch++) {
+            pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+        }
+    }
     
     juce::FileInputStream stream(file);
     if (!stream.openedOk()) return;
