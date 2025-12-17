@@ -734,9 +734,9 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
     lib.isScanning = false;
     libraryListBox.repaint();
 
-    // Analyze files in background
+    // Analyze files in background (also re-analyze if relativeKey is missing)
     for (size_t i = 0; i < allFiles.size(); i++) {
-        if (!allFiles[i].analyzed) {
+        if (!allFiles[i].analyzed || allFiles[i].relativeKey.isEmpty()) {
             analyzeFile(i);
         }
     }
@@ -1319,14 +1319,16 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     g.drawText(file.key, 28, 6, 70, 20, juce::Justification::centred);
     
     // Circle of Fifths relative key (shown in parentheses)
-    g.setColour(juce::Colour(0xffff9944));  // Orange for relative key
-    g.setFont(10.0f);
-    g.drawText("(" + file.relativeKey + ")", 100, 6, 40, 20, juce::Justification::centredLeft);
+    if (file.relativeKey.isNotEmpty()) {
+        g.setColour(juce::Colour(0xffff9944));  // Orange for relative key
+        g.setFont(10.0f);
+        g.drawText("(" + file.relativeKey + ")", 102, 6, 50, 20, juce::Justification::centredLeft);
+    }
 
     // File name
     g.setColour(juce::Colours::white);
     g.setFont(13.0f);
-    g.drawText(file.fileName, 142, 0, w - 394, h, juce::Justification::centredLeft);
+    g.drawText(file.fileName, 155, 0, w - 410, h, juce::Justification::centredLeft);
 
     // Instrument name
     g.setColour(juce::Colour(0xffaaaaff));
