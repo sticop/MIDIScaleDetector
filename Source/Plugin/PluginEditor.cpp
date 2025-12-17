@@ -110,7 +110,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     addAndMakeVisible(quantizeCombo);
 
     // Search box with modern rounded style
-    searchBox.setTextToShowWhenEmpty("🔍 Search MIDI files...", juce::Colours::grey);
+    searchBox.setTextToShowWhenEmpty("Search MIDI files...", juce::Colours::grey);
     searchBox.onTextChange = [this]() { filterFiles(); };
     searchBox.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff2a2a2a));
     searchBox.setColour(juce::TextEditor::outlineColourId, juce::Colour(0xff444444));

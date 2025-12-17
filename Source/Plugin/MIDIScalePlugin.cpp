@@ -50,23 +50,23 @@ void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     // Update transport state from host playhead - this runs on the audio thread
     bool wasHostPlaying = transportState.isPlaying.load();
-    
+
     if (auto* playhead = getPlayHead()) {
         if (auto pos = playhead->getPosition()) {
             transportState.isPlaying.store(pos->getIsPlaying(), std::memory_order_relaxed);
-            
+
             if (auto bpm = pos->getBpm()) {
                 transportState.bpm.store(*bpm, std::memory_order_relaxed);
             }
-            
+
             if (auto ppq = pos->getPpqPosition()) {
                 transportState.ppqPosition.store(*ppq, std::memory_order_relaxed);
             }
-            
+
             if (auto timeInSec = pos->getTimeInSeconds()) {
                 transportState.timeInSeconds.store(*timeInSec, std::memory_order_relaxed);
             }
-            
+
             // Auto-start playback when host starts playing (if sync is enabled and file is loaded)
             bool hostNowPlaying = pos->getIsPlaying();
             if (hostNowPlaying && !wasHostPlaying && playbackState.syncToHost.load() && playbackState.fileLoaded.load()) {
@@ -85,7 +85,7 @@ void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             }
         }
     }
-    
+
     // Update MIDI file playback (runs even when editor is closed)
     updatePlayback();
 
@@ -277,27 +277,27 @@ void MIDIScalePlugin::updatePlayback() {
     if (!playbackState.isPlaying.load() || !playbackState.fileLoaded.load()) {
         return;
     }
-    
+
     std::lock_guard<std::mutex> lock(sequenceMutex);
-    
+
     if (playbackSequence.getNumEvents() == 0) {
         return;
     }
-    
+
     double totalDuration = playbackState.fileDuration.load();
     if (totalDuration <= 0) totalDuration = 1.0;
-    
+
     double currentTime;
     double midiFileBpm = playbackState.fileBpm.load();
     if (midiFileBpm <= 0) midiFileBpm = 120.0;  // Fallback
-    
+
     bool synced = playbackState.syncToHost.load() && transportState.isPlaying.load();
     double hostBeat = transportState.ppqPosition.load();
-    
+
     if (synced) {
         double beatsElapsed = hostBeat - playbackState.playbackStartBeat.load();
         currentTime = (beatsElapsed * 60.0) / midiFileBpm;
-        
+
         // If time is negative (DAW seeked backwards), reset to beginning
         if (currentTime < 0) {
             playbackState.playbackNoteIndex.store(0);
@@ -308,14 +308,14 @@ void MIDIScalePlugin::updatePlayback() {
         currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackState.playbackStartTime.load();
         if (currentTime < 0) currentTime = 0;
     }
-    
+
     // Handle wrapping for position display
     double wrappedTime = std::fmod(currentTime, totalDuration);
     if (wrappedTime < 0) wrappedTime += totalDuration;
-    
+
     // Update position for UI
     playbackState.playbackPosition.store(wrappedTime / totalDuration);
-    
+
     // Handle looping
     if (currentTime >= totalDuration) {
         // Send all notes off
@@ -323,7 +323,7 @@ void MIDIScalePlugin::updatePlayback() {
             addMidiMessage(juce::MidiMessage::allNotesOff(ch));
         }
         playbackState.playbackNoteIndex.store(0);
-        
+
         if (synced) {
             // Recalculate start beat based on current host position to stay locked
             double beatsForOvershoot = (wrappedTime * midiFileBpm) / 60.0;
@@ -333,13 +333,13 @@ void MIDIScalePlugin::updatePlayback() {
         }
         currentTime = wrappedTime;
     }
-    
+
     // Play notes that should have triggered by now
     int noteIndex = playbackState.playbackNoteIndex.load();
     while (noteIndex < playbackSequence.getNumEvents()) {
         auto* event = playbackSequence.getEventPointer(noteIndex);
         double eventTime = event->message.getTimeStamp();
-        
+
         // Play notes at or before current time
         if (eventTime <= currentTime) {
             auto msg = event->message;
