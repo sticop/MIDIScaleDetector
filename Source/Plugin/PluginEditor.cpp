@@ -110,7 +110,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     addAndMakeVisible(quantizeCombo);
 
     // Search box with modern rounded style
-    searchBox.setTextToShowWhenEmpty("Search MIDI files...", juce::Colours::grey);
+    searchBox.setTextToShowWhenEmpty("Search files or keys (C Major, Am)...", juce::Colours::grey);
     searchBox.onTextChange = [this]() { filterFiles(); };
     searchBox.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff2a2a2a));
     searchBox.setColour(juce::TextEditor::outlineColourId, juce::Colour(0xff444444));
@@ -303,7 +303,8 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     transportSlider.setVelocityBasedMode(false);
     transportSlider.setColour(juce::Slider::trackColourId, juce::Colour(0xff3a3a3a));
     transportSlider.setColour(juce::Slider::thumbColourId, juce::Colour(0xff00aaff));
-    addAndMakeVisible(transportSlider);
+    // Transport slider hidden - use MIDI viewer for position
+    addChildComponent(transportSlider);
 
 
     timeDisplayLabel.setFont(juce::Font(14.0f));
@@ -457,15 +458,16 @@ void MIDIXplorerEditor::resized() {
     dragButton.setBounds(transport.removeFromLeft(40));
     transport.removeFromLeft(4);
     addToDAWButton.setBounds(transport.removeFromLeft(80));
-    transport.removeFromLeft(8);
-    // Transpose buttons
-    octaveDownButton.setBounds(transport.removeFromLeft(32));
-    semitoneDownButton.setBounds(transport.removeFromLeft(28));
-    semitoneUpButton.setBounds(transport.removeFromLeft(28));
-    octaveUpButton.setBounds(transport.removeFromLeft(32));
-    transport.removeFromLeft(10);
+    
+    // Time display on the right
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
-    transportSlider.setBounds(transport);
+    
+    // Transpose buttons on the right (next to time)
+    octaveUpButton.setBounds(transport.removeFromRight(32));
+    semitoneUpButton.setBounds(transport.removeFromRight(28));
+    semitoneDownButton.setBounds(transport.removeFromRight(28));
+    octaveDownButton.setBounds(transport.removeFromRight(32));
+    transport.removeFromRight(8);
 
     // MIDI Note Viewer - aligned with transport bar below
     auto noteViewerArea = area.removeFromBottom(120);
@@ -1399,12 +1401,12 @@ void MIDIXplorerEditor::filterFiles() {
             if (!matches) continue;
         }
 
-        // Check search filter
+        // Check search filter (matches filename, key, or relative key)
         if (searchText.isNotEmpty()) {
-            if (!file.fileName.toLowerCase().contains(searchText) &&
-                !file.key.toLowerCase().contains(searchText)) {
-                continue;
-            }
+            bool matchesSearch = file.fileName.toLowerCase().contains(searchText) ||
+                                 file.key.toLowerCase().contains(searchText) ||
+                                 file.relativeKey.toLowerCase().contains(searchText);
+            if (!matchesSearch) continue;
         }
 
         filteredFiles.push_back(file);
@@ -1759,26 +1761,26 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseWheelMove(const juce::MouseEvent& e
         float oldZoom = zoomLevel;
         float zoomDelta = wheel.deltaY * 0.3f;
         float newZoom = juce::jlimit(0.5f, 8.0f, zoomLevel + zoomDelta);
-        
+
         if (newZoom != oldZoom) {
             // Calculate the time position under the cursor
             float cursorX = (float)event.x;
             float width = (float)getWidth();
             float pixelsPerSecondOld = width * oldZoom / (float)totalDuration;
             float timeAtCursor = (cursorX + scrollOffset * pixelsPerSecondOld) / pixelsPerSecondOld;
-            
+
             // Update zoom
             zoomLevel = newZoom;
-            
+
             // Adjust scroll offset so the time at cursor stays at cursor position
             float pixelsPerSecondNew = width * newZoom / (float)totalDuration;
             float newScrollPixels = timeAtCursor * pixelsPerSecondNew - cursorX;
             scrollOffset = newScrollPixels / pixelsPerSecondNew;
-            
+
             // Clamp scroll offset to valid range
             float maxScroll = (float)totalDuration * (1.0f - 1.0f / zoomLevel);
             scrollOffset = juce::jlimit(0.0f, juce::jmax(0.0f, maxScroll), scrollOffset);
-            
+
             repaint();
         }
     }
