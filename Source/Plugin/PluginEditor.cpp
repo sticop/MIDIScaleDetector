@@ -865,6 +865,11 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
     isPlaying = true;
     playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
 
+    // Send note-offs for any currently playing notes before switching files
+    if (pluginProcessor) {
+        pluginProcessor->sendActiveNoteOffs();
+    }
+
     // Always load immediately for responsive browsing
     // The file will sync to DAW tempo if sync is enabled
     loadSelectedFile();
