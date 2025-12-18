@@ -110,7 +110,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     addAndMakeVisible(quantizeCombo);
 
     // Search box with modern rounded style
-    searchBox.setTextToShowWhenEmpty("Search files or keys (C Major, Am)...", juce::Colours::grey);
+    searchBox.setTextToShowWhenEmpty("Search files, keys, instruments...", juce::Colours::grey);
     searchBox.onTextChange = [this]() { filterFiles(); };
     searchBox.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff2a2a2a));
     searchBox.setColour(juce::TextEditor::outlineColourId, juce::Colour(0xff444444));
@@ -704,17 +704,17 @@ void MIDIXplorerEditor::timerCallback() {
                 // Calculate MIDI file duration in beats for proper loop alignment
                 double beatsPerLoop = (midiFileDuration * midiFileBpm) / 60.0;
                 if (beatsPerLoop <= 0) beatsPerLoop = 4.0;  // Safety fallback
-                
+
                 // Calculate where in the MIDI file we should be based on host position
                 double beatsIntoLoop = std::fmod(hostBeat, beatsPerLoop);
                 if (beatsIntoLoop < 0) beatsIntoLoop += beatsPerLoop;
-                
+
                 // Convert to time offset in MIDI file
                 double timeOffsetInFile = (beatsIntoLoop * 60.0) / midiFileBpm;
-                
+
                 // Find the note index that corresponds to this time
                 playbackNoteIndex = 0;
-                
+
                 // Set start beat to align with current host position
                 playbackStartBeat = hostBeat - beatsIntoLoop;
                 playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - timeOffsetInFile;
@@ -754,7 +754,7 @@ void MIDIXplorerEditor::timerCallback() {
         // Use a wider window to ensure we don't miss the beat
         bool nearBeatStart = currentBeatFrac < 0.2 || currentBeatFrac > 0.95;
         bool beatChanged = (int)std::floor(lastBeatPosition) != currentBeat;
-        
+
         if (nearBeatStart || beatChanged) {
             // Apply pending file change
             if (pendingFileIndex >= 0 && pendingFileIndex < (int)filteredFiles.size()) {
@@ -992,7 +992,7 @@ void MIDIXplorerEditor::loadSelectedFile() {
         // Start playback in processor (will use free-run if DAW is stopped)
         pluginProcessor->setPlaybackPlaying(true);
     }
-    
+
     // If host is already playing, sync our timing to current position
     if (isHostPlaying()) {
         playbackStartBeat = getHostBeatPosition();
@@ -1602,11 +1602,12 @@ void MIDIXplorerEditor::filterFiles() {
             if (!matches) continue;
         }
 
-        // Check search filter (matches filename, key, or relative key)
+        // Check search filter (matches filename, key, relative key, or instrument)
         if (searchText.isNotEmpty()) {
             bool matchesSearch = file.fileName.toLowerCase().contains(searchText) ||
                                  file.key.toLowerCase().contains(searchText) ||
-                                 file.relativeKey.toLowerCase().contains(searchText);
+                                 file.relativeKey.toLowerCase().contains(searchText) ||
+                                 file.instrument.toLowerCase().contains(searchText);
             if (!matchesSearch) continue;
         }
 
@@ -1893,7 +1894,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
 void MIDIXplorerEditor::MIDINoteViewer::setSequence(const juce::MidiMessageSequence* seq, double duration) {
     sequence = seq;
     totalDuration = duration > 0 ? duration : 1.0;
-    
+
     // Reset zoom and scroll when loading a new file
     zoomLevel = 1.0f;
     scrollOffset = 0.0f;
@@ -2171,11 +2172,11 @@ void MIDIXplorerEditor::LibraryListModel::listBoxItemClicked(int row, const juce
                 juce::String libName = owner.libraries[(size_t)libIndex].name;
                 owner.allFiles.erase(
                     std::remove_if(owner.allFiles.begin(), owner.allFiles.end(),
-                        [&libName](const MIDIXplorerEditor::MIDIFileInfo& f) { 
-                            return f.libraryName == libName; 
+                        [&libName](const MIDIXplorerEditor::MIDIFileInfo& f) {
+                            return f.libraryName == libName;
                         }),
                     owner.allFiles.end());
-                
+
                 // Remove the library
                 owner.libraries.erase(owner.libraries.begin() + libIndex);
                 owner.saveLibraries();
