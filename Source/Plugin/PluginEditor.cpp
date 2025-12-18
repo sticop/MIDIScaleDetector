@@ -466,6 +466,69 @@ void MIDIXplorerEditor::timerCallback() {
     // Increment spinner frame for loading animations
     spinnerFrame = (spinnerFrame + 1) % 8;
 
+    // Process background file scanning (non-blocking, incremental)
+    if (isScanningFiles && currentDirIterator) {
+        int filesFound = 0;
+        static constexpr int FILES_PER_SCAN_TICK = 50;  // Discover 50 files per tick
+        
+        while (filesFound < FILES_PER_SCAN_TICK && currentDirIterator->next()) {
+            auto file = currentDirIterator->getFile();
+            auto ext = file.getFileExtension().toLowerCase();
+            if (ext == ".mid" || ext == ".midi") {
+                // Check for duplicates
+                bool isDuplicate = false;
+                for (const auto& existingFile : allFiles) {
+                    if (existingFile.fullPath == file.getFullPathName()) {
+                        isDuplicate = true;
+                        break;
+                    }
+                }
+                if (!isDuplicate) {
+                    MIDIFileInfo info;
+                    info.fileName = file.getFileName();
+                    info.fullPath = file.getFullPathName();
+                    info.libraryName = libraries[currentScanLibraryIndex].name;
+                    info.key = "---";
+                    allFiles.push_back(info);
+                    libraries[currentScanLibraryIndex].fileCount++;
+                    
+                    // Queue for analysis
+                    analysisQueue.push_back(allFiles.size() - 1);
+                    filesFound++;
+                }
+            }
+        }
+        
+        // Check if current directory scan is complete
+        if (!currentDirIterator->next()) {
+            currentDirIterator.reset();
+            libraries[currentScanLibraryIndex].isScanning = false;
+            
+            // Move to next library in queue
+            if (!scanQueue.empty()) {
+                currentScanLibraryIndex = scanQueue.front();
+                scanQueue.erase(scanQueue.begin());
+                libraries[currentScanLibraryIndex].isScanning = true;
+                juce::File dir(libraries[currentScanLibraryIndex].path);
+                if (dir.isDirectory()) {
+                    currentDirIterator = std::make_unique<juce::DirectoryIterator>(dir, true, "*.mid;*.midi");
+                }
+            } else {
+                isScanningFiles = false;
+                sortFiles();
+            }
+            filterFiles();
+            libraryListBox.repaint();
+        } else {
+            // Re-position iterator (we moved past one file checking if done)
+            // Update UI periodically during scanning
+            if (filesFound > 0) {
+                filterFiles();
+                libraryListBox.repaint();
+            }
+        }
+    }
+
     // Process background analysis queue (non-blocking, a few files per tick)
     if (!analysisQueue.empty()) {
         int filesAnalyzed = 0;
@@ -952,13 +1015,31 @@ void MIDIXplorerEditor::addLibrary() {
 
 void MIDIXplorerEditor::scanLibraries() {
     allFiles.clear();
+    analysisQueue.clear();
+    scanQueue.clear();
+    
+    // Queue all enabled libraries for background scanning
     for (size_t i = 0; i < libraries.size(); i++) {
         if (libraries[i].enabled) {
-            scanLibrary(i);
+            libraries[i].fileCount = 0;
+            scanQueue.push_back(i);
         }
     }
-    sortFiles();
+    
+    // Start scanning first library
+    if (!scanQueue.empty()) {
+        currentScanLibraryIndex = scanQueue.front();
+        scanQueue.erase(scanQueue.begin());
+        libraries[currentScanLibraryIndex].isScanning = true;
+        juce::File dir(libraries[currentScanLibraryIndex].path);
+        if (dir.isDirectory()) {
+            currentDirIterator = std::make_unique<juce::DirectoryIterator>(dir, true, "*.mid;*.midi");
+            isScanningFiles = true;
+        }
+    }
+    
     filterFiles();
+    libraryListBox.repaint();
 }
 
 void MIDIXplorerEditor::scanLibrary(size_t index) {
@@ -969,52 +1050,29 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
     lib.fileCount = 0;
 
     juce::File dir(lib.path);
-    if (!dir.isDirectory()) return;
-
-    auto files = dir.findChildFiles(juce::File::findFiles, true, "*.mid;*.midi");
-
-    // Count total MIDI files in folder (regardless of whether already imported)
-    lib.fileCount = (int)files.size();
-
-    for (const auto& file : files) {
-        // Check for duplicates - skip if file already exists in library
-        bool isDuplicate = false;
-        for (const auto& existingFile : allFiles) {
-            if (existingFile.fullPath == file.getFullPathName()) {
-                isDuplicate = true;
-                break;
-            }
-        }
-        if (isDuplicate) continue;
-
-        MIDIFileInfo info;
-        info.fileName = file.getFileName();
-        info.fullPath = file.getFullPathName();
-        info.libraryName = lib.name;
-        info.key = "---";
-        allFiles.push_back(info);
+    if (!dir.isDirectory()) {
+        lib.isScanning = false;
+        return;
     }
 
-    lib.isScanning = false;
+    // Add to scan queue for background processing
+    // Check if already scanning or in queue
+    if (isScanningFiles && currentScanLibraryIndex == index) return;
+    for (size_t idx : scanQueue) {
+        if (idx == index) return;
+    }
+    
+    if (!isScanningFiles) {
+        // Start scanning immediately
+        currentScanLibraryIndex = index;
+        currentDirIterator = std::make_unique<juce::DirectoryIterator>(dir, true, "*.mid;*.midi");
+        isScanningFiles = true;
+    } else {
+        // Queue for later
+        scanQueue.push_back(index);
+    }
+    
     libraryListBox.repaint();
-
-    // Queue files for background analysis (non-blocking)
-    for (size_t i = 0; i < allFiles.size(); i++) {
-        if (!allFiles[i].analyzed || allFiles[i].relativeKey.isEmpty()) {
-            // Check if not already in queue
-            bool inQueue = false;
-            for (size_t idx : analysisQueue) {
-                if (idx == i) { inQueue = true; break; }
-            }
-            if (!inQueue) {
-                analysisQueue.push_back(i);
-            }
-        }
-    }
-
-    sortFiles();
-    filterFiles();
-    updateKeyFilterFromDetectedScales();
 
     // Ensure the currently playing file stays selected
     if (!filteredFiles.empty()) {
@@ -1105,10 +1163,10 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         info.analyzed = true;  // Mark as analyzed to avoid retrying
         return;
     }
-    
+
     // Capture file size
     info.fileSize = file.getSize();
-    
+
     juce::FileInputStream stream(file);
     if (!stream.openedOk()) {
         info.analyzed = true;
