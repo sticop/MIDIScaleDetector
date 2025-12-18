@@ -155,8 +155,12 @@ private:
     public:
         void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
         void mouseMagnify(const juce::MouseEvent& event, float scaleFactor) override;
+        void mouseDown(const juce::MouseEvent& e) override;
+        void mouseDrag(const juce::MouseEvent& e) override;
+        void mouseUp(const juce::MouseEvent& e) override;
         float getZoomLevel() const { return zoomLevel; }
         void setZoomLevel(float newZoom) { zoomLevel = juce::jlimit(0.5f, 32.0f, newZoom); repaint(); }
+        void resetZoom() { zoomLevel = 1.0f; scrollOffset = 0.0f; repaint(); }
     public:
         MIDINoteViewer() { setMouseCursor(juce::MouseCursor::CrosshairCursor); }
         void paint(juce::Graphics& g) override;
@@ -176,6 +180,11 @@ private:
         juce::Point<int> hoverPos;
         float zoomLevel = 1.0f;
         float scrollOffset = 0.0f;
+        
+        // Selection for click-to-zoom
+        bool isDraggingSelection = false;
+        juce::Point<int> selectionStart;
+        juce::Point<int> selectionEnd;
     };
 
     std::unique_ptr<LibraryListModel> libraryModel;

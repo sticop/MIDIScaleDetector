@@ -1889,6 +1889,15 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
         g.setColour(juce::Colours::white);
         g.drawText(noteName, tooltipX, tooltipY, textWidth, textHeight, juce::Justification::centred);
     }
+    
+    // Draw selection rectangle if dragging
+    if (isDraggingSelection) {
+        auto selRect = juce::Rectangle<int>(selectionStart, selectionEnd);
+        g.setColour(juce::Colour(0x400078d4));  // Semi-transparent blue fill
+        g.fillRect(selRect);
+        g.setColour(juce::Colour(0xff0078d4));  // Blue border
+        g.drawRect(selRect, 2);
+    }
 }
 
 void MIDIXplorerEditor::MIDINoteViewer::setSequence(const juce::MidiMessageSequence* seq, double duration) {
@@ -2042,6 +2051,62 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseMagnify(const juce::MouseEvent& eve
         float maxScroll = (float)totalDuration * (1.0f - 1.0f / zoomLevel);
         scrollOffset = juce::jlimit(0.0f, juce::jmax(0.0f, maxScroll), scrollOffset);
 
+        repaint();
+    }
+}
+
+void MIDIXplorerEditor::MIDINoteViewer::mouseDown(const juce::MouseEvent& e) {
+    if (e.mods.isRightButtonDown()) {
+        // Right-click: reset zoom completely
+        resetZoom();
+    } else if (e.mods.isLeftButtonDown()) {
+        // Left-click: start selection for zoom
+        isDraggingSelection = true;
+        selectionStart = e.getPosition();
+        selectionEnd = e.getPosition();
+        repaint();
+    }
+}
+
+void MIDIXplorerEditor::MIDINoteViewer::mouseDrag(const juce::MouseEvent& e) {
+    if (isDraggingSelection) {
+        selectionEnd = e.getPosition();
+        repaint();
+    }
+}
+
+void MIDIXplorerEditor::MIDINoteViewer::mouseUp(const juce::MouseEvent& e) {
+    if (isDraggingSelection) {
+        isDraggingSelection = false;
+        
+        // Calculate selection rectangle
+        auto selRect = juce::Rectangle<int>(selectionStart, selectionEnd);
+        
+        // Only zoom if selection is at least 10 pixels wide
+        if (selRect.getWidth() > 10) {
+            float width = (float)getWidth();
+            float pixelsPerSecond = width * zoomLevel / (float)totalDuration;
+            
+            // Calculate time range of selection
+            float selStartTime = (selRect.getX() / pixelsPerSecond) + scrollOffset;
+            float selEndTime = (selRect.getRight() / pixelsPerSecond) + scrollOffset;
+            float selDuration = selEndTime - selStartTime;
+            
+            if (selDuration > 0.01f) {
+                // Calculate new zoom level to fit selection
+                float newZoom = (float)totalDuration / selDuration;
+                newZoom = juce::jlimit(0.5f, 32.0f, newZoom);
+                
+                // Set scroll offset to selection start
+                scrollOffset = selStartTime;
+                zoomLevel = newZoom;
+                
+                // Clamp scroll offset
+                float maxScroll = (float)totalDuration * (1.0f - 1.0f / zoomLevel);
+                scrollOffset = juce::jlimit(0.0f, juce::jmax(0.0f, maxScroll), scrollOffset);
+            }
+        }
+        
         repaint();
     }
 }
