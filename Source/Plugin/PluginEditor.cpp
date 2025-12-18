@@ -181,9 +181,16 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
         int selectedRow = fileListBox->getLastRowSelected();
         if (selectedRow >= 0 && selectedRow < static_cast<int>(filteredFiles.size())) {
             auto& selectedFile = filteredFiles[static_cast<size_t>(selectedRow)];
-            juce::StringArray files;
-            files.add(selectedFile.fullPath);
-            juce::DragAndDropContainer::performExternalDragDropOfFiles(files, true);
+            juce::File srcFile(selectedFile.fullPath);
+            if (srcFile.existsAsFile()) {
+                // Copy to temp for reliable drag
+                auto dragFile = makeTempCopyForDrag(srcFile);
+                if (dragFile.existsAsFile()) {
+                    juce::StringArray files;
+                    files.add(dragFile.getFullPathName());
+                    juce::DragAndDropContainer::performExternalDragDropOfFiles(files, false);
+                }
+            }
         }
     };
     addAndMakeVisible(dragButton);

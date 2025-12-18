@@ -73,7 +73,6 @@ private:
     public:
         DraggableListBox(const juce::String& name, MIDIXplorerEditor& o)
             : juce::ListBox(name), owner(o) {
-            // Allow row dragging
             setMultipleSelectionEnabled(false);
         }
 
@@ -86,7 +85,7 @@ private:
             if (e.x < 24 && dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
                 owner.toggleFavorite(dragStartRow);
                 starClicked = true;
-                return;  // Don't process further
+                return;
             }
             starClicked = false;
 
@@ -95,27 +94,25 @@ private:
 
         void mouseDrag(const juce::MouseEvent& e) override {
             if (starClicked) return;
-            if (isDragging) return;  // Already dragging
+            if (isDragging) return;
 
             // Start native file drag when mouse moves enough
             if (dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
                 auto distance = e.getPosition().getDistanceFrom(dragStartPos);
-                if (distance > 5) {  // Lower threshold for better responsiveness
+                if (distance > 5) {
                     auto filePath = owner.filteredFiles[(size_t)dragStartRow].fullPath;
-                    juce::File file(filePath);
-                    if (file.existsAsFile()) {
+                    juce::File srcFile(filePath);
+                    if (srcFile.existsAsFile()) {
                         isDragging = true;
                         
-                        // Create StringArray with the file path
-                        juce::StringArray files;
-                        files.add(file.getFullPathName());
-
-                        // Perform native OS file drag
-                        // canMoveFiles=false means copy, not move
-                        bool success = juce::DragAndDropContainer::performExternalDragDropOfFiles(files, false);
-                        (void)success;  // Ignore result
+                        // Copy to temp directory for reliable drag to DAW
+                        auto dragFile = makeTempCopyForDrag(srcFile);
+                        if (dragFile.existsAsFile()) {
+                            juce::StringArray files;
+                            files.add(dragFile.getFullPathName());
+                            juce::DragAndDropContainer::performExternalDragDropOfFiles(files, false);
+                        }
                         
-                        // Reset state after drag operation completes
                         isDragging = false;
                         dragStartRow = -1;
                     }
@@ -130,8 +127,22 @@ private:
             juce::ListBox::mouseUp(e);
         }
         
-        
     private:
+        // Create a temp copy of the file for reliable drag to DAW
+        juce::File makeTempCopyForDrag(const juce::File& src) {
+            auto tempDir = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                             .getChildFile("MIDIXplorerDrags");
+            tempDir.createDirectory();
+            
+            auto dst = tempDir.getNonexistentChildFile(src.getFileNameWithoutExtension(),
+                                                        src.getFileExtension());
+            
+            if (src.copyFileTo(dst))
+                return dst;
+            
+            return {};
+        }
+        
         MIDIXplorerEditor& owner;
         bool isDragging = false;
         bool starClicked = false;
@@ -265,6 +276,16 @@ private:
     void addToRecentlyPlayed(const juce::String& filePath);
     void quantizeMidi();
     void selectAndPreview(int row);
+    
+    // Utility for drag and drop with temp file copy
+    juce::File makeTempCopyForDrag(const juce::File& src) {
+        auto cacheDir = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                            .getChildFile("MIDIXplorerDrags");
+        cacheDir.createDirectory();
+        auto dest = cacheDir.getChildFile(src.getFileName());
+        src.copyFileTo(dest);
+        return dest;
+    }
 
     // Persistence
     void saveLibraries();
