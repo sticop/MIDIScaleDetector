@@ -338,8 +338,11 @@ void MIDIScalePlugin::updatePlayback() {
 
     // Check if we've reached the end - do a clean reset
     if (currentTime >= totalDuration) {
-        // Send note-offs only for notes that are actually playing
+        // Send note-offs for active notes, plus allNotesOff as safety
         sendActiveNoteOffs();
+        for (int ch = 1; ch <= 16; ch++) {
+            addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+        }
 
         // Reset note index to start from scratch
         playbackState.playbackNoteIndex.store(0);

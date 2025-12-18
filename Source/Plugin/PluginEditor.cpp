@@ -799,9 +799,12 @@ void MIDIXplorerEditor::timerCallback() {
 
     // Handle looping
     if (currentTime >= totalDuration) {
-        // Send note-offs only for notes that are actually playing
+        // Send note-offs for active notes, plus allNotesOff as safety
         if (pluginProcessor) {
             pluginProcessor->sendActiveNoteOffs();
+            for (int ch = 1; ch <= 16; ch++) {
+                pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
+            }
         }
         // Calculate how much we overshot and preserve it for smooth loop
         double overshoot = std::fmod(currentTime, totalDuration);
