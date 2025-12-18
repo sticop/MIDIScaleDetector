@@ -161,6 +161,8 @@ private:
         float getZoomLevel() const { return zoomLevel; }
         void setZoomLevel(float newZoom) { zoomLevel = juce::jlimit(0.5f, 32.0f, newZoom); repaint(); }
         void resetZoom() { zoomLevel = 1.0f; scrollOffset = 0.0f; repaint(); }
+        void setPlayingNotes(const std::vector<int>& notes) { playingNotes = notes; repaint(); }
+        static constexpr int PIANO_WIDTH = 40;  // Width of piano keyboard on left
     public:
         MIDINoteViewer() { setMouseCursor(juce::MouseCursor::CrosshairCursor); }
         void paint(juce::Graphics& g) override;
@@ -180,6 +182,7 @@ private:
         juce::Point<int> hoverPos;
         float zoomLevel = 1.0f;
         float scrollOffset = 0.0f;
+        std::vector<int> playingNotes;  // Currently playing notes
 
         // Selection for click-to-zoom
         bool isDraggingSelection = false;

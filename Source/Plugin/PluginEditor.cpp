@@ -267,17 +267,16 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     addChildComponent(syncToHostToggle);
 
     // Velocity slider for volume control
-    velocityLabel.setText("Vol:", juce::dontSendNotification);
+    velocityLabel.setText("Volume:", juce::dontSendNotification);
     velocityLabel.setFont(juce::Font(12.0f));
     velocityLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
     velocityLabel.setJustificationType(juce::Justification::centredRight);
     addAndMakeVisible(velocityLabel);
 
     velocitySlider.setSliderStyle(juce::Slider::LinearHorizontal);
-    velocitySlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 40, 20);
+    velocitySlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     velocitySlider.setRange(0.0, 200.0, 1.0);  // 0% to 200%
     velocitySlider.setValue(100.0);  // Default 100%
-    velocitySlider.setTextValueSuffix("%");
     velocitySlider.setColour(juce::Slider::trackColourId, juce::Colour(0xff3a3a3a));
     velocitySlider.setColour(juce::Slider::thumbColourId, juce::Colours::orange);
     velocitySlider.setColour(juce::Slider::textBoxTextColourId, juce::Colours::white);
@@ -530,8 +529,8 @@ void MIDIXplorerEditor::resized() {
     keyFilterCombo.setBounds(topBar.removeFromLeft(105).reduced(2));
     sortCombo.setBounds(topBar.removeFromLeft(110).reduced(2));
     // Volume slider on the right
-    velocitySlider.setBounds(topBar.removeFromRight(100).reduced(2));
-    velocityLabel.setBounds(topBar.removeFromRight(28));
+    velocitySlider.setBounds(topBar.removeFromRight(80).reduced(2));
+    velocityLabel.setBounds(topBar.removeFromRight(55));
     // syncToHostToggle hidden
 
     // Bottom transport bar
@@ -800,6 +799,12 @@ void MIDIXplorerEditor::timerCallback() {
     if (position >= 0 && position <= 1) {
         transportSlider.setValue(position, juce::dontSendNotification);
         midiNoteViewer.setPlaybackPosition(position);
+        
+        // Update currently playing notes display
+        if (pluginProcessor) {
+            midiNoteViewer.setPlayingNotes(pluginProcessor->getActiveNoteNumbers());
+        }
+        
         currentPlaybackPosition = position;
         fileListBox->repaint();  // Refresh to show progress bar
 
@@ -1805,17 +1810,51 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
     if (noteRange <= 0) noteRange = 1;
 
     float noteHeight = (float)bounds.getHeight() / (float)noteRange;
-    float pixelsPerSecond = (float)bounds.getWidth() * zoomLevel / (float)totalDuration;
+    
+    // Reserve space for piano keyboard on left
+    auto pianoArea = bounds.removeFromLeft(PIANO_WIDTH);
+    auto noteArea = bounds;
+    
+    float pixelsPerSecond = (float)noteArea.getWidth() * zoomLevel / (float)totalDuration;
     float scrollPixels = scrollOffset * pixelsPerSecond;
 
-    // Draw piano key background hints
+    // Draw piano keyboard on left
     for (int note = lowestNote; note <= highestNote; note++) {
         float y = bounds.getHeight() - (note - lowestNote + 1) * noteHeight;
         int noteInOctave = note % 12;
         bool isBlackKey = (noteInOctave == 1 || noteInOctave == 3 || noteInOctave == 6 || noteInOctave == 8 || noteInOctave == 10);
+        
+        // Check if this note is currently playing
+        bool isPlaying = std::find(playingNotes.begin(), playingNotes.end(), note) != playingNotes.end();
+        
+        // Draw piano key
+        if (isBlackKey) {
+            g.setColour(isPlaying ? juce::Colours::orange : juce::Colour(0xff222222));
+        } else {
+            g.setColour(isPlaying ? juce::Colours::orange : juce::Colour(0xffe8e8e8));
+        }
+        g.fillRect(pianoArea.getX(), (int)y, PIANO_WIDTH - 2, (int)noteHeight);
+        
+        // Draw key border
+        g.setColour(juce::Colour(0xff444444));
+        g.drawRect(pianoArea.getX(), (int)y, PIANO_WIDTH - 2, (int)noteHeight);
+        
+        // Draw note name on C notes
+        if (noteInOctave == 0 && noteHeight >= 8) {
+            g.setColour(juce::Colours::black);
+            g.setFont(juce::Font(juce::jmin(10.0f, noteHeight - 2)));
+            g.drawText("C" + juce::String(note / 12 - 1), pianoArea.getX() + 2, (int)y, PIANO_WIDTH - 6, (int)noteHeight, juce::Justification::centredLeft);
+        }
+    }
+
+    // Draw piano key background hints in note area
+    for (int note = lowestNote; note <= highestNote; note++) {
+        float y = noteArea.getHeight() - (note - lowestNote + 1) * noteHeight;
+        int noteInOctave = note % 12;
+        bool isBlackKey = (noteInOctave == 1 || noteInOctave == 3 || noteInOctave == 6 || noteInOctave == 8 || noteInOctave == 10);
         if (isBlackKey) {
             g.setColour(juce::Colour(0xff161616));
-            g.fillRect(0.0f, y, (float)bounds.getWidth(), noteHeight);
+            g.fillRect((float)noteArea.getX(), y, (float)noteArea.getWidth(), noteHeight);
         }
     }
 
@@ -1838,13 +1877,13 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
                 }
             }
 
-            float x = (float)(startTime * pixelsPerSecond) - scrollPixels;
+            float x = noteArea.getX() + (float)(startTime * pixelsPerSecond) - scrollPixels;
             float w = (float)((endTime - startTime) * pixelsPerSecond);
             if (w < 2.0f) w = 2.0f;
-            float y = bounds.getHeight() - (noteNum - lowestNote + 1) * noteHeight;
+            float y = noteArea.getHeight() - (noteNum - lowestNote + 1) * noteHeight;
 
             // Skip notes outside visible area
-            if (x + w < 0 || x > bounds.getWidth()) continue;
+            if (x + w < noteArea.getX() || x > noteArea.getRight()) continue;
 
             // Note color based on velocity, highlight if hovered
             int velocity = msg.getVelocity();
@@ -1862,9 +1901,23 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
 
     // Draw playhead
     if (playPosition >= 0 && playPosition <= 1.0) {
-        float xPos = (float)(playPosition * totalDuration * pixelsPerSecond) - scrollPixels;
+        float xPos = noteArea.getX() + (float)(playPosition * totalDuration * pixelsPerSecond) - scrollPixels;
         g.setColour(juce::Colours::white);
-        g.drawVerticalLine((int)xPos, 0.0f, (float)bounds.getHeight());
+        g.drawVerticalLine((int)xPos, 0.0f, (float)noteArea.getHeight());
+    }
+
+    // Draw currently playing notes/chord display at top
+    if (!playingNotes.empty()) {
+        juce::String chordText;
+        for (size_t i = 0; i < playingNotes.size(); i++) {
+            if (i > 0) chordText += " ";
+            chordText += getNoteNameFromMidi(playingNotes[i]);
+        }
+        g.setColour(juce::Colour(0xcc000000));
+        g.fillRoundedRectangle((float)noteArea.getX() + 5, 5.0f, (float)g.getCurrentFont().getStringWidth(chordText) + 16, 22.0f, 4.0f);
+        g.setColour(juce::Colours::orange);
+        g.setFont(14.0f);
+        g.drawText(chordText, noteArea.getX() + 13, 5, noteArea.getWidth() - 20, 22, juce::Justification::left);
     }
 
     // Draw note name tooltip if hovering

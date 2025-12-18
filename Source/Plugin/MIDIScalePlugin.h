@@ -105,6 +105,12 @@ public:
     std::vector<ActiveNote> activeNotes;
     std::mutex activeNotesMutex;
     void sendActiveNoteOffs();  // Send note-offs for all active notes
+    std::vector<int> getActiveNoteNumbers() {
+        std::lock_guard<std::mutex> lock(activeNotesMutex);
+        std::vector<int> notes;
+        for (const auto& n : activeNotes) notes.push_back(n.noteNumber);
+        return notes;
+    }
 
     // Playback control methods
     void setPlaybackPlaying(bool playing) { playbackState.isPlaying = playing; }
