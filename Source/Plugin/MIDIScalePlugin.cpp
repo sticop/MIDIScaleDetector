@@ -346,7 +346,8 @@ void MIDIScalePlugin::updatePlayback() {
         if (synced) {
             // Align to the next loop start based on total duration in beats
             double beatsPerLoop = (totalDuration * midiFileBpm) / 60.0;
-            double loopsCompleted = std::floor((hostBeat - playbackState.playbackStartBeat.load()) * midiFileBpm / 60.0 / totalDuration);
+            double beatsElapsedTotal = hostBeat - playbackState.playbackStartBeat.load();
+            double loopsCompleted = std::floor(beatsElapsedTotal / beatsPerLoop);
             playbackState.playbackStartBeat.store(playbackState.playbackStartBeat.load() + loopsCompleted * beatsPerLoop);
 
             // Recalculate current time

@@ -693,17 +693,22 @@ void MIDIXplorerEditor::timerCallback() {
                     }
                 }
 
-                // Calculate where in the MIDI file we should be based on host beat fraction
-                double beatFraction = hostBeat - std::floor(hostBeat);
-
+                // Calculate MIDI file duration in beats for proper loop alignment
+                double beatsPerLoop = (midiFileDuration * midiFileBpm) / 60.0;
+                if (beatsPerLoop <= 0) beatsPerLoop = 4.0;  // Safety fallback
+                
+                // Calculate where in the MIDI file we should be based on host position
+                double beatsIntoLoop = std::fmod(hostBeat, beatsPerLoop);
+                if (beatsIntoLoop < 0) beatsIntoLoop += beatsPerLoop;
+                
                 // Convert to time offset in MIDI file
-                double timeOffsetInFile = (beatFraction * 60.0) / midiFileBpm;
-
+                double timeOffsetInFile = (beatsIntoLoop * 60.0) / midiFileBpm;
+                
                 // Find the note index that corresponds to this time
                 playbackNoteIndex = 0;
-
+                
                 // Set start beat to align with current host position
-                playbackStartBeat = hostBeat - (timeOffsetInFile * midiFileBpm / 60.0);
+                playbackStartBeat = hostBeat - beatsIntoLoop;
                 playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - timeOffsetInFile;
 
                 // Immediately play any notes at time 0 or very start
