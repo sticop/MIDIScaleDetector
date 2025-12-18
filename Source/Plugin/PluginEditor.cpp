@@ -160,12 +160,10 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
             isPlaying = false;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u25B6"));  // Play icon
             playbackNoteIndex = 0;  // Reset for next play
-            // Send all notes off when stopping
+            // Send note-offs for active notes when stopping
             if (pluginProcessor) {
                 pluginProcessor->setPlaybackPlaying(false);
-                for (int ch = 1; ch <= 16; ch++) {
-                    pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-                }
+                pluginProcessor->sendActiveNoteOffs();
             }
         }
     };
@@ -671,9 +669,7 @@ void MIDIXplorerEditor::timerCallback() {
         } else if (!hostPlaying && wasHostPlaying) {
             // Host stopped - pause playback and update button
             if (pluginProcessor) {
-                for (int ch = 1; ch <= 16; ch++) {
-                    pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-                }
+                pluginProcessor->sendActiveNoteOffs();
                 pluginProcessor->setPlaybackPlaying(false);
             }
             isPlaying = false;
@@ -688,9 +684,8 @@ void MIDIXplorerEditor::timerCallback() {
             if (beatDiff < -0.5) {
                 // DAW looped back - restart MIDI aligned to exact playhead position
                 if (pluginProcessor) {
-                    for (int ch = 1; ch <= 16; ch++) {
-                        pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-                    }
+                    // Use proper note-offs instead of allNotesOff to prevent cutting chords
+                    pluginProcessor->sendActiveNoteOffs();
                 }
 
                 // Calculate MIDI file duration in beats for proper loop alignment
@@ -800,11 +795,9 @@ void MIDIXplorerEditor::timerCallback() {
 
     // Handle looping
     if (currentTime >= totalDuration) {
-        // Send all notes off before looping to prevent overlapping notes
+        // Send note-offs only for notes that are actually playing
         if (pluginProcessor) {
-            for (int ch = 1; ch <= 16; ch++) {
-                pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-            }
+            pluginProcessor->sendActiveNoteOffs();
         }
         // Calculate how much we overshot and preserve it for smooth loop
         double overshoot = std::fmod(currentTime, totalDuration);
@@ -1000,9 +993,7 @@ void MIDIXplorerEditor::restartPlayback() {
     } else {
         // Restart immediately in freerun mode
         if (pluginProcessor) {
-            for (int ch = 1; ch <= 16; ch++) {
-                pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-            }
+            pluginProcessor->sendActiveNoteOffs();
         }
         playbackNoteIndex = 0;
         playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;

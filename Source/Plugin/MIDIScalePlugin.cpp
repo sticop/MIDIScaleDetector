@@ -78,10 +78,8 @@ void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             else if (!hostNowPlaying && wasHostPlaying && playbackState.syncToHost.load()) {
                 playbackState.isPlaying.store(false);  // Stop playback state
                 playbackState.playbackNoteIndex.store(0);  // Reset for next play
-                // Send all notes off
-                for (int ch = 1; ch <= 16; ch++) {
-                    addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-                }
+                // Send note-offs for currently playing notes
+                sendActiveNoteOffs();
             }
         }
     }
@@ -319,10 +317,8 @@ void MIDIScalePlugin::updatePlayback() {
 
         // If time is negative (DAW seeked backwards), reset completely
         if (currentTime < 0) {
-            // Send all notes off for clean state
-            for (int ch = 1; ch <= 16; ch++) {
-                addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-            }
+            // Send note-offs for currently playing notes
+            sendActiveNoteOffs();
             playbackState.playbackNoteIndex.store(0);
             playbackState.playbackStartBeat.store(hostBeat);
             currentTime = 0;
@@ -334,10 +330,8 @@ void MIDIScalePlugin::updatePlayback() {
 
     // Check if we've reached the end - do a clean reset
     if (currentTime >= totalDuration) {
-        // Send all notes off for a clean slate
-        for (int ch = 1; ch <= 16; ch++) {
-            addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-        }
+        // Send note-offs only for notes that are actually playing
+        sendActiveNoteOffs();
 
         // Reset note index to start from scratch
         playbackState.playbackNoteIndex.store(0);
@@ -388,11 +382,32 @@ void MIDIScalePlugin::updatePlayback() {
                 msg = juce::MidiMessage::noteOn(msg.getChannel(), transposedNote, (juce::uint8)velocity);
                 msg.setTimeStamp(eventTime);
                 addMidiMessage(msg);
+                
+                // Track this note so we can send proper note-off
+                if (event->noteOffObject != nullptr) {
+                    std::lock_guard<std::mutex> noteLock(activeNotesMutex);
+                    ActiveNote an;
+                    an.channel = msg.getChannel();
+                    an.noteNumber = transposedNote;
+                    an.noteOffTime = event->noteOffObject->message.getTimeStamp();
+                    activeNotes.push_back(an);
+                }
             } else if (msg.isNoteOff()) {
                 // Apply transpose to note-off too
                 int transposedNoteOff = juce::jlimit(0, 127, msg.getNoteNumber() + playbackState.transposeAmount.load());
                 msg = juce::MidiMessage::noteOff(msg.getChannel(), transposedNoteOff);
                 addMidiMessage(msg);
+                
+                // Remove from active notes
+                {
+                    std::lock_guard<std::mutex> noteLock(activeNotesMutex);
+                    activeNotes.erase(
+                        std::remove_if(activeNotes.begin(), activeNotes.end(),
+                            [&](const ActiveNote& an) {
+                                return an.channel == msg.getChannel() && an.noteNumber == transposedNoteOff;
+                            }),
+                        activeNotes.end());
+                }
             }
             noteIndex++;
         } else {
@@ -400,6 +415,14 @@ void MIDIScalePlugin::updatePlayback() {
         }
     }
     playbackState.playbackNoteIndex.store(noteIndex);
+}
+
+void MIDIScalePlugin::sendActiveNoteOffs() {
+    std::lock_guard<std::mutex> noteLock(activeNotesMutex);
+    for (const auto& an : activeNotes) {
+        addMidiMessage(juce::MidiMessage::noteOff(an.channel, an.noteNumber));
+    }
+    activeNotes.clear();
 }
 
 

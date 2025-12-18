@@ -94,6 +94,17 @@ public:
     PlaybackState playbackState;
     juce::MidiMessageSequence playbackSequence;
     std::mutex sequenceMutex;
+    
+    // Active note tracking - maps (channel, note) to note-off time
+    // This ensures notes get their proper note-offs even across loops
+    struct ActiveNote {
+        int channel;
+        int noteNumber;
+        double noteOffTime;  // When this note should end (in MIDI file time)
+    };
+    std::vector<ActiveNote> activeNotes;
+    std::mutex activeNotesMutex;
+    void sendActiveNoteOffs();  // Send note-offs for all active notes
 
     // Playback control methods
     void setPlaybackPlaying(bool playing) { playbackState.isPlaying = playing; }
