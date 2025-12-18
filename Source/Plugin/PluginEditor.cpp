@@ -2003,13 +2003,12 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     int secs = (int)(file.duration) % 60;
 
     if (row == owner.selectedFileIndex && owner.isPlaying && owner.fileLoaded) {
-        // Show elapsed / total time for the playing file
+        // Show elapsed / total time for the playing file (minutes only)
         double elapsed = owner.currentPlaybackPosition * file.duration;
         int elapsedMins = (int)(elapsed) / 60;
-        int elapsedSecs = (int)(elapsed) % 60;
-        juce::String timeStr = juce::String::formatted("%d:%02d / %d:%02d", elapsedMins, elapsedSecs, mins, secs);
+        juce::String timeStr = juce::String::formatted("%d / %d", elapsedMins, mins);
         g.setColour(juce::Colour(0xff00cc88));  // Green for playing
-        g.drawText(timeStr, w - 95, 0, 90, h, juce::Justification::centredRight);
+        g.drawText(timeStr, w - 70, 0, 65, h, juce::Justification::centredRight);
     } else {
         juce::String durationStr = juce::String::formatted("%dbar %d:%02d", bars, mins, secs);
         g.drawText(durationStr, w - 85, 0, 80, h, juce::Justification::centredRight);
