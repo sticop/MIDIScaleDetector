@@ -2145,10 +2145,22 @@ void MIDIXplorerEditor::LibraryListModel::listBoxItemClicked(int row, const juce
                 owner.saveLibraries();
                 owner.scanLibraries();
             } else if (result == 4) {
+                // Remove all cached files from this library
+                juce::String libName = owner.libraries[(size_t)libIndex].name;
+                owner.allFiles.erase(
+                    std::remove_if(owner.allFiles.begin(), owner.allFiles.end(),
+                        [&libName](const MIDIXplorerEditor::MIDIFileInfo& f) { 
+                            return f.libraryName == libName; 
+                        }),
+                    owner.allFiles.end());
+                
+                // Remove the library
                 owner.libraries.erase(owner.libraries.begin() + libIndex);
                 owner.saveLibraries();
+                owner.saveFileCache();  // Update cache after removing files
                 owner.libraryListBox.updateContent();
-                owner.scanLibraries();
+                owner.filterFiles();
+                owner.updateKeyFilterFromDetectedScales();
             }
         });
     }
