@@ -738,8 +738,12 @@ void MIDIXplorerEditor::timerCallback() {
         int currentBeat = (int)std::floor(hostBeat);
         double currentBeatFrac = hostBeat - currentBeat;
 
-        // Check if we crossed a beat boundary
-        if (currentBeatFrac < 0.15 || (int)std::floor(lastBeatPosition) != currentBeat) {
+        // Check if we crossed a beat boundary (or are close to a beat start)
+        // Use a wider window to ensure we don't miss the beat
+        bool nearBeatStart = currentBeatFrac < 0.2 || currentBeatFrac > 0.95;
+        bool beatChanged = (int)std::floor(lastBeatPosition) != currentBeat;
+        
+        if (nearBeatStart || beatChanged) {
             // Apply pending file change
             if (pendingFileIndex >= 0 && pendingFileIndex < (int)filteredFiles.size()) {
                 fileListBox->selectRow(pendingFileIndex);
