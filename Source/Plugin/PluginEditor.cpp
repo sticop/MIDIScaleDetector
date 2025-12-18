@@ -469,11 +469,9 @@ void MIDIXplorerEditor::resized() {
     octaveDownButton.setBounds(transport.removeFromRight(32));
     transport.removeFromRight(8);
 
-    // MIDI Note Viewer - aligned with transport bar below
+    // MIDI Note Viewer - full width
     auto noteViewerArea = area.removeFromBottom(240);
-    auto noteViewerBounds = noteViewerArea.reduced(4);
-    noteViewerBounds.removeFromLeft(50);  // Match play button + spacing
-    noteViewerBounds.removeFromRight(80); // Match time display
+    auto noteViewerBounds = noteViewerArea.reduced(4, 4);
     midiNoteViewer.setBounds(noteViewerBounds);
 
     // File list fills the rest
@@ -1783,6 +1781,34 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseWheelMove(const juce::MouseEvent& e
 
             repaint();
         }
+    }
+}
+
+void MIDIXplorerEditor::MIDINoteViewer::mouseMagnify(const juce::MouseEvent& event, float scaleFactor) {
+    // Pinch-to-zoom on trackpad, centered on cursor position
+    float oldZoom = zoomLevel;
+    float newZoom = juce::jlimit(0.5f, 8.0f, zoomLevel * scaleFactor);
+    
+    if (newZoom != oldZoom) {
+        // Calculate the time position under the cursor
+        float cursorX = (float)event.x;
+        float width = (float)getWidth();
+        float pixelsPerSecondOld = width * oldZoom / (float)totalDuration;
+        float timeAtCursor = (cursorX + scrollOffset * pixelsPerSecondOld) / pixelsPerSecondOld;
+        
+        // Update zoom
+        zoomLevel = newZoom;
+        
+        // Adjust scroll offset so the time at cursor stays at cursor position
+        float pixelsPerSecondNew = width * newZoom / (float)totalDuration;
+        float newScrollPixels = timeAtCursor * pixelsPerSecondNew - cursorX;
+        scrollOffset = newScrollPixels / pixelsPerSecondNew;
+        
+        // Clamp scroll offset to valid range
+        float maxScroll = (float)totalDuration * (1.0f - 1.0f / zoomLevel);
+        scrollOffset = juce::jlimit(0.0f, juce::jmax(0.0f, maxScroll), scrollOffset);
+        
+        repaint();
     }
 }
 

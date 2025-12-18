@@ -130,6 +130,7 @@ private:
     class MIDINoteViewer : public juce::Component {
     public:
         void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
+        void mouseMagnify(const juce::MouseEvent& event, float scaleFactor) override;
         float getZoomLevel() const { return zoomLevel; }
         void setZoomLevel(float newZoom) { zoomLevel = juce::jlimit(0.5f, 4.0f, newZoom); repaint(); }
     public:
