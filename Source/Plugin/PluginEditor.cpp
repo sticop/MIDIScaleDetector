@@ -403,7 +403,7 @@ void MIDIXplorerEditor::loadFileCache() {
                     info.fileSize = (juce::int64)fileObj->getProperty("fileSize");
                     info.instrument = fileObj->getProperty("instrument").toString();
                     info.analyzed = (bool)fileObj->getProperty("analyzed");
-                    
+
                     // Only add if file still exists
                     if (juce::File(info.fullPath).existsAsFile()) {
                         allFiles.push_back(info);
@@ -459,10 +459,10 @@ void MIDIXplorerEditor::loadLibraries() {
                 }
             }
             libraryListBox.updateContent();
-            
+
             // Load cached files first
             loadFileCache();
-            
+
             // Update library file counts from cache
             for (auto& lib : libraries) {
                 lib.fileCount = 0;
@@ -472,7 +472,7 @@ void MIDIXplorerEditor::loadLibraries() {
                     }
                 }
             }
-            
+
             // Then scan for any new files
             scanLibraries();
         }
@@ -522,8 +522,6 @@ void MIDIXplorerEditor::resized() {
     keyFilterCombo.setBounds(topBar.removeFromLeft(105).reduced(2));
     sortCombo.setBounds(topBar.removeFromLeft(110).reduced(2));
     topBar.removeFromLeft(8);
-    quantizeCombo.setBounds(topBar.removeFromLeft(145).reduced(2));
-    topBar.removeFromLeft(8);
     velocityLabel.setBounds(topBar.removeFromLeft(28));
     velocitySlider.setBounds(topBar.removeFromLeft(100).reduced(2));
     // syncToHostToggle hidden
@@ -535,11 +533,10 @@ void MIDIXplorerEditor::resized() {
     dragButton.setBounds(transport.removeFromLeft(40));
     // addToDAWButton hidden
 
-    // Time display on the right
-    timeDisplayLabel.setBounds(transport.removeFromRight(80));
-
-    // Transpose dropdown on the right (next to time)
+    // Quantize and Transpose dropdowns on the right
     transposeComboBox.setBounds(transport.removeFromRight(100));
+    transport.removeFromRight(4);
+    quantizeCombo.setBounds(transport.removeFromRight(145));
     transport.removeFromRight(8);
 
     // MIDI Note Viewer - full width
@@ -637,7 +634,7 @@ void MIDIXplorerEditor::timerCallback() {
             fileListBox->repaint();
             libraryListBox.repaint();
         }
-        
+
         // Save cache when analysis completes and no more scanning
         if (analysisQueue.empty() && !isScanningFiles) {
             saveFileCache();
@@ -2042,7 +2039,7 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
         auto& lib = owner.libraries[(size_t)libIndex];
         name = lib.name;
         fileCount = lib.fileCount;
-        icon = juce::String::fromUTF8("\u{1F4C1}");  // Folder icon
+        icon = juce::String::fromUTF8("\u{1F4BE}");  // Hard drive/disk icon
         isLibraryScanning = lib.isScanning;
         // Also check if any files from this library are in analysis queue
         if (!isLibraryScanning) {
@@ -2252,18 +2249,19 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     juce::String bpmStr = juce::String((int)file.bpm) + " bpm";
     g.drawText(bpmStr, w - 130, 0, 60, h, juce::Justification::centredRight);
 
-    // Draw duration (bars and time) or elapsed time for playing file
+    // Draw duration (bars and time) with elapsed time for playing file
     int bars = (int)(file.durationBeats / 4.0);
     int mins = (int)(file.duration) / 60;
     int secs = (int)(file.duration) % 60;
 
     if (row == owner.selectedFileIndex && owner.isPlaying && owner.fileLoaded) {
-        // Show elapsed / total time for the playing file (minutes only)
+        // Show elapsed / total time for the playing file
         double elapsed = owner.currentPlaybackPosition * file.duration;
         int elapsedMins = (int)(elapsed) / 60;
-        juce::String timeStr = juce::String::formatted("%d / %d", elapsedMins, mins);
+        int elapsedSecs = (int)(elapsed) % 60;
+        juce::String timeStr = juce::String::formatted("%d:%02d / %d:%02d", elapsedMins, elapsedSecs, mins, secs);
         g.setColour(juce::Colour(0xff00cc88));  // Green for playing
-        g.drawText(timeStr, w - 70, 0, 65, h, juce::Justification::centredRight);
+        g.drawText(timeStr, w - 95, 0, 90, h, juce::Justification::centredRight);
     } else {
         juce::String durationStr = juce::String::formatted("%dbar %d:%02d", bars, mins, secs);
         g.drawText(durationStr, w - 85, 0, 80, h, juce::Justification::centredRight);
