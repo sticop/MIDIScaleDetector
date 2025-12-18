@@ -479,6 +479,24 @@ void MIDIXplorerEditor::resized() {
 }
 
 void MIDIXplorerEditor::timerCallback() {
+    // Process background analysis queue (non-blocking, a few files per tick)
+    if (!analysisQueue.empty()) {
+        int filesAnalyzed = 0;
+        while (!analysisQueue.empty() && filesAnalyzed < FILES_PER_TICK) {
+            size_t idx = analysisQueue.front();
+            analysisQueue.erase(analysisQueue.begin());
+            if (idx < allFiles.size() && !allFiles[idx].analyzed) {
+                analyzeFile(idx);
+                filesAnalyzed++;
+            }
+        }
+        // Update UI if we analyzed files
+        if (filesAnalyzed > 0) {
+            updateKeyFilterFromDetectedScales();
+            fileListBox->repaint();
+        }
+    }
+    
     bool synced = syncToHostToggle.getToggleState();
     bool hostPlaying = isHostPlaying();
     double hostBpm = getHostBpm();
@@ -990,10 +1008,17 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
     lib.isScanning = false;
     libraryListBox.repaint();
 
-    // Analyze files in background (also re-analyze if relativeKey is missing)
+    // Queue files for background analysis (non-blocking)
     for (size_t i = 0; i < allFiles.size(); i++) {
         if (!allFiles[i].analyzed || allFiles[i].relativeKey.isEmpty()) {
-            analyzeFile(i);
+            // Check if not already in queue
+            bool inQueue = false;
+            for (size_t idx : analysisQueue) {
+                if (idx == i) { inQueue = true; break; }
+            }
+            if (!inQueue) {
+                analysisQueue.push_back(i);
+            }
         }
     }
 
@@ -1086,20 +1111,21 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     auto& info = allFiles[index];
     juce::File file(info.fullPath);
 
-    if (!file.existsAsFile()) return;
-
-    // Send all notes off to stop any playing notes from previous file
-    if (auto* pluginProcessor = dynamic_cast<MIDIScaleDetector::MIDIScalePlugin*>(&processor)) {
-        for (int ch = 1; ch <= 16; ch++) {
-            pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-        }
+    if (!file.existsAsFile()) {
+        info.analyzed = true;  // Mark as analyzed to avoid retrying
+        return;
+    }
+    juce::FileInputStream stream(file);
+    if (!stream.openedOk()) {
+        info.analyzed = true;
+        return;
     }
 
-    juce::FileInputStream stream(file);
-    if (!stream.openedOk()) return;
-
     juce::MidiFile midiFile;
-    if (!midiFile.readFrom(stream)) return;
+    if (!midiFile.readFrom(stream)) {
+        info.analyzed = true;
+        return;
+    }
 
     // Count notes per pitch class
     std::array<int, 12> noteHistogram = {0};
@@ -1788,26 +1814,26 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseMagnify(const juce::MouseEvent& eve
     // Pinch-to-zoom on trackpad, centered on cursor position
     float oldZoom = zoomLevel;
     float newZoom = juce::jlimit(0.5f, 8.0f, zoomLevel * scaleFactor);
-    
+
     if (newZoom != oldZoom) {
         // Calculate the time position under the cursor
         float cursorX = (float)event.x;
         float width = (float)getWidth();
         float pixelsPerSecondOld = width * oldZoom / (float)totalDuration;
         float timeAtCursor = (cursorX + scrollOffset * pixelsPerSecondOld) / pixelsPerSecondOld;
-        
+
         // Update zoom
         zoomLevel = newZoom;
-        
+
         // Adjust scroll offset so the time at cursor stays at cursor position
         float pixelsPerSecondNew = width * newZoom / (float)totalDuration;
         float newScrollPixels = timeAtCursor * pixelsPerSecondNew - cursorX;
         scrollOffset = newScrollPixels / pixelsPerSecondNew;
-        
+
         // Clamp scroll offset to valid range
         float maxScroll = (float)totalDuration * (1.0f - 1.0f / zoomLevel);
         scrollOffset = juce::jlimit(0.0f, juce::jmax(0.0f, maxScroll), scrollOffset);
-        
+
         repaint();
     }
 }
