@@ -677,6 +677,12 @@ void MIDIXplorerEditor::timerCallback() {
             playbackNoteIndex = 0;
         }
 
+        // Only update wasHostPlaying if we have a file loaded
+        // This ensures the "host started" transition can fire when first file is selected
+        if (fileLoaded) {
+            wasHostPlaying = hostPlaying;
+        }
+
         // Detect DAW loop: if host beat jumped backwards significantly, DAW looped
         if (hostPlaying && wasHostPlaying && lastBeatPosition > 0) {
             double beatDiff = hostBeat - lastBeatPosition;
@@ -726,7 +732,6 @@ void MIDIXplorerEditor::timerCallback() {
             }
         }
 
-        wasHostPlaying = hostPlaying;
     }
 
     if (!isPlaying || !fileLoaded) {
