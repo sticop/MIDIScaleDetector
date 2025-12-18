@@ -94,7 +94,7 @@ public:
     PlaybackState playbackState;
     juce::MidiMessageSequence playbackSequence;
     std::mutex sequenceMutex;
-    
+
     // Active note tracking - maps (channel, note) to note-off time
     // This ensures notes get their proper note-offs even across loops
     struct ActiveNote {
@@ -129,7 +129,7 @@ public:
     void setTransposeAmount(int amount) { playbackState.transposeAmount = juce::jlimit(-24, 24, amount); }
     int getTransposeAmount() const { return playbackState.transposeAmount; }
     juce::String getCurrentFilePath() const { return playbackState.currentFilePath; }
-    
+
     // Queue MIDI for insertion at DAW playhead
     void queueMidiForInsertion(const juce::MidiFile& midiFile);
 
@@ -149,7 +149,7 @@ private:
     // MIDI queue for playback from editor
     std::vector<juce::MidiMessage> midiQueue;
     std::mutex midiQueueMutex;
-    
+
     // MIDI insertion queue
     juce::MidiMessageSequence insertionQueue;
     std::atomic<bool> hasQueuedInsertion{false};

@@ -799,12 +799,12 @@ void MIDIXplorerEditor::timerCallback() {
     if (position >= 0 && position <= 1) {
         transportSlider.setValue(position, juce::dontSendNotification);
         midiNoteViewer.setPlaybackPosition(position);
-        
+
         // Update currently playing notes display
         if (pluginProcessor) {
             midiNoteViewer.setPlayingNotes(pluginProcessor->getActiveNoteNumbers());
         }
-        
+
         currentPlaybackPosition = position;
         fileListBox->repaint();  // Refresh to show progress bar
 
@@ -1413,11 +1413,32 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         }
     }
 
-    info.key = juce::String(noteNames[bestKey]) + " " + scales[bestScaleIdx].name;
+    // Get mode degree string (e.g., "2nd", "4th", etc.)
+    juce::String scaleName = scales[bestScaleIdx].name;
+    juce::String modeInfo;
+    
+    if (scaleName == "Dorian") {
+        modeInfo = " (Maj 2nd)";
+    } else if (scaleName == "Phrygian") {
+        modeInfo = " (Maj 3rd)";
+    } else if (scaleName == "Lydian") {
+        modeInfo = " (Maj 4th)";
+    } else if (scaleName == "Mixolydian") {
+        modeInfo = " (Maj 5th)";
+    } else if (scaleName == "Minor") {
+        modeInfo = " (Maj 6th)";
+    } else if (scaleName == "Locrian") {
+        modeInfo = " (Maj 7th)";
+    } else if (scaleName == "Harmonic Min") {
+        modeInfo = "";
+    } else if (scaleName == "Melodic Min") {
+        modeInfo = "";
+    }
+
+    info.key = juce::String(noteNames[bestKey]) + " " + scales[bestScaleIdx].name + modeInfo;
 
     // Calculate Circle of Fifths - show parent major key and relative minor
     // Each mode has a specific relationship to its parent major scale
-    juce::String scaleName = scales[bestScaleIdx].name;
     int parentMajorRoot = bestKey;  // Default: same as detected root
 
     // Calculate parent major key based on mode (semitones from mode root to parent major)
@@ -1810,11 +1831,11 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
     if (noteRange <= 0) noteRange = 1;
 
     float noteHeight = (float)bounds.getHeight() / (float)noteRange;
-    
+
     // Reserve space for piano keyboard on left
     auto pianoArea = bounds.removeFromLeft(PIANO_WIDTH);
     auto noteArea = bounds;
-    
+
     float pixelsPerSecond = (float)noteArea.getWidth() * zoomLevel / (float)totalDuration;
     float scrollPixels = scrollOffset * pixelsPerSecond;
 
@@ -1823,10 +1844,10 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
         float y = bounds.getHeight() - (note - lowestNote + 1) * noteHeight;
         int noteInOctave = note % 12;
         bool isBlackKey = (noteInOctave == 1 || noteInOctave == 3 || noteInOctave == 6 || noteInOctave == 8 || noteInOctave == 10);
-        
+
         // Check if this note is currently playing
         bool isPlaying = std::find(playingNotes.begin(), playingNotes.end(), note) != playingNotes.end();
-        
+
         // Draw piano key
         if (isBlackKey) {
             g.setColour(isPlaying ? juce::Colours::orange : juce::Colour(0xff222222));
@@ -1834,11 +1855,11 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
             g.setColour(isPlaying ? juce::Colours::orange : juce::Colour(0xffe8e8e8));
         }
         g.fillRect(pianoArea.getX(), (int)y, PIANO_WIDTH - 2, (int)noteHeight);
-        
+
         // Draw key border
         g.setColour(juce::Colour(0xff444444));
         g.drawRect(pianoArea.getX(), (int)y, PIANO_WIDTH - 2, (int)noteHeight);
-        
+
         // Draw note name on C notes
         if (noteInOctave == 0 && noteHeight >= 8) {
             g.setColour(juce::Colours::black);
