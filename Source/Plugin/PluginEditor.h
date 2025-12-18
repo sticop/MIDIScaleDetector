@@ -213,7 +213,7 @@ private:
     // Pending file change
     bool pendingFileChange = false;
     int pendingFileIndex = -1;
-    
+
     // Background analysis queue for large libraries
     std::vector<size_t> analysisQueue;
     size_t analysisIndex = 0;

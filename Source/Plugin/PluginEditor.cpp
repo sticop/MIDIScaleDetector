@@ -216,14 +216,15 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
             }
         }
     };
-    addAndMakeVisible(addToDAWButton);
+    // addToDAWButton hidden - drag button is preferred
+    addChildComponent(addToDAWButton);
 
     // Zoom is now handled by mouse wheel in the MIDI viewer
 
     // Transpose buttons - semitone
-    semitoneDownButton.setButtonText("-1");
-    semitoneDownButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a5a));
-    semitoneDownButton.setColour(juce::TextButton::textColourOffId, juce::Colours::lightblue);
+    semitoneDownButton.setButtonText(juce::String::fromUTF8("\u266D"));  // Flat symbol
+    semitoneDownButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2a4a6a));
+    semitoneDownButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     semitoneDownButton.setTooltip("Transpose down 1 semitone");
     semitoneDownButton.onClick = [this]() {
         transposeAmount = juce::jlimit(-24, 24, transposeAmount - 1);
@@ -231,9 +232,9 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     };
     addAndMakeVisible(semitoneDownButton);
 
-    semitoneUpButton.setButtonText("+1");
-    semitoneUpButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a5a));
-    semitoneUpButton.setColour(juce::TextButton::textColourOffId, juce::Colours::lightblue);
+    semitoneUpButton.setButtonText(juce::String::fromUTF8("\u266F"));  // Sharp symbol
+    semitoneUpButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2a4a6a));
+    semitoneUpButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     semitoneUpButton.setTooltip("Transpose up 1 semitone");
     semitoneUpButton.onClick = [this]() {
         transposeAmount = juce::jlimit(-24, 24, transposeAmount + 1);
@@ -242,20 +243,20 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     addAndMakeVisible(semitoneUpButton);
 
     // Transpose buttons - octave
-    octaveDownButton.setButtonText("-12");
-    octaveDownButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff5a3a5a));
-    octaveDownButton.setColour(juce::TextButton::textColourOffId, juce::Colours::pink);
-    octaveDownButton.setTooltip("Transpose down 1 octave");
+    octaveDownButton.setButtonText("8vb");
+    octaveDownButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a2a4a));
+    octaveDownButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    octaveDownButton.setTooltip("Transpose down 1 octave (-12 semitones)");
     octaveDownButton.onClick = [this]() {
         transposeAmount = juce::jlimit(-24, 24, transposeAmount - 12);
         applyTransposeToPlayback();
     };
     addAndMakeVisible(octaveDownButton);
 
-    octaveUpButton.setButtonText("+12");
-    octaveUpButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff5a3a5a));
-    octaveUpButton.setColour(juce::TextButton::textColourOffId, juce::Colours::pink);
-    octaveUpButton.setTooltip("Transpose up 1 octave");
+    octaveUpButton.setButtonText("8va");
+    octaveUpButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a2a4a));
+    octaveUpButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    octaveUpButton.setTooltip("Transpose up 1 octave (+12 semitones)");
     octaveUpButton.onClick = [this]() {
         transposeAmount = juce::jlimit(-24, 24, transposeAmount + 12);
         applyTransposeToPlayback();
@@ -456,17 +457,17 @@ void MIDIXplorerEditor::resized() {
     playPauseButton.setBounds(transport.removeFromLeft(40));
     transport.removeFromLeft(4);
     dragButton.setBounds(transport.removeFromLeft(40));
-    transport.removeFromLeft(4);
-    addToDAWButton.setBounds(transport.removeFromLeft(80));
+    // addToDAWButton hidden
 
     // Time display on the right
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
 
     // Transpose buttons on the right (next to time)
-    octaveUpButton.setBounds(transport.removeFromRight(32));
-    semitoneUpButton.setBounds(transport.removeFromRight(28));
-    semitoneDownButton.setBounds(transport.removeFromRight(28));
-    octaveDownButton.setBounds(transport.removeFromRight(32));
+    octaveUpButton.setBounds(transport.removeFromRight(36));
+    semitoneUpButton.setBounds(transport.removeFromRight(32));
+    transport.removeFromRight(8);
+    semitoneDownButton.setBounds(transport.removeFromRight(32));
+    octaveDownButton.setBounds(transport.removeFromRight(36));
     transport.removeFromRight(8);
 
     // MIDI Note Viewer - full width
@@ -496,7 +497,7 @@ void MIDIXplorerEditor::timerCallback() {
             fileListBox->repaint();
         }
     }
-    
+
     bool synced = syncToHostToggle.getToggleState();
     bool hostPlaying = isHostPlaying();
     double hostBpm = getHostBpm();
@@ -2013,12 +2014,23 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     juce::String bpmStr = juce::String((int)file.bpm) + " bpm";
     g.drawText(bpmStr, w - 130, 0, 60, h, juce::Justification::centredRight);
 
-    // Draw duration (bars and time)
+    // Draw duration (bars and time) or elapsed time for playing file
     int bars = (int)(file.durationBeats / 4.0);
     int mins = (int)(file.duration) / 60;
     int secs = (int)(file.duration) % 60;
-    juce::String durationStr = juce::String::formatted("%dbar %d:%02d", bars, mins, secs);
-    g.drawText(durationStr, w - 85, 0, 80, h, juce::Justification::centredRight);
+    
+    if (row == owner.selectedFileIndex && owner.isPlaying && owner.fileLoaded) {
+        // Show elapsed / total time for the playing file
+        double elapsed = owner.currentPlaybackPosition * file.duration;
+        int elapsedMins = (int)(elapsed) / 60;
+        int elapsedSecs = (int)(elapsed) % 60;
+        juce::String timeStr = juce::String::formatted("%d:%02d / %d:%02d", elapsedMins, elapsedSecs, mins, secs);
+        g.setColour(juce::Colour(0xff00cc88));  // Green for playing
+        g.drawText(timeStr, w - 95, 0, 90, h, juce::Justification::centredRight);
+    } else {
+        juce::String durationStr = juce::String::formatted("%dbar %d:%02d", bars, mins, secs);
+        g.drawText(durationStr, w - 85, 0, 80, h, juce::Justification::centredRight);
+    }
 
     // Progress bar for currently playing file
     if (row == owner.selectedFileIndex && owner.isPlaying && owner.fileLoaded) {
