@@ -218,24 +218,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     };
     addAndMakeVisible(addToDAWButton);
 
-    // Zoom buttons
-    zoomOutButton.setButtonText(juce::String::fromUTF8("\u2796"));  // Minus sign
-    zoomOutButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
-    zoomOutButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
-    zoomOutButton.setTooltip("Zoom out");
-    zoomOutButton.onClick = [this]() {
-        midiNoteViewer.setZoomLevel(midiNoteViewer.getZoomLevel() - 0.25f);
-    };
-    addAndMakeVisible(zoomOutButton);
-
-    zoomInButton.setButtonText(juce::String::fromUTF8("\u2795"));  // Plus sign
-    zoomInButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
-    zoomInButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
-    zoomInButton.setTooltip("Zoom in");
-    zoomInButton.onClick = [this]() {
-        midiNoteViewer.setZoomLevel(midiNoteViewer.getZoomLevel() + 0.25f);
-    };
-    addAndMakeVisible(zoomInButton);
+    // Zoom is now handled by mouse wheel in the MIDI viewer
 
     // Transpose buttons - semitone
     semitoneDownButton.setButtonText("-1");
@@ -475,9 +458,6 @@ void MIDIXplorerEditor::resized() {
     transport.removeFromLeft(4);
     addToDAWButton.setBounds(transport.removeFromLeft(80));
     transport.removeFromLeft(8);
-    zoomOutButton.setBounds(transport.removeFromLeft(28));
-    zoomInButton.setBounds(transport.removeFromLeft(28));
-    transport.removeFromLeft(12);
     // Transpose buttons
     octaveDownButton.setBounds(transport.removeFromLeft(32));
     semitoneDownButton.setBounds(transport.removeFromLeft(28));
@@ -1593,6 +1573,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
 
     float noteHeight = (float)bounds.getHeight() / (float)noteRange;
     float pixelsPerSecond = (float)bounds.getWidth() * zoomLevel / (float)totalDuration;
+    float scrollPixels = scrollOffset * pixelsPerSecond;
 
     // Draw piano key background hints
     for (int note = lowestNote; note <= highestNote; note++) {
@@ -1624,10 +1605,13 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
                 }
             }
 
-            float x = (float)(startTime * pixelsPerSecond);
+            float x = (float)(startTime * pixelsPerSecond) - scrollPixels;
             float w = (float)((endTime - startTime) * pixelsPerSecond);
             if (w < 2.0f) w = 2.0f;
             float y = bounds.getHeight() - (noteNum - lowestNote + 1) * noteHeight;
+
+            // Skip notes outside visible area
+            if (x + w < 0 || x > bounds.getWidth()) continue;
 
             // Note color based on velocity, highlight if hovered
             int velocity = msg.getVelocity();
@@ -1645,7 +1629,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
 
     // Draw playhead
     if (playPosition >= 0 && playPosition <= 1.0) {
-        float xPos = playPosition * bounds.getWidth();
+        float xPos = (float)(playPosition * totalDuration * pixelsPerSecond) - scrollPixels;
         g.setColour(juce::Colours::white);
         g.drawVerticalLine((int)xPos, 0.0f, (float)bounds.getHeight());
     }
@@ -1770,11 +1754,33 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseExit(const juce::MouseEvent& /*e*/)
 }
 
 void MIDIXplorerEditor::MIDINoteViewer::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) {
-    // Zoom with mouse wheel
+    // Zoom with mouse wheel, centered on cursor position
     if (wheel.deltaY != 0) {
+        float oldZoom = zoomLevel;
         float zoomDelta = wheel.deltaY * 0.3f;
-        zoomLevel = juce::jlimit(0.5f, 4.0f, zoomLevel + zoomDelta);
-        repaint();
+        float newZoom = juce::jlimit(0.5f, 8.0f, zoomLevel + zoomDelta);
+        
+        if (newZoom != oldZoom) {
+            // Calculate the time position under the cursor
+            float cursorX = (float)event.x;
+            float width = (float)getWidth();
+            float pixelsPerSecondOld = width * oldZoom / (float)totalDuration;
+            float timeAtCursor = (cursorX + scrollOffset * pixelsPerSecondOld) / pixelsPerSecondOld;
+            
+            // Update zoom
+            zoomLevel = newZoom;
+            
+            // Adjust scroll offset so the time at cursor stays at cursor position
+            float pixelsPerSecondNew = width * newZoom / (float)totalDuration;
+            float newScrollPixels = timeAtCursor * pixelsPerSecondNew - cursorX;
+            scrollOffset = newScrollPixels / pixelsPerSecondNew;
+            
+            // Clamp scroll offset to valid range
+            float maxScroll = (float)totalDuration * (1.0f - 1.0f / zoomLevel);
+            scrollOffset = juce::jlimit(0.0f, juce::jmax(0.0f, maxScroll), scrollOffset);
+            
+            repaint();
+        }
     }
 }
 
