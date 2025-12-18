@@ -173,10 +173,7 @@ private:
     juce::TextButton addToDAWButton;  // Add to DAW at playhead
     juce::TextButton zoomInButton;
     juce::TextButton zoomOutButton;
-    juce::TextButton semitoneUpButton;    // Transpose up semitone
-    juce::TextButton semitoneDownButton;  // Transpose down semitone
-    juce::TextButton octaveUpButton;      // Transpose up octave
-    juce::TextButton octaveDownButton;    // Transpose down octave
+    juce::ComboBox transposeComboBox;    // Transpose dropdown
     int transposeAmount = 0;              // Current transpose in semitones
     bool isPlaying = true;
     juce::ToggleButton syncToHostToggle{"DAW Sync"};

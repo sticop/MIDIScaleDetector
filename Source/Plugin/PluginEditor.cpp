@@ -221,47 +221,34 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
 
     // Zoom is now handled by mouse wheel in the MIDI viewer
 
-    // Transpose buttons - semitone
-    semitoneDownButton.setButtonText(juce::String::fromUTF8("\u266D"));  // Flat symbol
-    semitoneDownButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2a4a6a));
-    semitoneDownButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
-    semitoneDownButton.setTooltip("Transpose down 1 semitone");
-    semitoneDownButton.onClick = [this]() {
-        transposeAmount = juce::jlimit(-24, 24, transposeAmount - 1);
+    // Transpose dropdown
+    transposeComboBox.addItem("+36", 1);
+    transposeComboBox.addItem("+24", 2);
+    transposeComboBox.addItem("+12", 3);
+    transposeComboBox.addItem(juce::CharPointer_UTF8("\xc2\xb1 0"), 4);  // ± 0
+    transposeComboBox.addItem("-12", 5);
+    transposeComboBox.addItem("-24", 6);
+    transposeComboBox.addItem("-36", 7);
+    transposeComboBox.setSelectedId(4);  // Default to ± 0
+    transposeComboBox.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff3a3a3a));
+    transposeComboBox.setColour(juce::ComboBox::textColourId, juce::Colours::white);
+    transposeComboBox.setColour(juce::ComboBox::arrowColourId, juce::Colours::white);
+    transposeComboBox.setTooltip("Transpose");
+    transposeComboBox.onChange = [this]() {
+        int selectedId = transposeComboBox.getSelectedId();
+        switch (selectedId) {
+            case 1: transposeAmount = 36; break;
+            case 2: transposeAmount = 24; break;
+            case 3: transposeAmount = 12; break;
+            case 4: transposeAmount = 0; break;
+            case 5: transposeAmount = -12; break;
+            case 6: transposeAmount = -24; break;
+            case 7: transposeAmount = -36; break;
+            default: transposeAmount = 0; break;
+        }
         applyTransposeToPlayback();
     };
-    addAndMakeVisible(semitoneDownButton);
-
-    semitoneUpButton.setButtonText(juce::String::fromUTF8("\u266F"));  // Sharp symbol
-    semitoneUpButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2a4a6a));
-    semitoneUpButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
-    semitoneUpButton.setTooltip("Transpose up 1 semitone");
-    semitoneUpButton.onClick = [this]() {
-        transposeAmount = juce::jlimit(-24, 24, transposeAmount + 1);
-        applyTransposeToPlayback();
-    };
-    addAndMakeVisible(semitoneUpButton);
-
-    // Transpose buttons - octave
-    octaveDownButton.setButtonText("8vb");
-    octaveDownButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a2a4a));
-    octaveDownButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
-    octaveDownButton.setTooltip("Transpose down 1 octave (-12 semitones)");
-    octaveDownButton.onClick = [this]() {
-        transposeAmount = juce::jlimit(-24, 24, transposeAmount - 12);
-        applyTransposeToPlayback();
-    };
-    addAndMakeVisible(octaveDownButton);
-
-    octaveUpButton.setButtonText("8va");
-    octaveUpButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a2a4a));
-    octaveUpButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
-    octaveUpButton.setTooltip("Transpose up 1 octave (+12 semitones)");
-    octaveUpButton.onClick = [this]() {
-        transposeAmount = juce::jlimit(-24, 24, transposeAmount + 12);
-        applyTransposeToPlayback();
-    };
-    addAndMakeVisible(octaveUpButton);
+    addAndMakeVisible(transposeComboBox);
 
     syncToHostToggle.setToggleState(true, juce::dontSendNotification);
     syncToHostToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
@@ -462,12 +449,8 @@ void MIDIXplorerEditor::resized() {
     // Time display on the right
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
 
-    // Transpose buttons on the right (next to time)
-    octaveUpButton.setBounds(transport.removeFromRight(36));
-    semitoneUpButton.setBounds(transport.removeFromRight(32));
-    transport.removeFromRight(8);
-    semitoneDownButton.setBounds(transport.removeFromRight(32));
-    octaveDownButton.setBounds(transport.removeFromRight(36));
+    // Transpose dropdown on the right (next to time)
+    transposeComboBox.setBounds(transport.removeFromRight(100));
     transport.removeFromRight(8);
 
     // MIDI Note Viewer - full width
@@ -2018,7 +2001,7 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     int bars = (int)(file.durationBeats / 4.0);
     int mins = (int)(file.duration) / 60;
     int secs = (int)(file.duration) % 60;
-    
+
     if (row == owner.selectedFileIndex && owner.isPlaying && owner.fileLoaded) {
         // Show elapsed / total time for the playing file
         double elapsed = owner.currentPlaybackPosition * file.duration;
