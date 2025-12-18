@@ -799,12 +799,9 @@ void MIDIXplorerEditor::timerCallback() {
 
     // Handle looping
     if (currentTime >= totalDuration) {
-        // Send note-offs for active notes, plus allNotesOff as safety
+        // Send note-offs for currently active notes
         if (pluginProcessor) {
             pluginProcessor->sendActiveNoteOffs();
-            for (int ch = 1; ch <= 16; ch++) {
-                pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-            }
         }
         // Calculate how much we overshot and preserve it for smooth loop
         double overshoot = std::fmod(currentTime, totalDuration);
@@ -899,12 +896,7 @@ void MIDIXplorerEditor::loadSelectedFile() {
 
     if (!file.existsAsFile()) return;
 
-    // Send all notes off to stop any playing notes from previous file
-    if (auto* pluginProcessor = dynamic_cast<MIDIScaleDetector::MIDIScalePlugin*>(&processor)) {
-        for (int ch = 1; ch <= 16; ch++) {
-            pluginProcessor->addMidiMessage(juce::MidiMessage::allNotesOff(ch));
-        }
-    }
+    // Note: allNotesOff is handled by selectAndPreview before calling this
 
     juce::FileInputStream stream(file);
     if (!stream.openedOk()) return;
