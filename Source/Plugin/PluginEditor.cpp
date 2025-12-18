@@ -458,10 +458,10 @@ void MIDIXplorerEditor::resized() {
     dragButton.setBounds(transport.removeFromLeft(40));
     transport.removeFromLeft(4);
     addToDAWButton.setBounds(transport.removeFromLeft(80));
-    
+
     // Time display on the right
     timeDisplayLabel.setBounds(transport.removeFromRight(80));
-    
+
     // Transpose buttons on the right (next to time)
     octaveUpButton.setBounds(transport.removeFromRight(32));
     semitoneUpButton.setBounds(transport.removeFromRight(28));
@@ -470,7 +470,7 @@ void MIDIXplorerEditor::resized() {
     transport.removeFromRight(8);
 
     // MIDI Note Viewer - aligned with transport bar below
-    auto noteViewerArea = area.removeFromBottom(120);
+    auto noteViewerArea = area.removeFromBottom(240);
     auto noteViewerBounds = noteViewerArea.reduced(4);
     noteViewerBounds.removeFromLeft(50);  // Match play button + spacing
     noteViewerBounds.removeFromRight(80); // Match time display
