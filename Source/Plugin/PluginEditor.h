@@ -218,7 +218,7 @@ private:
     size_t analysisIndex = 0;
     static constexpr int FILES_PER_TICK = 5;  // Analyze 5 files per timer tick
     int spinnerFrame = 0;  // Animation frame for loading spinners
-    
+
     // Background file scanning
     std::vector<size_t> scanQueue;  // Library indices to scan
     std::unique_ptr<juce::DirectoryIterator> currentDirIterator;

@@ -470,7 +470,7 @@ void MIDIXplorerEditor::timerCallback() {
     if (isScanningFiles && currentDirIterator) {
         int filesFound = 0;
         static constexpr int FILES_PER_SCAN_TICK = 50;  // Discover 50 files per tick
-        
+
         while (filesFound < FILES_PER_SCAN_TICK && currentDirIterator->next()) {
             auto file = currentDirIterator->getFile();
             auto ext = file.getFileExtension().toLowerCase();
@@ -491,19 +491,19 @@ void MIDIXplorerEditor::timerCallback() {
                     info.key = "---";
                     allFiles.push_back(info);
                     libraries[currentScanLibraryIndex].fileCount++;
-                    
+
                     // Queue for analysis
                     analysisQueue.push_back(allFiles.size() - 1);
                     filesFound++;
                 }
             }
         }
-        
+
         // Check if current directory scan is complete
         if (!currentDirIterator->next()) {
             currentDirIterator.reset();
             libraries[currentScanLibraryIndex].isScanning = false;
-            
+
             // Move to next library in queue
             if (!scanQueue.empty()) {
                 currentScanLibraryIndex = scanQueue.front();
@@ -1017,7 +1017,7 @@ void MIDIXplorerEditor::scanLibraries() {
     allFiles.clear();
     analysisQueue.clear();
     scanQueue.clear();
-    
+
     // Queue all enabled libraries for background scanning
     for (size_t i = 0; i < libraries.size(); i++) {
         if (libraries[i].enabled) {
@@ -1025,7 +1025,7 @@ void MIDIXplorerEditor::scanLibraries() {
             scanQueue.push_back(i);
         }
     }
-    
+
     // Start scanning first library
     if (!scanQueue.empty()) {
         currentScanLibraryIndex = scanQueue.front();
@@ -1037,7 +1037,7 @@ void MIDIXplorerEditor::scanLibraries() {
             isScanningFiles = true;
         }
     }
-    
+
     filterFiles();
     libraryListBox.repaint();
 }
@@ -1061,7 +1061,7 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
     for (size_t idx : scanQueue) {
         if (idx == index) return;
     }
-    
+
     if (!isScanningFiles) {
         // Start scanning immediately
         currentScanLibraryIndex = index;
@@ -1071,7 +1071,7 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
         // Queue for later
         scanQueue.push_back(index);
     }
-    
+
     libraryListBox.repaint();
 
     // Ensure the currently playing file stays selected
@@ -1499,12 +1499,18 @@ void MIDIXplorerEditor::filterFiles() {
 void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
     detectedKeys.clear();
     juce::StringArray allKeysAndRelatives;
+    juce::StringArray allScales;
 
     for (const auto& file : allFiles) {
-        // Only add the relative key format (e.g., "C/Am")
+        // Add the relative key format (e.g., "C/Am")
         if (file.relativeKey.isNotEmpty() && file.relativeKey != "---" &&
             !allKeysAndRelatives.contains(file.relativeKey)) {
             allKeysAndRelatives.add(file.relativeKey);
+        }
+        // Add the full scale name (e.g., "C Japanese", "D Minor")
+        if (file.key.isNotEmpty() && file.key != "---" &&
+            !allScales.contains(file.key)) {
+            allScales.add(file.key);
         }
     }
 
@@ -1516,13 +1522,30 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
             }
         }
     }
+    
+    // Sort scales by key order too
+    for (int i = 0; i < allScales.size() - 1; i++) {
+        for (int j = i + 1; j < allScales.size(); j++) {
+            if (getKeyOrder(allScales[i]) > getKeyOrder(allScales[j])) {
+                allScales.getReference(i).swapWith(allScales.getReference(j));
+            }
+        }
+    }
 
     keyFilterCombo.clear();
     keyFilterCombo.addItem("All Keys", 1);
-
+    
+    // Add separator and relative keys section
     int id = 2;
+    keyFilterCombo.addSeparator();
     for (const auto& key : allKeysAndRelatives) {
         keyFilterCombo.addItem(key, id++);
+    }
+    
+    // Add separator and scales section
+    keyFilterCombo.addSeparator();
+    for (const auto& scale : allScales) {
+        keyFilterCombo.addItem(scale, id++);
     }
 
     keyFilterCombo.setSelectedId(1);
