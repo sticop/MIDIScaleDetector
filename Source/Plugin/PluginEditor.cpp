@@ -865,13 +865,9 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
     isPlaying = true;
     playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
 
-    if (syncToHostToggle.getToggleState() && isHostPlaying()) {
-        // Queue the file change for the next beat
-        scheduleFileChange();
-    } else {
-        // Load immediately
-        loadSelectedFile();
-    }
+    // Always load immediately for responsive browsing
+    // The file will sync to DAW tempo if sync is enabled
+    loadSelectedFile();
 }
 
 void MIDIXplorerEditor::scheduleFileChange() {
