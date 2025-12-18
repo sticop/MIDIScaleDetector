@@ -41,6 +41,7 @@ public:
         double bpm = 120.0;     // Tempo in BPM
         juce::String instrument = "---";  // GM instrument name
         bool analyzed = false;
+        bool isAnalyzing = false;  // Currently being analyzed
         bool favorite = false;  // Marked as favorite
     };
 
@@ -215,6 +216,7 @@ private:
     std::vector<size_t> analysisQueue;
     size_t analysisIndex = 0;
     static constexpr int FILES_PER_TICK = 5;  // Analyze 5 files per timer tick
+    int spinnerFrame = 0;  // Animation frame for loading spinners
 
     juce::MidiFile currentMidiFile;
     juce::MidiMessageSequence playbackSequence;

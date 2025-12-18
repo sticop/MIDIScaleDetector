@@ -463,6 +463,9 @@ void MIDIXplorerEditor::resized() {
 }
 
 void MIDIXplorerEditor::timerCallback() {
+    // Increment spinner frame for loading animations
+    spinnerFrame = (spinnerFrame + 1) % 8;
+    
     // Process background analysis queue (non-blocking, a few files per tick)
     if (!analysisQueue.empty()) {
         int filesAnalyzed = 0;
@@ -470,7 +473,9 @@ void MIDIXplorerEditor::timerCallback() {
             size_t idx = analysisQueue.front();
             analysisQueue.erase(analysisQueue.begin());
             if (idx < allFiles.size() && !allFiles[idx].analyzed) {
+                allFiles[idx].isAnalyzing = true;
                 analyzeFile(idx);
+                allFiles[idx].isAnalyzing = false;
                 filesAnalyzed++;
             }
         }
@@ -478,6 +483,7 @@ void MIDIXplorerEditor::timerCallback() {
         if (filesAnalyzed > 0) {
             updateKeyFilterFromDetectedScales();
             fileListBox->repaint();
+            libraryListBox.repaint();
         }
     }
 
@@ -1827,11 +1833,14 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
     juce::String name;
     int fileCount = 0;
     juce::String icon;
+    bool isLibraryScanning = false;
 
     if (row == 0) {
         name = "All";
         fileCount = (int)owner.allFiles.size();
         icon = juce::String::fromUTF8("\u2630");  // Hamburger menu icon
+        // Check if any files are in analysis queue
+        isLibraryScanning = !owner.analysisQueue.empty();
     } else if (row == 1) {
         name = "Favorites";
         fileCount = 0;
@@ -1850,6 +1859,16 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
         name = lib.name;
         fileCount = lib.fileCount;
         icon = juce::String::fromUTF8("\u{1F4C1}");  // Folder icon
+        isLibraryScanning = lib.isScanning;
+        // Also check if any files from this library are in analysis queue
+        if (!isLibraryScanning) {
+            for (size_t idx : owner.analysisQueue) {
+                if (idx < owner.allFiles.size() && owner.allFiles[idx].libraryName == lib.name) {
+                    isLibraryScanning = true;
+                    break;
+                }
+            }
+        }
     }
 
     bool isSelected = (row == owner.selectedLibraryIndex);
@@ -1872,10 +1891,30 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
     g.setFont(13.0f);
     g.drawText(name, 26, 0, w - 80, h, juce::Justification::centredLeft);
 
-    // File count
-    g.setColour(juce::Colours::grey);
-    g.setFont(11.0f);
-    g.drawText(juce::String(fileCount), w - 50, 0, 45, h, juce::Justification::centredRight);
+    // File count or spinner
+    if (isLibraryScanning) {
+        // Draw animated spinner
+        float centerX = w - 25.0f;
+        float centerY = h / 2.0f;
+        float radius = 6.0f;
+        
+        // Draw spinning dots
+        for (int i = 0; i < 8; i++) {
+            float angle = juce::MathConstants<float>::twoPi * i / 8.0f;
+            float dotX = centerX + radius * std::cos(angle);
+            float dotY = centerY + radius * std::sin(angle);
+            
+            // Fade based on distance from current frame
+            int dist = (owner.spinnerFrame - i + 8) % 8;
+            float alpha = 1.0f - (dist * 0.12f);
+            g.setColour(juce::Colour(0xff00cc88).withAlpha(alpha));
+            g.fillEllipse(dotX - 2.0f, dotY - 2.0f, 4.0f, 4.0f);
+        }
+    } else {
+        g.setColour(juce::Colours::grey);
+        g.setFont(11.0f);
+        g.drawText(juce::String(fileCount), w - 50, 0, 45, h, juce::Justification::centredRight);
+    }
 }
 
 void MIDIXplorerEditor::LibraryListModel::listBoxItemClicked(int row, const juce::MouseEvent& e) {
@@ -1967,12 +2006,31 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
         g.strokePath(starPath, juce::PathStrokeType(1.0f));
     }
 
-    // Key badge
+    // Key badge - show spinner if not yet analyzed
     g.setColour(juce::Colour(0xff3a3a3a));
     g.fillRoundedRectangle(28.0f, 6.0f, 70.0f, 20.0f, 4.0f);
-    g.setColour(juce::Colours::cyan);
-    g.setFont(11.0f);
-    g.drawText(file.key, 28, 6, 70, 20, juce::Justification::centred);
+    
+    if (!file.analyzed) {
+        // Draw animated spinner for files being analyzed
+        float centerX = 63.0f;
+        float centerY = 16.0f;
+        float radius = 5.0f;
+        
+        for (int i = 0; i < 8; i++) {
+            float angle = juce::MathConstants<float>::twoPi * i / 8.0f;
+            float dotX = centerX + radius * std::cos(angle);
+            float dotY = centerY + radius * std::sin(angle);
+            
+            int dist = (owner.spinnerFrame - i + 8) % 8;
+            float alpha = 1.0f - (dist * 0.12f);
+            g.setColour(juce::Colour(0xff00cc88).withAlpha(alpha));
+            g.fillEllipse(dotX - 1.5f, dotY - 1.5f, 3.0f, 3.0f);
+        }
+    } else {
+        g.setColour(juce::Colours::cyan);
+        g.setFont(11.0f);
+        g.drawText(file.key, 28, 6, 70, 20, juce::Justification::centred);
+    }
 
     // Circle of Fifths relative key (Parent Major / Relative minor)
     if (file.relativeKey.isNotEmpty()) {
