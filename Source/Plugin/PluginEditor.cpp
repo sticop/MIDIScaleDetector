@@ -465,7 +465,7 @@ void MIDIXplorerEditor::resized() {
 void MIDIXplorerEditor::timerCallback() {
     // Increment spinner frame for loading animations
     spinnerFrame = (spinnerFrame + 1) % 8;
-    
+
     // Process background analysis queue (non-blocking, a few files per tick)
     if (!analysisQueue.empty()) {
         int filesAnalyzed = 0;
@@ -1105,6 +1105,10 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         info.analyzed = true;  // Mark as analyzed to avoid retrying
         return;
     }
+    
+    // Capture file size
+    info.fileSize = file.getSize();
+    
     juce::FileInputStream stream(file);
     if (!stream.openedOk()) {
         info.analyzed = true;
@@ -1422,6 +1426,9 @@ void MIDIXplorerEditor::filterFiles() {
                                  file.relativeKey.toLowerCase().contains(searchText);
             if (!matchesSearch) continue;
         }
+
+        // Skip files with 0 duration (empty or invalid MIDI files)
+        if (file.analyzed && file.duration <= 0.0) continue;
 
         filteredFiles.push_back(file);
     }
@@ -1897,13 +1904,13 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
         float centerX = w - 25.0f;
         float centerY = h / 2.0f;
         float radius = 6.0f;
-        
+
         // Draw spinning dots
         for (int i = 0; i < 8; i++) {
             float angle = juce::MathConstants<float>::twoPi * i / 8.0f;
             float dotX = centerX + radius * std::cos(angle);
             float dotY = centerY + radius * std::sin(angle);
-            
+
             // Fade based on distance from current frame
             int dist = (owner.spinnerFrame - i + 8) % 8;
             float alpha = 1.0f - (dist * 0.12f);
@@ -2009,18 +2016,18 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     // Key badge - show spinner if not yet analyzed
     g.setColour(juce::Colour(0xff3a3a3a));
     g.fillRoundedRectangle(28.0f, 6.0f, 70.0f, 20.0f, 4.0f);
-    
+
     if (!file.analyzed) {
         // Draw animated spinner for files being analyzed
         float centerX = 63.0f;
         float centerY = 16.0f;
         float radius = 5.0f;
-        
+
         for (int i = 0; i < 8; i++) {
             float angle = juce::MathConstants<float>::twoPi * i / 8.0f;
             float dotX = centerX + radius * std::cos(angle);
             float dotY = centerY + radius * std::sin(angle);
-            
+
             int dist = (owner.spinnerFrame - i + 8) % 8;
             float alpha = 1.0f - (dist * 0.12f);
             g.setColour(juce::Colour(0xff00cc88).withAlpha(alpha));
@@ -2042,11 +2049,24 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     // File name
     g.setColour(juce::Colours::white);
     g.setFont(13.0f);
-    g.drawText(file.fileName, 175, 0, w - 430, h, juce::Justification::centredLeft);
+    g.drawText(file.fileName, 175, 0, w - 480, h, juce::Justification::centredLeft);
 
     // Instrument name
     g.setColour(juce::Colour(0xffaaaaff));
-    g.drawText(file.instrument, w - 330, 0, 140, h, juce::Justification::centredLeft);
+    g.drawText(file.instrument, w - 380, 0, 130, h, juce::Justification::centredLeft);
+
+    // File size
+    g.setColour(juce::Colour(0xff888888));
+    g.setFont(10.0f);
+    juce::String sizeStr;
+    if (file.fileSize >= 1024 * 1024) {
+        sizeStr = juce::String(file.fileSize / (1024.0 * 1024.0), 1) + " MB";
+    } else if (file.fileSize >= 1024) {
+        sizeStr = juce::String(file.fileSize / 1024.0, 1) + " KB";
+    } else {
+        sizeStr = juce::String(file.fileSize) + " B";
+    }
+    g.drawText(sizeStr, w - 190, 0, 50, h, juce::Justification::centredRight);
 
     // Duration in seconds
     g.setColour(juce::Colours::grey);

@@ -39,6 +39,7 @@ public:
         double duration = 0.0;      // Duration in seconds (rounded to bars)
         double durationBeats = 0.0; // Duration in beats
         double bpm = 120.0;     // Tempo in BPM
+        juce::int64 fileSize = 0;  // File size in bytes
         juce::String instrument = "---";  // GM instrument name
         bool analyzed = false;
         bool isAnalyzing = false;  // Currently being analyzed
