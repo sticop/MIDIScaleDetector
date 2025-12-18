@@ -977,6 +977,13 @@ void MIDIXplorerEditor::loadSelectedFile() {
         // Start playback in processor (will use free-run if DAW is stopped)
         pluginProcessor->setPlaybackPlaying(true);
     }
+    
+    // If host is already playing, sync our timing to current position
+    if (isHostPlaying()) {
+        playbackStartBeat = getHostBeatPosition();
+        playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+        playbackNoteIndex = 0;
+    }
 }
 
 void MIDIXplorerEditor::stopPlayback() {
