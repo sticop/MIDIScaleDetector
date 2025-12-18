@@ -72,11 +72,15 @@ private:
     class DraggableListBox : public juce::ListBox {
     public:
         DraggableListBox(const juce::String& name, MIDIXplorerEditor& o)
-            : juce::ListBox(name), owner(o) {}
+            : juce::ListBox(name), owner(o) {
+            // Allow row dragging
+            setMultipleSelectionEnabled(false);
+        }
 
         void mouseDown(const juce::MouseEvent& e) override {
             dragStartRow = getRowContainingPosition(e.x, e.y);
             dragStartPos = e.getPosition();
+            isDragging = false;
 
             // Check if clicking on star area (first 24 pixels of the row)
             if (e.x < 24 && dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
@@ -91,25 +95,30 @@ private:
 
         void mouseDrag(const juce::MouseEvent& e) override {
             if (starClicked) return;
+            if (isDragging) return;  // Already dragging
 
             // Start native file drag when mouse moves enough
-            if (!isDragging && dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
+            if (dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
                 auto distance = e.getPosition().getDistanceFrom(dragStartPos);
-                if (distance > 8) {  // Slightly larger threshold
-                    isDragging = true;
+                if (distance > 5) {  // Lower threshold for better responsiveness
                     auto filePath = owner.filteredFiles[(size_t)dragStartRow].fullPath;
                     juce::File file(filePath);
                     if (file.existsAsFile()) {
-                        // Use StringArray with full path for macOS compatibility
+                        isDragging = true;
+                        
+                        // Create StringArray with the file path
                         juce::StringArray files;
                         files.add(file.getFullPathName());
 
-                        // Perform the drag - canMoveFiles=true works better with Logic Pro
-                        juce::DragAndDropContainer::performExternalDragDropOfFiles(files, true);
+                        // Perform native OS file drag
+                        // canMoveFiles=false means copy, not move
+                        bool success = juce::DragAndDropContainer::performExternalDragDropOfFiles(files, false);
+                        (void)success;  // Ignore result
+                        
+                        // Reset state after drag operation completes
+                        isDragging = false;
+                        dragStartRow = -1;
                     }
-                    // Reset after drag completes or is cancelled
-                    isDragging = false;
-                    dragStartRow = -1;
                 }
             }
         }
@@ -120,6 +129,8 @@ private:
             starClicked = false;
             juce::ListBox::mouseUp(e);
         }
+        
+        
     private:
         MIDIXplorerEditor& owner;
         bool isDragging = false;
