@@ -1871,6 +1871,10 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
 void MIDIXplorerEditor::MIDINoteViewer::setSequence(const juce::MidiMessageSequence* seq, double duration) {
     sequence = seq;
     totalDuration = duration > 0 ? duration : 1.0;
+    
+    // Reset zoom and scroll when loading a new file
+    zoomLevel = 1.0f;
+    scrollOffset = 0.0f;
 
     // Calculate note range
     lowestNote = 127;
