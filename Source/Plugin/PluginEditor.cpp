@@ -526,9 +526,9 @@ void MIDIXplorerEditor::resized() {
     fileCountLabel.setBounds(topBar.removeFromLeft(70));
     keyFilterCombo.setBounds(topBar.removeFromLeft(105).reduced(2));
     sortCombo.setBounds(topBar.removeFromLeft(110).reduced(2));
-    topBar.removeFromLeft(8);
-    velocityLabel.setBounds(topBar.removeFromLeft(28));
-    velocitySlider.setBounds(topBar.removeFromLeft(100).reduced(2));
+    // Volume slider on the right
+    velocitySlider.setBounds(topBar.removeFromRight(100).reduced(2));
+    velocityLabel.setBounds(topBar.removeFromRight(28));
     // syncToHostToggle hidden
 
     // Bottom transport bar
@@ -881,6 +881,9 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
     if (pluginProcessor) {
         pluginProcessor->sendActiveNoteOffs();
     }
+
+    // Reset velocity/volume to 100% on file change
+    velocitySlider.setValue(100.0, juce::sendNotification);
 
     // Always load immediately for responsive browsing
     // The file will sync to DAW tempo if sync is enabled
