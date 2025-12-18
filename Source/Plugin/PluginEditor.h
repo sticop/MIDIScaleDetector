@@ -104,7 +104,7 @@ private:
                     juce::File srcFile(filePath);
                     if (srcFile.existsAsFile()) {
                         isDragging = true;
-                        
+
                         // Copy to temp directory for reliable drag to DAW
                         auto dragFile = makeTempCopyForDrag(srcFile);
                         if (dragFile.existsAsFile()) {
@@ -112,7 +112,7 @@ private:
                             files.add(dragFile.getFullPathName());
                             juce::DragAndDropContainer::performExternalDragDropOfFiles(files, false);
                         }
-                        
+
                         isDragging = false;
                         dragStartRow = -1;
                     }
@@ -126,23 +126,23 @@ private:
             starClicked = false;
             juce::ListBox::mouseUp(e);
         }
-        
+
     private:
         // Create a temp copy of the file for reliable drag to DAW
         juce::File makeTempCopyForDrag(const juce::File& src) {
             auto tempDir = juce::File::getSpecialLocation(juce::File::tempDirectory)
                              .getChildFile("MIDIXplorerDrags");
             tempDir.createDirectory();
-            
+
             auto dst = tempDir.getNonexistentChildFile(src.getFileNameWithoutExtension(),
                                                         src.getFileExtension());
-            
+
             if (src.copyFileTo(dst))
                 return dst;
-            
+
             return {};
         }
-        
+
         MIDIXplorerEditor& owner;
         bool isDragging = false;
         bool starClicked = false;
@@ -276,7 +276,7 @@ private:
     void addToRecentlyPlayed(const juce::String& filePath);
     void quantizeMidi();
     void selectAndPreview(int row);
-    
+
     // Utility for drag and drop with temp file copy
     juce::File makeTempCopyForDrag(const juce::File& src) {
         auto cacheDir = juce::File::getSpecialLocation(juce::File::tempDirectory)

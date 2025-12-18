@@ -180,6 +180,9 @@ void MIDIScalePlugin::getStateInformation(juce::MemoryBlock& destData) {
     stream.writeFloat(static_cast<float>(currentScale.confidence));
     stream.writeBool(constrainToScale);
     stream.writeInt(static_cast<int>(transformMode));
+
+    // Save selected file path
+    stream.writeString(playbackState.currentFilePath);
 }
 
 void MIDIScalePlugin::setStateInformation(const void* data, int sizeInBytes) {
@@ -190,6 +193,11 @@ void MIDIScalePlugin::setStateInformation(const void* data, int sizeInBytes) {
     currentScale.confidence = stream.readFloat();
     constrainToScale = stream.readBool();
     transformMode = static_cast<TransformMode>(stream.readInt());
+
+    // Load selected file path (if available in saved state)
+    if (!stream.isExhausted()) {
+        playbackState.currentFilePath = stream.readString();
+    }
 }
 
 void MIDIScalePlugin::loadMIDIFile(const juce::File& file) {
@@ -281,7 +289,7 @@ void MIDIScalePlugin::loadPlaybackSequence(const juce::MidiMessageSequence& seq,
     playbackState.fileLoaded.store(true);
     playbackState.playbackNoteIndex.store(0);
     playbackState.playbackPosition.store(0.0);
-    
+
     // If host is already playing when file is loaded, start playback immediately
     bool hostIsPlaying = transportState.isPlaying.load();
     bool shouldSync = playbackState.syncToHost.load();
@@ -390,7 +398,7 @@ void MIDIScalePlugin::updatePlayback() {
                 msg = juce::MidiMessage::noteOn(msg.getChannel(), transposedNote, (juce::uint8)velocity);
                 msg.setTimeStamp(eventTime);
                 addMidiMessage(msg);
-                
+
                 // Track this note so we can send proper note-off
                 if (event->noteOffObject != nullptr) {
                     std::lock_guard<std::mutex> noteLock(activeNotesMutex);
@@ -405,7 +413,7 @@ void MIDIScalePlugin::updatePlayback() {
                 int transposedNoteOff = juce::jlimit(0, 127, msg.getNoteNumber() + playbackState.transposeAmount.load());
                 msg = juce::MidiMessage::noteOff(msg.getChannel(), transposedNoteOff);
                 addMidiMessage(msg);
-                
+
                 // Remove from active notes
                 {
                     std::lock_guard<std::mutex> noteLock(activeNotesMutex);
@@ -437,9 +445,9 @@ void MIDIScalePlugin::sendActiveNoteOffs() {
 
 void MIDIScalePlugin::queueMidiForInsertion(const juce::MidiFile& midiFile) {
     std::lock_guard<std::mutex> lock(insertionMutex);
-    
+
     insertionQueue.clear();
-    
+
     // Get all tracks and merge them
     for (int track = 0; track < midiFile.getNumTracks(); ++track) {
         const auto* trackSeq = midiFile.getTrack(track);
@@ -452,11 +460,11 @@ void MIDIScalePlugin::queueMidiForInsertion(const juce::MidiFile& midiFile) {
             }
         }
     }
-    
+
     // Sort by timestamp
     insertionQueue.sort();
     insertionQueue.updateMatchedPairs();
-    
+
     hasQueuedInsertion = true;
 }
 
