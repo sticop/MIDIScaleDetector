@@ -1992,7 +1992,7 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseWheelMove(const juce::MouseEvent& e
     if (wheel.deltaY != 0) {
         float oldZoom = zoomLevel;
         float zoomDelta = wheel.deltaY * 0.3f;
-        float newZoom = juce::jlimit(0.5f, 8.0f, zoomLevel + zoomDelta);
+        float newZoom = juce::jlimit(0.5f, 32.0f, zoomLevel + zoomDelta);
 
         if (newZoom != oldZoom) {
             // Calculate the time position under the cursor
@@ -2021,7 +2021,7 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseWheelMove(const juce::MouseEvent& e
 void MIDIXplorerEditor::MIDINoteViewer::mouseMagnify(const juce::MouseEvent& event, float scaleFactor) {
     // Pinch-to-zoom on trackpad, centered on cursor position
     float oldZoom = zoomLevel;
-    float newZoom = juce::jlimit(0.5f, 8.0f, zoomLevel * scaleFactor);
+    float newZoom = juce::jlimit(0.5f, 32.0f, zoomLevel * scaleFactor);
 
     if (newZoom != oldZoom) {
         // Calculate the time position under the cursor
