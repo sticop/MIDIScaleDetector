@@ -340,6 +340,80 @@ juce::File MIDIXplorerEditor::getSettingsFile() {
     return pluginDir.getChildFile("libraries.json");
 }
 
+juce::File MIDIXplorerEditor::getCacheFile() {
+    auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+    auto pluginDir = appDataDir.getChildFile("MIDIXplorer");
+    if (!pluginDir.exists()) {
+        pluginDir.createDirectory();
+    }
+    return pluginDir.getChildFile("filecache.json");
+}
+
+void MIDIXplorerEditor::saveFileCache() {
+    auto file = getCacheFile();
+    juce::DynamicObject::Ptr root = new juce::DynamicObject();
+    juce::Array<juce::var> filesArray;
+
+    for (const auto& f : allFiles) {
+        if (f.analyzed) {  // Only cache analyzed files
+            juce::DynamicObject::Ptr fileObj = new juce::DynamicObject();
+            fileObj->setProperty("fullPath", f.fullPath);
+            fileObj->setProperty("fileName", f.fileName);
+            fileObj->setProperty("libraryName", f.libraryName);
+            fileObj->setProperty("key", f.key);
+            fileObj->setProperty("relativeKey", f.relativeKey);
+            fileObj->setProperty("duration", f.duration);
+            fileObj->setProperty("durationBeats", f.durationBeats);
+            fileObj->setProperty("bpm", f.bpm);
+            fileObj->setProperty("fileSize", (juce::int64)f.fileSize);
+            fileObj->setProperty("instrument", f.instrument);
+            fileObj->setProperty("analyzed", f.analyzed);
+            filesArray.add(juce::var(fileObj.get()));
+        }
+    }
+    root->setProperty("files", filesArray);
+    root->setProperty("cacheVersion", 1);
+
+    juce::var jsonVar(root.get());
+    auto jsonStr = juce::JSON::toString(jsonVar);
+    file.replaceWithText(jsonStr);
+}
+
+void MIDIXplorerEditor::loadFileCache() {
+    auto file = getCacheFile();
+    if (!file.existsAsFile()) return;
+
+    auto jsonStr = file.loadFileAsString();
+    auto jsonVar = juce::JSON::parse(jsonStr);
+
+    if (auto* obj = jsonVar.getDynamicObject()) {
+        auto filesVar = obj->getProperty("files");
+        if (auto* filesArray = filesVar.getArray()) {
+            for (const auto& fileVar : *filesArray) {
+                if (auto* fileObj = fileVar.getDynamicObject()) {
+                    MIDIFileInfo info;
+                    info.fullPath = fileObj->getProperty("fullPath").toString();
+                    info.fileName = fileObj->getProperty("fileName").toString();
+                    info.libraryName = fileObj->getProperty("libraryName").toString();
+                    info.key = fileObj->getProperty("key").toString();
+                    info.relativeKey = fileObj->getProperty("relativeKey").toString();
+                    info.duration = (double)fileObj->getProperty("duration");
+                    info.durationBeats = (double)fileObj->getProperty("durationBeats");
+                    info.bpm = (double)fileObj->getProperty("bpm");
+                    info.fileSize = (juce::int64)fileObj->getProperty("fileSize");
+                    info.instrument = fileObj->getProperty("instrument").toString();
+                    info.analyzed = (bool)fileObj->getProperty("analyzed");
+                    
+                    // Only add if file still exists
+                    if (juce::File(info.fullPath).existsAsFile()) {
+                        allFiles.push_back(info);
+                    }
+                }
+            }
+        }
+    }
+}
+
 void MIDIXplorerEditor::saveLibraries() {
     auto file = getSettingsFile();
     juce::DynamicObject::Ptr root = new juce::DynamicObject();
@@ -385,6 +459,21 @@ void MIDIXplorerEditor::loadLibraries() {
                 }
             }
             libraryListBox.updateContent();
+            
+            // Load cached files first
+            loadFileCache();
+            
+            // Update library file counts from cache
+            for (auto& lib : libraries) {
+                lib.fileCount = 0;
+                for (const auto& f : allFiles) {
+                    if (f.libraryName == lib.name) {
+                        lib.fileCount++;
+                    }
+                }
+            }
+            
+            // Then scan for any new files
             scanLibraries();
         }
 
@@ -547,6 +636,11 @@ void MIDIXplorerEditor::timerCallback() {
             updateKeyFilterFromDetectedScales();
             fileListBox->repaint();
             libraryListBox.repaint();
+        }
+        
+        // Save cache when analysis completes and no more scanning
+        if (analysisQueue.empty() && !isScanningFiles) {
+            saveFileCache();
         }
     }
 
@@ -1014,14 +1108,15 @@ void MIDIXplorerEditor::addLibrary() {
 }
 
 void MIDIXplorerEditor::scanLibraries() {
-    allFiles.clear();
+    // Don't clear allFiles if we have cached data - just scan for new files
+    // allFiles.clear();  // Removed - keep cached files
     analysisQueue.clear();
     scanQueue.clear();
 
     // Queue all enabled libraries for background scanning
     for (size_t i = 0; i < libraries.size(); i++) {
         if (libraries[i].enabled) {
-            libraries[i].fileCount = 0;
+            // Don't reset file count - it was set from cache
             scanQueue.push_back(i);
         }
     }
@@ -1039,6 +1134,7 @@ void MIDIXplorerEditor::scanLibraries() {
     }
 
     filterFiles();
+    updateKeyFilterFromDetectedScales();
     libraryListBox.repaint();
 }
 
@@ -1522,7 +1618,7 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
             }
         }
     }
-    
+
     // Sort scales by key order too
     for (int i = 0; i < allScales.size() - 1; i++) {
         for (int j = i + 1; j < allScales.size(); j++) {
@@ -1534,14 +1630,14 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
 
     keyFilterCombo.clear();
     keyFilterCombo.addItem("All Keys", 1);
-    
+
     // Add separator and relative keys section
     int id = 2;
     keyFilterCombo.addSeparator();
     for (const auto& key : allKeysAndRelatives) {
         keyFilterCombo.addItem(key, id++);
     }
-    
+
     // Add separator and scales section
     keyFilterCombo.addSeparator();
     for (const auto& scale : allScales) {

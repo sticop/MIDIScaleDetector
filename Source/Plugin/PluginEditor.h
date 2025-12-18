@@ -258,7 +258,10 @@ private:
     // Persistence
     void saveLibraries();
     void loadLibraries();
+    void saveFileCache();
+    void loadFileCache();
     juce::File getSettingsFile();
+    juce::File getCacheFile();
 
     double getHostBpm();
     double getHostBeatPosition();
