@@ -281,6 +281,14 @@ void MIDIScalePlugin::loadPlaybackSequence(const juce::MidiMessageSequence& seq,
     playbackState.fileLoaded.store(true);
     playbackState.playbackNoteIndex.store(0);
     playbackState.playbackPosition.store(0.0);
+    
+    // If host is already playing when file is loaded, start playback immediately
+    bool hostIsPlaying = transportState.isPlaying.load();
+    bool shouldSync = playbackState.syncToHost.load();
+    if (hostIsPlaying && shouldSync) {
+        playbackState.isPlaying.store(true);
+        resetPlayback();
+    }
 }
 
 void MIDIScalePlugin::resetPlayback() {
