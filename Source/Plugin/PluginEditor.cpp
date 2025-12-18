@@ -1110,7 +1110,21 @@ void MIDIXplorerEditor::scanLibraries() {
     analysisQueue.clear();
     scanQueue.clear();
 
-    // Queue all enabled libraries for background scanning
+    // If we have cached files, just update the UI without rescanning
+    if (!allFiles.empty()) {
+        // Queue unanalyzed files for analysis
+        for (size_t i = 0; i < allFiles.size(); i++) {
+            if (!allFiles[i].analyzed) {
+                analysisQueue.push_back(i);
+            }
+        }
+        filterFiles();
+        updateKeyFilterFromDetectedScales();
+        libraryListBox.repaint();
+        return;  // Skip scanning - we have cached data
+    }
+
+    // Queue all enabled libraries for background scanning (only if no cache)
     for (size_t i = 0; i < libraries.size(); i++) {
         if (libraries[i].enabled) {
             // Don't reset file count - it was set from cache
