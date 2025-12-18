@@ -180,7 +180,7 @@ private:
         juce::Point<int> hoverPos;
         float zoomLevel = 1.0f;
         float scrollOffset = 0.0f;
-        
+
         // Selection for click-to-zoom
         bool isDraggingSelection = false;
         juce::Point<int> selectionStart;

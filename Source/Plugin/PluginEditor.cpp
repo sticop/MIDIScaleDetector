@@ -308,12 +308,8 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     addAndMakeVisible(midiNoteViewer);
     setSize(1200, 750);
 
-    // Load saved libraries
-    loadLibraries();
-    loadFavorites();
-    loadRecentlyPlayed();
-
-    // Restore playback state from processor (in case editor was reopened while playing)
+    // Restore playback state from processor FIRST (in case editor was reopened while playing)
+    // This sets pendingSelectedFilePath which loadLibraries will use
     if (pluginProcessor) {
         isPlaying = pluginProcessor->isPlaybackPlaying();
         if (isPlaying) {
@@ -321,12 +317,17 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
         }
         syncToHostToggle.setToggleState(pluginProcessor->isSyncToHost(), juce::dontSendNotification);
 
-        // Restore the selected file path from processor
+        // Restore the selected file path from processor (highest priority)
         juce::String lastPath = pluginProcessor->getCurrentFilePath();
         if (lastPath.isNotEmpty()) {
             pendingSelectedFilePath = lastPath;
         }
     }
+
+    // Load saved libraries (will use pendingSelectedFilePath if processor didn't set one)
+    loadLibraries();
+    loadFavorites();
+    loadRecentlyPlayed();
 
     startTimer(20); // 50 fps for smooth sync
 }
@@ -478,14 +479,16 @@ void MIDIXplorerEditor::loadLibraries() {
                 }
             }
 
-            // Then scan for any new files
-            scanLibraries();
-        }
+            // Restore selected file BEFORE scanning/filtering (only if not already set by processor)
+            if (pendingSelectedFilePath.isEmpty()) {
+                auto savedPath = obj->getProperty("selectedFilePath").toString();
+                if (savedPath.isNotEmpty()) {
+                    pendingSelectedFilePath = savedPath;
+                }
+            }
 
-        // Restore selected file
-        auto savedPath = obj->getProperty("selectedFilePath").toString();
-        if (savedPath.isNotEmpty()) {
-            pendingSelectedFilePath = savedPath;
+            // Then scan for any new files (this calls filterFiles which uses pendingSelectedFilePath)
+            scanLibraries();
         }
     }
 }
@@ -1889,7 +1892,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
         g.setColour(juce::Colours::white);
         g.drawText(noteName, tooltipX, tooltipY, textWidth, textHeight, juce::Justification::centred);
     }
-    
+
     // Draw selection rectangle if dragging
     if (isDraggingSelection) {
         auto selRect = juce::Rectangle<int>(selectionStart, selectionEnd);
@@ -2078,35 +2081,35 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseDrag(const juce::MouseEvent& e) {
 void MIDIXplorerEditor::MIDINoteViewer::mouseUp(const juce::MouseEvent& e) {
     if (isDraggingSelection) {
         isDraggingSelection = false;
-        
+
         // Calculate selection rectangle
         auto selRect = juce::Rectangle<int>(selectionStart, selectionEnd);
-        
+
         // Only zoom if selection is at least 10 pixels wide
         if (selRect.getWidth() > 10) {
             float width = (float)getWidth();
             float pixelsPerSecond = width * zoomLevel / (float)totalDuration;
-            
+
             // Calculate time range of selection
             float selStartTime = (selRect.getX() / pixelsPerSecond) + scrollOffset;
             float selEndTime = (selRect.getRight() / pixelsPerSecond) + scrollOffset;
             float selDuration = selEndTime - selStartTime;
-            
+
             if (selDuration > 0.01f) {
                 // Calculate new zoom level to fit selection
                 float newZoom = (float)totalDuration / selDuration;
                 newZoom = juce::jlimit(0.5f, 32.0f, newZoom);
-                
+
                 // Set scroll offset to selection start
                 scrollOffset = selStartTime;
                 zoomLevel = newZoom;
-                
+
                 // Clamp scroll offset
                 float maxScroll = (float)totalDuration * (1.0f - 1.0f / zoomLevel);
                 scrollOffset = juce::jlimit(0.0f, juce::jmax(0.0f, maxScroll), scrollOffset);
             }
         }
-        
+
         repaint();
     }
 }
