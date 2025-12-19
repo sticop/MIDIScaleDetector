@@ -1416,7 +1416,7 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     // Get mode degree string (e.g., "2nd", "4th", etc.)
     juce::String scaleName = scales[bestScaleIdx].name;
     juce::String modeInfo;
-    
+
     if (scaleName == "Dorian") {
         modeInfo = " (Maj 2nd)";
     } else if (scaleName == "Phrygian") {
@@ -2081,17 +2081,17 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseWheelMove(const juce::MouseEvent& e
         float newZoom = juce::jlimit(0.5f, 32.0f, zoomLevel + zoomDelta);
 
         if (newZoom != oldZoom) {
-            // Calculate the time position under the cursor
-            float cursorX = (float)event.x;
-            float width = (float)getWidth();
-            float pixelsPerSecondOld = width * oldZoom / (float)totalDuration;
+            // Calculate the time position under the cursor (account for piano width)
+            float cursorX = (float)(event.x - PIANO_WIDTH);
+            float noteAreaWidth = (float)(getWidth() - PIANO_WIDTH);
+            float pixelsPerSecondOld = noteAreaWidth * oldZoom / (float)totalDuration;
             float timeAtCursor = (cursorX + scrollOffset * pixelsPerSecondOld) / pixelsPerSecondOld;
 
             // Update zoom
             zoomLevel = newZoom;
 
             // Adjust scroll offset so the time at cursor stays at cursor position
-            float pixelsPerSecondNew = width * newZoom / (float)totalDuration;
+            float pixelsPerSecondNew = noteAreaWidth * newZoom / (float)totalDuration;
             float newScrollPixels = timeAtCursor * pixelsPerSecondNew - cursorX;
             scrollOffset = newScrollPixels / pixelsPerSecondNew;
 
@@ -2110,17 +2110,17 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseMagnify(const juce::MouseEvent& eve
     float newZoom = juce::jlimit(0.5f, 32.0f, zoomLevel * scaleFactor);
 
     if (newZoom != oldZoom) {
-        // Calculate the time position under the cursor
-        float cursorX = (float)event.x;
-        float width = (float)getWidth();
-        float pixelsPerSecondOld = width * oldZoom / (float)totalDuration;
+        // Calculate the time position under the cursor (account for piano width)
+        float cursorX = (float)(event.x - PIANO_WIDTH);
+        float noteAreaWidth = (float)(getWidth() - PIANO_WIDTH);
+        float pixelsPerSecondOld = noteAreaWidth * oldZoom / (float)totalDuration;
         float timeAtCursor = (cursorX + scrollOffset * pixelsPerSecondOld) / pixelsPerSecondOld;
 
         // Update zoom
         zoomLevel = newZoom;
 
         // Adjust scroll offset so the time at cursor stays at cursor position
-        float pixelsPerSecondNew = width * newZoom / (float)totalDuration;
+        float pixelsPerSecondNew = noteAreaWidth * newZoom / (float)totalDuration;
         float newScrollPixels = timeAtCursor * pixelsPerSecondNew - cursorX;
         scrollOffset = newScrollPixels / pixelsPerSecondNew;
 
@@ -2161,12 +2161,13 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseUp(const juce::MouseEvent& e) {
 
         // Only zoom if selection is at least 10 pixels wide
         if (selRect.getWidth() > 10) {
-            float width = (float)getWidth();
-            float pixelsPerSecond = width * zoomLevel / (float)totalDuration;
+            // Account for piano keyboard area on the left
+            float noteAreaWidth = (float)(getWidth() - PIANO_WIDTH);
+            float pixelsPerSecond = noteAreaWidth * zoomLevel / (float)totalDuration;
 
-            // Calculate time range of selection
-            float selStartTime = (selRect.getX() / pixelsPerSecond) + scrollOffset;
-            float selEndTime = (selRect.getRight() / pixelsPerSecond) + scrollOffset;
+            // Calculate time range of selection (subtract piano width from x coordinates)
+            float selStartTime = ((selRect.getX() - PIANO_WIDTH) / pixelsPerSecond) + scrollOffset;
+            float selEndTime = ((selRect.getRight() - PIANO_WIDTH) / pixelsPerSecond) + scrollOffset;
             float selDuration = selEndTime - selStartTime;
 
             if (selDuration > 0.01f) {
