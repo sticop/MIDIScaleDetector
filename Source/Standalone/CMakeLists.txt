@@ -5,10 +5,10 @@ juce_add_gui_app(MIDIXplorerStandalone
     COMPANY_NAME "MIDIXplorer"
     PRODUCT_NAME "MIDI Xplorer"
     BUNDLE_ID "com.midixplorer.standalone"
-    
+
     NEEDS_CURL FALSE
     NEEDS_WEB_BROWSER FALSE
-    
+
     DOCUMENT_EXTENSIONS "mid" "midi"
 )
 
