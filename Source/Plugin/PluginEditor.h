@@ -5,6 +5,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <juce_audio_formats/juce_audio_formats.h>
+#include "LicenseManager.h"
 
 namespace MIDIScaleDetector {
     class MIDIScalePlugin;
@@ -12,7 +13,8 @@ namespace MIDIScaleDetector {
 
 class MIDIXplorerEditor : public juce::AudioProcessorEditor,
                           private juce::Timer,
-                          public juce::DragAndDropContainer {
+                          public juce::DragAndDropContainer,
+                          public LicenseManager::Listener {
 public:
     explicit MIDIXplorerEditor(juce::AudioProcessor& p);
     ~MIDIXplorerEditor() override;
@@ -21,6 +23,9 @@ public:
     void resized() override;
     void timerCallback() override;
     bool keyPressed(const juce::KeyPress& key) override;
+    
+    // LicenseManager::Listener
+    void licenseStatusChanged(const LicenseManager::LicenseInfo& info) override;
 
     struct Library {
         juce::String name;
@@ -265,6 +270,16 @@ private:
     std::unique_ptr<juce::FileChooser> fileChooser;
 
     MIDIScaleDetector::MIDIScalePlugin* pluginProcessor = nullptr;
+    
+    // License management
+    LicenseManager licenseManager;
+    bool showLicenseDialog = false;
+    juce::TextEditor licenseKeyInput;
+    juce::TextButton activateLicenseBtn{"Activate"};
+    juce::TextButton deactivateLicenseBtn{"Deactivate"};
+    juce::Label licenseStatusLabel;
+    void showLicenseActivation();
+    void hideLicenseDialog();
 
     void addLibrary();
     void scanLibraries();
