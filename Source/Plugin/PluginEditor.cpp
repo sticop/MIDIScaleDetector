@@ -1905,7 +1905,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
 
             // Skip notes outside visible area
             if (x + w < noteArea.getX() || x > noteArea.getRight()) continue;
-            
+
             // Clip notes that extend into piano area
             if (x < noteArea.getX()) {
                 w -= (noteArea.getX() - x);
@@ -2279,8 +2279,12 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseUp(const juce::MouseEvent& e) {
     if (isDraggingSelection) {
         isDraggingSelection = false;
 
-        // Calculate selection rectangle
-        auto selRect = juce::Rectangle<int>(selectionStart, selectionEnd);
+        // Calculate selection rectangle - ensure proper ordering of coordinates
+        int left = juce::jmin(selectionStart.x, selectionEnd.x);
+        int right = juce::jmax(selectionStart.x, selectionEnd.x);
+        int top = juce::jmin(selectionStart.y, selectionEnd.y);
+        int bottom = juce::jmax(selectionStart.y, selectionEnd.y);
+        auto selRect = juce::Rectangle<int>(left, top, right - left, bottom - top);
 
         // Only zoom if selection is at least 10 pixels wide
         if (selRect.getWidth() > 10) {
@@ -2289,8 +2293,15 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseUp(const juce::MouseEvent& e) {
             float pixelsPerSecond = noteAreaWidth * zoomLevel / (float)totalDuration;
 
             // Calculate time range of selection (subtract piano width from x coordinates)
-            float selStartTime = ((selRect.getX() - PIANO_WIDTH) / pixelsPerSecond) + scrollOffset;
-            float selEndTime = ((selRect.getRight() - PIANO_WIDTH) / pixelsPerSecond) + scrollOffset;
+            float selLeftX = (float)(selRect.getX() - PIANO_WIDTH);
+            float selRightX = (float)(selRect.getRight() - PIANO_WIDTH);
+            
+            // Clamp to note area bounds
+            selLeftX = juce::jmax(0.0f, selLeftX);
+            selRightX = juce::jmin(noteAreaWidth, selRightX);
+            
+            float selStartTime = (selLeftX / pixelsPerSecond) + scrollOffset;
+            float selEndTime = (selRightX / pixelsPerSecond) + scrollOffset;
             float selDuration = selEndTime - selStartTime;
 
             if (selDuration > 0.01f) {
@@ -2298,8 +2309,10 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseUp(const juce::MouseEvent& e) {
                 float newZoom = (float)totalDuration / selDuration;
                 newZoom = juce::jlimit(0.5f, 32.0f, newZoom);
 
-                // Set scroll offset to selection start
-                scrollOffset = selStartTime;
+                // Set scroll offset to center of selection
+                float selCenterTime = (selStartTime + selEndTime) / 2.0f;
+                float visibleDuration = (float)totalDuration / newZoom;
+                scrollOffset = selCenterTime - visibleDuration / 2.0f;
                 zoomLevel = newZoom;
 
                 // Clamp scroll offset
