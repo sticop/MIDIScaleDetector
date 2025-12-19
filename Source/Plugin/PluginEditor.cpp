@@ -1905,6 +1905,13 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
 
             // Skip notes outside visible area
             if (x + w < noteArea.getX() || x > noteArea.getRight()) continue;
+            
+            // Clip notes that extend into piano area
+            if (x < noteArea.getX()) {
+                w -= (noteArea.getX() - x);
+                x = noteArea.getX();
+                if (w < 2.0f) continue;
+            }
 
             // Note color based on velocity, highlight if hovered
             int velocity = msg.getVelocity();
@@ -2017,9 +2024,9 @@ juce::String MIDIXplorerEditor::MIDINoteViewer::getNoteNameFromMidi(int midiNote
 juce::String MIDIXplorerEditor::MIDINoteViewer::detectChordName(const std::vector<int>& notes) {
     if (notes.empty()) return "";
     if (notes.size() == 1) return getNoteNameFromMidi(notes[0]);
-    
+
     static const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
-    
+
     // Get unique pitch classes and find the bass note
     std::set<int> pitchClasses;
     int bassNote = 127;
@@ -2027,14 +2034,14 @@ juce::String MIDIXplorerEditor::MIDINoteViewer::detectChordName(const std::vecto
         pitchClasses.insert(n % 12);
         if (n < bassNote) bassNote = n;
     }
-    
+
     if (pitchClasses.size() < 2) {
         // All same pitch class - just show the note
         return getNoteNameFromMidi(bassNote);
     }
-    
+
     int bassClass = bassNote % 12;
-    
+
     // Calculate intervals from bass note
     std::vector<int> intervals;
     for (int pc : pitchClasses) {
@@ -2042,10 +2049,10 @@ juce::String MIDIXplorerEditor::MIDINoteViewer::detectChordName(const std::vecto
         if (interval > 0) intervals.push_back(interval);
     }
     std::sort(intervals.begin(), intervals.end());
-    
+
     juce::String chordName = juce::String(noteNames[bassClass]);
     juce::String chordType;
-    
+
     // Detect chord type based on intervals
     // Major triad: 4, 7
     // Minor triad: 3, 7
@@ -2059,7 +2066,7 @@ juce::String MIDIXplorerEditor::MIDINoteViewer::detectChordName(const std::vecto
     // Diminished 7: 3, 6, 9
     // Half-dim 7: 3, 6, 10
     // Add9: 4, 7, 14->2
-    
+
     bool has2 = std::find(intervals.begin(), intervals.end(), 2) != intervals.end();
     bool has3 = std::find(intervals.begin(), intervals.end(), 3) != intervals.end();
     bool has4 = std::find(intervals.begin(), intervals.end(), 4) != intervals.end();
@@ -2070,7 +2077,7 @@ juce::String MIDIXplorerEditor::MIDINoteViewer::detectChordName(const std::vecto
     bool has9 = std::find(intervals.begin(), intervals.end(), 9) != intervals.end();
     bool has10 = std::find(intervals.begin(), intervals.end(), 10) != intervals.end();
     bool has11 = std::find(intervals.begin(), intervals.end(), 11) != intervals.end();
-    
+
     // Extended chords (7ths)
     if (has4 && has7 && has11) {
         chordType = "maj7";
@@ -2130,7 +2137,7 @@ juce::String MIDIXplorerEditor::MIDINoteViewer::detectChordName(const std::vecto
         }
         return noteList;
     }
-    
+
     return chordName + chordType;
 }
 
