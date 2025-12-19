@@ -23,7 +23,7 @@ public:
     void resized() override;
     void timerCallback() override;
     bool keyPressed(const juce::KeyPress& key) override;
-    
+
     // LicenseManager::Listener
     void licenseStatusChanged(const LicenseManager::LicenseInfo& info) override;
 
@@ -270,7 +270,7 @@ private:
     std::unique_ptr<juce::FileChooser> fileChooser;
 
     MIDIScaleDetector::MIDIScalePlugin* pluginProcessor = nullptr;
-    
+
     // License management
     LicenseManager licenseManager;
     bool showLicenseDialog = false;

@@ -113,7 +113,13 @@ public:
     }
 
     // Playback control methods
-    void setPlaybackPlaying(bool playing) { playbackState.isPlaying = playing; }
+    void setPlaybackPlaying(bool playing) { 
+        if (!playing && playbackState.isPlaying) {
+            // Stop playback - send note offs for all active notes
+            sendActiveNoteOffs();
+        }
+        playbackState.isPlaying = playing; 
+    }
     bool isPlaybackPlaying() const { return playbackState.isPlaying; }
     void setPlaybackPosition(double pos) { playbackState.playbackPosition = pos; }
     double getPlaybackPosition() const { return playbackState.playbackPosition; }
