@@ -2282,41 +2282,45 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseUp(const juce::MouseEvent& e) {
         // Calculate selection rectangle - ensure proper ordering of coordinates
         int left = juce::jmin(selectionStart.x, selectionEnd.x);
         int right = juce::jmax(selectionStart.x, selectionEnd.x);
-        int top = juce::jmin(selectionStart.y, selectionEnd.y);
-        int bottom = juce::jmax(selectionStart.y, selectionEnd.y);
-        auto selRect = juce::Rectangle<int>(left, top, right - left, bottom - top);
+        auto selWidth = right - left;
 
         // Only zoom if selection is at least 10 pixels wide
-        if (selRect.getWidth() > 10) {
+        if (selWidth > 10) {
             // Account for piano keyboard area on the left
             float noteAreaWidth = (float)(getWidth() - PIANO_WIDTH);
-            float pixelsPerSecond = noteAreaWidth * zoomLevel / (float)totalDuration;
-
-            // Calculate time range of selection (subtract piano width from x coordinates)
-            float selLeftX = (float)(selRect.getX() - PIANO_WIDTH);
-            float selRightX = (float)(selRect.getRight() - PIANO_WIDTH);
             
-            // Clamp to note area bounds
+            // Current pixels per second based on current zoom
+            float currentPixelsPerSecond = noteAreaWidth * zoomLevel / (float)totalDuration;
+            
+            // Convert screen X positions to time values
+            // Selection X is relative to component, need to subtract PIANO_WIDTH and account for scroll
+            float selLeftX = (float)(left - PIANO_WIDTH);
+            float selRightX = (float)(right - PIANO_WIDTH);
+            
+            // Clamp to note area bounds (0 to noteAreaWidth)
             selLeftX = juce::jmax(0.0f, selLeftX);
             selRightX = juce::jmin(noteAreaWidth, selRightX);
             
-            float selStartTime = (selLeftX / pixelsPerSecond) + scrollOffset;
-            float selEndTime = (selRightX / pixelsPerSecond) + scrollOffset;
+            // Convert pixel positions to time (accounting for current scroll)
+            float selStartTime = scrollOffset + (selLeftX / currentPixelsPerSecond);
+            float selEndTime = scrollOffset + (selRightX / currentPixelsPerSecond);
             float selDuration = selEndTime - selStartTime;
 
             if (selDuration > 0.01f) {
-                // Calculate new zoom level to fit selection
+                // Calculate new zoom level: we want selDuration to fill the noteAreaWidth
+                // pixelsPerSecond_new = noteAreaWidth * newZoom / totalDuration
+                // We want: selDuration * pixelsPerSecond_new = noteAreaWidth
+                // So: selDuration * noteAreaWidth * newZoom / totalDuration = noteAreaWidth
+                // Therefore: newZoom = totalDuration / selDuration
                 float newZoom = (float)totalDuration / selDuration;
                 newZoom = juce::jlimit(0.5f, 32.0f, newZoom);
 
-                // Set scroll offset to center of selection
-                float selCenterTime = (selStartTime + selEndTime) / 2.0f;
-                float visibleDuration = (float)totalDuration / newZoom;
-                scrollOffset = selCenterTime - visibleDuration / 2.0f;
+                // Scroll so that selStartTime is at the left edge of the view
+                scrollOffset = selStartTime;
                 zoomLevel = newZoom;
 
-                // Clamp scroll offset
-                float maxScroll = (float)totalDuration * (1.0f - 1.0f / zoomLevel);
+                // Clamp scroll offset to valid range
+                float maxScroll = (float)totalDuration - ((float)totalDuration / zoomLevel);
                 scrollOffset = juce::jlimit(0.0f, juce::jmax(0.0f, maxScroll), scrollOffset);
             }
         }
