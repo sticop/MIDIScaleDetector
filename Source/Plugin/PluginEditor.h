@@ -172,6 +172,7 @@ private:
         void mouseExit(const juce::MouseEvent& e) override;
 
         static juce::String getNoteNameFromMidi(int midiNote);
+        static juce::String detectChordName(const std::vector<int>& notes);
     private:
         const juce::MidiMessageSequence* sequence = nullptr;
         double totalDuration = 1.0;

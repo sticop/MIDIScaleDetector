@@ -1929,11 +1929,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
 
     // Draw currently playing notes/chord display at top
     if (!playingNotes.empty()) {
-        juce::String chordText;
-        for (size_t i = 0; i < playingNotes.size(); i++) {
-            if (i > 0) chordText += " ";
-            chordText += getNoteNameFromMidi(playingNotes[i]);
-        }
+        juce::String chordText = detectChordName(playingNotes);
         g.setColour(juce::Colour(0xcc000000));
         g.fillRoundedRectangle((float)noteArea.getX() + 5, 5.0f, (float)g.getCurrentFont().getStringWidth(chordText) + 16, 22.0f, 4.0f);
         g.setColour(juce::Colours::orange);
@@ -2016,6 +2012,126 @@ juce::String MIDIXplorerEditor::MIDINoteViewer::getNoteNameFromMidi(int midiNote
     int octave = (midiNote / 12) - 1;
     int noteIndex = midiNote % 12;
     return juce::String(noteNames[noteIndex]) + juce::String(octave);
+}
+
+juce::String MIDIXplorerEditor::MIDINoteViewer::detectChordName(const std::vector<int>& notes) {
+    if (notes.empty()) return "";
+    if (notes.size() == 1) return getNoteNameFromMidi(notes[0]);
+    
+    static const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    
+    // Get unique pitch classes and find the bass note
+    std::set<int> pitchClasses;
+    int bassNote = 127;
+    for (int n : notes) {
+        pitchClasses.insert(n % 12);
+        if (n < bassNote) bassNote = n;
+    }
+    
+    if (pitchClasses.size() < 2) {
+        // All same pitch class - just show the note
+        return getNoteNameFromMidi(bassNote);
+    }
+    
+    int bassClass = bassNote % 12;
+    
+    // Calculate intervals from bass note
+    std::vector<int> intervals;
+    for (int pc : pitchClasses) {
+        int interval = (pc - bassClass + 12) % 12;
+        if (interval > 0) intervals.push_back(interval);
+    }
+    std::sort(intervals.begin(), intervals.end());
+    
+    juce::String chordName = juce::String(noteNames[bassClass]);
+    juce::String chordType;
+    
+    // Detect chord type based on intervals
+    // Major triad: 4, 7
+    // Minor triad: 3, 7
+    // Diminished: 3, 6
+    // Augmented: 4, 8
+    // Sus2: 2, 7
+    // Sus4: 5, 7
+    // Major 7: 4, 7, 11
+    // Minor 7: 3, 7, 10
+    // Dominant 7: 4, 7, 10
+    // Diminished 7: 3, 6, 9
+    // Half-dim 7: 3, 6, 10
+    // Add9: 4, 7, 14->2
+    
+    bool has2 = std::find(intervals.begin(), intervals.end(), 2) != intervals.end();
+    bool has3 = std::find(intervals.begin(), intervals.end(), 3) != intervals.end();
+    bool has4 = std::find(intervals.begin(), intervals.end(), 4) != intervals.end();
+    bool has5 = std::find(intervals.begin(), intervals.end(), 5) != intervals.end();
+    bool has6 = std::find(intervals.begin(), intervals.end(), 6) != intervals.end();
+    bool has7 = std::find(intervals.begin(), intervals.end(), 7) != intervals.end();
+    bool has8 = std::find(intervals.begin(), intervals.end(), 8) != intervals.end();
+    bool has9 = std::find(intervals.begin(), intervals.end(), 9) != intervals.end();
+    bool has10 = std::find(intervals.begin(), intervals.end(), 10) != intervals.end();
+    bool has11 = std::find(intervals.begin(), intervals.end(), 11) != intervals.end();
+    
+    // Extended chords (7ths)
+    if (has4 && has7 && has11) {
+        chordType = "maj7";
+    } else if (has3 && has7 && has10) {
+        chordType = "m7";
+    } else if (has4 && has7 && has10) {
+        chordType = "7";
+    } else if (has3 && has6 && has9) {
+        chordType = "dim7";
+    } else if (has3 && has6 && has10) {
+        chordType = "m7b5";
+    } else if (has4 && has8 && has11) {
+        chordType = "maj7#5";
+    }
+    // Triads
+    else if (has4 && has7) {
+        chordType = "";  // Major (no suffix)
+    } else if (has3 && has7) {
+        chordType = "m";
+    } else if (has3 && has6) {
+        chordType = "dim";
+    } else if (has4 && has8) {
+        chordType = "aug";
+    } else if (has2 && has7) {
+        chordType = "sus2";
+    } else if (has5 && has7) {
+        chordType = "sus4";
+    }
+    // Power chord
+    else if (has7 && !has3 && !has4) {
+        chordType = "5";
+    }
+    // Two notes - interval name
+    else if (intervals.size() == 1) {
+        int interval = intervals[0];
+        switch (interval) {
+            case 1: chordType = "(m2)"; break;
+            case 2: chordType = "(M2)"; break;
+            case 3: chordType = "(m3)"; break;
+            case 4: chordType = "(M3)"; break;
+            case 5: chordType = "(P4)"; break;
+            case 6: chordType = "(tri)"; break;
+            case 7: chordType = "(P5)"; break;
+            case 8: chordType = "(m6)"; break;
+            case 9: chordType = "(M6)"; break;
+            case 10: chordType = "(m7)"; break;
+            case 11: chordType = "(M7)"; break;
+            default: chordType = ""; break;
+        }
+    }
+    // Unknown - just list notes
+    else {
+        juce::String noteList;
+        for (size_t i = 0; i < notes.size(); i++) {
+            if (i > 0) noteList += " ";
+            noteList += getNoteNameFromMidi(notes[i]);
+        }
+        return noteList;
+    }
+    
+    return chordName + chordType;
 }
 
 void MIDIXplorerEditor::MIDINoteViewer::mouseMove(const juce::MouseEvent& e) {
