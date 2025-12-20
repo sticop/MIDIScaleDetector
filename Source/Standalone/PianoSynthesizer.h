@@ -12,9 +12,11 @@ class PianoVoice : public juce::SynthesiserVoice
 public:
     PianoVoice() = default;
 
-    bool canPlaySound(juce::SynthesiserSound* sound) override
+    bool canPlaySound(juce::SynthesiserSound*) override
     {
-        return dynamic_cast<juce::SynthesiserSound*>(sound) != nullptr;
+        // Accept any sound - we'll forward declare PianoSound check isn't needed
+        // since we only add PianoSound to the synth
+        return true;
     }
 
     void startNote(int midiNoteNumber, float velocity, juce::SynthesiserSound*, int) override
@@ -233,6 +235,9 @@ public:
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
     {
         synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
+        
+        // Apply master gain to ensure audible output
+        buffer.applyGain(2.0f);
     }
 
     void allNotesOff()
