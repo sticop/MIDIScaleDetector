@@ -36,6 +36,7 @@ private:
     void updateUI();
     void attemptActivation();
     void attemptDeactivation();
+    void loadLogoImage();
 
     // UI Components
     juce::Label titleLabel;
@@ -47,6 +48,9 @@ private:
     juce::TextButton closeButton;
     juce::Label infoLabel;
     juce::HyperlinkButton purchaseLink;
+
+    // Logo image
+    juce::Image logoImage;
 
     // Progress indicator
     bool isProcessing = false;

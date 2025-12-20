@@ -277,6 +277,7 @@ private:
 
     // License management
     LicenseManager licenseManager;
+    juce::Image logoImage;  // Logo for license dialog
     bool showLicenseDialog = false;
     juce::TextEditor licenseKeyInput;
     juce::TextButton activateLicenseBtn{"Activate"};

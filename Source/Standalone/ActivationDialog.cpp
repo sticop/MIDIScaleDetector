@@ -1,4 +1,5 @@
 #include "ActivationDialog.h"
+#include "BinaryData.h"
 
 //==============================================================================
 // ActivationDialog
@@ -6,7 +7,10 @@
 
 ActivationDialog::ActivationDialog()
 {
-    setSize(450, 350);
+    setSize(450, 400);  // Increased height for logo
+
+    // Load logo from binary data
+    loadLogoImage();
 
     // Title
     titleLabel.setText("MIDI Xplorer License Activation", juce::dontSendNotification);
@@ -88,9 +92,34 @@ ActivationDialog::~ActivationDialog()
     LicenseManager::getInstance().removeListener(this);
 }
 
+void ActivationDialog::loadLogoImage()
+{
+    // Load logo from binary data
+    logoImage = juce::ImageCache::getFromMemory(BinaryData::logomidi_png, BinaryData::logomidi_pngSize);
+}
+
 void ActivationDialog::paint(juce::Graphics& g)
 {
     g.fillAll(backgroundColour);
+
+    // Draw logo at top center
+    if (logoImage.isValid())
+    {
+        // Scale logo to fit within dialog width while maintaining aspect ratio
+        int logoMaxWidth = getWidth() - 60;
+        int logoMaxHeight = 50;  // Max height for logo
+
+        float scale = juce::jmin((float)logoMaxWidth / logoImage.getWidth(),
+                                  (float)logoMaxHeight / logoImage.getHeight());
+
+        int logoWidth = (int)(logoImage.getWidth() * scale);
+        int logoHeight = (int)(logoImage.getHeight() * scale);
+        int logoX = (getWidth() - logoWidth) / 2;
+        int logoY = 15;
+
+        g.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight,
+                    0, 0, logoImage.getWidth(), logoImage.getHeight());
+    }
 
     // Border
     g.setColour(juce::Colour(0xff4a4a4a));
@@ -100,6 +129,9 @@ void ActivationDialog::paint(juce::Graphics& g)
 void ActivationDialog::resized()
 {
     auto bounds = getLocalBounds().reduced(30);
+
+    // Reserve space for logo at top
+    bounds.removeFromTop(55);
 
     titleLabel.setBounds(bounds.removeFromTop(35));
     bounds.removeFromTop(10);

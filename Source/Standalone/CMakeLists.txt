@@ -5,6 +5,7 @@ juce_add_gui_app(MIDIXplorerStandalone
     COMPANY_NAME "MIDIXplorer"
     PRODUCT_NAME "MIDI Xplorer"
     BUNDLE_ID "com.midixplorer.standalone"
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/../../Resources/logomidi.png"
 
     NEEDS_CURL TRUE
     NEEDS_WEB_BROWSER FALSE
@@ -37,9 +38,18 @@ target_sources(MIDIXplorerStandalone
         ${CMAKE_CURRENT_SOURCE_DIR}/../Core/FileScanner/FileScanner.h
 )
 
+# Add binary resources (logo image)
+juce_add_binary_data(MIDIXplorerAssets
+    HEADER_NAME "BinaryData.h"
+    NAMESPACE BinaryData
+    SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../Resources/logomidi.png
+)
+
 # Link libraries
 target_link_libraries(MIDIXplorerStandalone
     PRIVATE
+        MIDIXplorerAssets
         juce::juce_audio_basics
         juce::juce_audio_devices
         juce::juce_audio_formats

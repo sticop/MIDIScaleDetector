@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "MIDIScalePlugin.h"
+#include "BinaryData.h"
 
 namespace {
     int getKeyOrder(const juce::String& key) {
@@ -363,6 +364,9 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     licenseManager.initializeTrial();
     licenseManager.checkTrialStatus();
 
+    // Load logo from binary data
+    logoImage = juce::ImageCache::getFromMemory(BinaryData::logomidi_png, BinaryData::logomidi_pngSize);
+
     setSize(1200, 750);
 
     // Restore playback state from processor FIRST (in case editor was reopened while playing)
@@ -628,10 +632,32 @@ void MIDIXplorerEditor::paint(juce::Graphics& g) {
         g.setColour(juce::Colour(0xff00d4ff));
         g.drawRoundedRectangle(dialogBounds.toFloat(), 10.0f, 2.0f);
 
-        // Title
-        g.setFont(juce::Font(juce::FontOptions(24.0f).withStyle("Bold")));
-        g.setColour(juce::Colour(0xff00d4ff));
-        g.drawText(juce::String::fromUTF8("🎹 MIDI Xplorer"), dialogBounds.removeFromTop(60), juce::Justification::centred);
+        // Draw logo at top of dialog
+        if (logoImage.isValid())
+        {
+            int logoMaxWidth = dialogBounds.getWidth() - 40;
+            int logoMaxHeight = 50;
+
+            float scale = juce::jmin((float)logoMaxWidth / logoImage.getWidth(),
+                                      (float)logoMaxHeight / logoImage.getHeight());
+
+            int logoWidth = (int)(logoImage.getWidth() * scale);
+            int logoHeight = (int)(logoImage.getHeight() * scale);
+            int logoX = dialogBounds.getX() + (dialogBounds.getWidth() - logoWidth) / 2;
+            int logoY = dialogBounds.getY() + 15;
+
+            g.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight,
+                        0, 0, logoImage.getWidth(), logoImage.getHeight());
+
+            dialogBounds.removeFromTop(logoHeight + 25);
+        }
+        else
+        {
+            // Fallback to text title
+            g.setFont(juce::Font(juce::FontOptions(24.0f).withStyle("Bold")));
+            g.setColour(juce::Colour(0xff00d4ff));
+            g.drawText(juce::String::fromUTF8("MIDI Xplorer"), dialogBounds.removeFromTop(60), juce::Justification::centred);
+        }
 
         // Subtitle
         g.setFont(juce::Font(juce::FontOptions(14.0f)));

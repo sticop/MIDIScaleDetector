@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.20)
 
+# Add binary resources for Plugin (logo image)
+juce_add_binary_data(MIDIXplorerPluginAssets
+    HEADER_NAME "BinaryData.h"
+    NAMESPACE BinaryData
+    SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../Resources/logomidi.png
+)
+
 # Plugin configuration
 juce_add_plugin(MIDIXplorerPlugin
     COMPANY_NAME "MIDIXplorer"
@@ -34,6 +42,7 @@ target_sources(MIDIXplorerPlugin
 target_link_libraries(MIDIXplorerPlugin
     PRIVATE
         MIDIXplorerCore
+        MIDIXplorerPluginAssets
         juce::juce_audio_utils
         juce::juce_audio_processors
         juce::juce_cryptography
