@@ -48,6 +48,11 @@ void MIDIScalePlugin::clearMidiQueue() {
 void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) {
     buffer.clear();
 
+    // Check if we need to send note-offs (from pause/stop/seek)
+    if (playbackState.pendingNoteOffs.exchange(false)) {
+        sendActiveNoteOffsImmediate(midiMessages);
+    }
+
     // Update transport state from host playhead - this runs on the audio thread
     bool wasHostPlaying = transportState.isPlaying.load();
 
@@ -78,8 +83,8 @@ void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             else if (!hostNowPlaying && wasHostPlaying && playbackState.syncToHost.load()) {
                 playbackState.isPlaying.store(false);  // Stop playback state
                 playbackState.playbackNoteIndex.store(0);  // Reset for next play
-                // Send note-offs for currently playing notes
-                sendActiveNoteOffs();
+                // Send note-offs immediately to this buffer (not queued)
+                sendActiveNoteOffsImmediate(midiMessages);
             }
         }
     }
@@ -434,18 +439,27 @@ void MIDIScalePlugin::updatePlayback() {
 }
 
 void MIDIScalePlugin::sendActiveNoteOffs() {
-    std::lock_guard<std::mutex> noteLock(activeNotesMutex);
+    // Set flag for processBlock to send note-offs immediately
+    playbackState.pendingNoteOffs.store(true);
     
-    // Send individual note-offs for each active note
+    // Also clear active notes tracking
+    std::lock_guard<std::mutex> noteLock(activeNotesMutex);
+    activeNotes.clear();
+}
+
+void MIDIScalePlugin::sendActiveNoteOffsImmediate(juce::MidiBuffer& midiMessages) {
+    std::lock_guard<std::mutex> noteLock(activeNotesMutex);
+
+    // Send individual note-offs for each active note directly to buffer
     for (const auto& an : activeNotes) {
-        addMidiMessage(juce::MidiMessage::noteOff(an.channel, an.noteNumber));
+        midiMessages.addEvent(juce::MidiMessage::noteOff(an.channel, an.noteNumber), 0);
     }
     activeNotes.clear();
-    
-    // Also send All-Notes-Off (CC 123) and All-Sound-Off (CC 120) on all channels for reliability
+
+    // Also send All-Notes-Off (CC 123) and All-Sound-Off (CC 120) on all channels
     for (int channel = 1; channel <= 16; ++channel) {
-        addMidiMessage(juce::MidiMessage::allNotesOff(channel));
-        addMidiMessage(juce::MidiMessage::allSoundOff(channel));
+        midiMessages.addEvent(juce::MidiMessage::allNotesOff(channel), 0);
+        midiMessages.addEvent(juce::MidiMessage::allSoundOff(channel), 0);
     }
 }
 

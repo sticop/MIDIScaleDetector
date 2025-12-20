@@ -88,6 +88,7 @@ public:
         std::atomic<bool> syncToHost{true};
         std::atomic<float> velocityScale{1.0f};  // 0.0 to 2.0 (0% to 200%)
         std::atomic<int> transposeAmount{0};      // -24 to +24 semitones
+        std::atomic<bool> pendingNoteOffs{false}; // Flag to send note-offs in next processBlock
         juce::String currentFilePath;
     };
 
@@ -104,7 +105,8 @@ public:
     };
     std::vector<ActiveNote> activeNotes;
     std::mutex activeNotesMutex;
-    void sendActiveNoteOffs();  // Send note-offs for all active notes
+    void sendActiveNoteOffs();  // Send note-offs for all active notes (queued)
+    void sendActiveNoteOffsImmediate(juce::MidiBuffer& midiMessages);  // Send note-offs directly to buffer
     std::vector<int> getActiveNoteNumbers() {
         std::lock_guard<std::mutex> lock(activeNotesMutex);
         std::vector<int> notes;

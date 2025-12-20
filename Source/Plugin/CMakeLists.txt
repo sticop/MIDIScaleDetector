@@ -26,6 +26,8 @@ target_sources(MIDIXplorerPlugin
         MIDIScalePlugin.h
         PluginEditor.cpp
         PluginEditor.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Standalone/LicenseManager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Standalone/LicenseManager.h
 )
 
 # Link libraries
@@ -34,6 +36,7 @@ target_link_libraries(MIDIXplorerPlugin
         MIDIXplorerCore
         juce::juce_audio_utils
         juce::juce_audio_processors
+        juce::juce_cryptography
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
