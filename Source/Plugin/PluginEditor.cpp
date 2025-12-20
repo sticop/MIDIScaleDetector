@@ -1,6 +1,7 @@
 #include "PluginEditor.h"
 #include "MIDIScalePlugin.h"
 #include "BinaryData.h"
+#include "../Standalone/ActivationDialog.h"
 
 namespace {
     int getKeyOrder(const juce::String& key) {
@@ -320,35 +321,6 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     // License management UI
     licenseManager.addListener(this);
 
-    licenseKeyInput.setMultiLine(false);
-    licenseKeyInput.setTextToShowWhenEmpty("Enter license key (MX-XXXX-XXXX-XXXX-XXXX)", juce::Colours::grey);
-    licenseKeyInput.setFont(juce::Font(juce::FontOptions(14.0f)));
-    licenseKeyInput.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff1a1a2e));
-    licenseKeyInput.setColour(juce::TextEditor::textColourId, juce::Colours::white);
-    licenseKeyInput.setColour(juce::TextEditor::outlineColourId, juce::Colour(0xff444466));
-    addChildComponent(licenseKeyInput);
-
-    activateLicenseBtn.onClick = [this]() {
-        auto key = licenseKeyInput.getText().trim().toUpperCase();
-        if (key.isNotEmpty()) {
-            licenseStatusLabel.setText("Activating...", juce::dontSendNotification);
-            licenseManager.activateLicense(key, [](LicenseManager::LicenseStatus, const juce::String&) {});
-        }
-    };
-    activateLicenseBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff00d4ff));
-    activateLicenseBtn.setColour(juce::TextButton::textColourOffId, juce::Colours::black);
-    addChildComponent(activateLicenseBtn);
-
-    deactivateLicenseBtn.onClick = [this]() {
-        licenseManager.deactivateLicense([](bool, const juce::String&) {});
-    };
-    deactivateLicenseBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff444466));
-    addChildComponent(deactivateLicenseBtn);
-
-    licenseStatusLabel.setFont(juce::Font(juce::FontOptions(12.0f)));
-    licenseStatusLabel.setColour(juce::Label::textColourId, juce::Colours::grey);
-    addChildComponent(licenseStatusLabel);
-
     // Status bar activate button (visible when in trial or expired)
     statusBarActivateBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a9eff));
     statusBarActivateBtn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
@@ -357,15 +329,9 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     };
     addAndMakeVisible(statusBarActivateBtn);
 
-    // License dialog is shown via menu, not on startup
-    showLicenseDialog = false;
-
     // Initialize license manager and check trial status
     licenseManager.initializeTrial();
     licenseManager.checkTrialStatus();
-
-    // Load logo from binary data
-    logoImage = juce::ImageCache::getFromMemory(BinaryData::logomidi_png, BinaryData::logomidi_pngSize);
 
     setSize(1200, 750);
 
@@ -617,70 +583,6 @@ void MIDIXplorerEditor::paint(juce::Graphics& g) {
     // Separator line
     g.setColour(juce::Colour(0xff3a3a3a));
     g.drawVerticalLine(200, (float)barHeight, (float)getHeight());
-
-    // License dialog overlay
-    if (showLicenseDialog) {
-        // Semi-transparent overlay
-        g.setColour(juce::Colour(0xdd000000));
-        g.fillRect(getLocalBounds());
-
-        // Dialog box
-        auto dialogBounds = getLocalBounds().reduced(300, 200);
-        g.setColour(juce::Colour(0xff1a1a2e));
-        g.fillRoundedRectangle(dialogBounds.toFloat(), 10.0f);
-
-        g.setColour(juce::Colour(0xff00d4ff));
-        g.drawRoundedRectangle(dialogBounds.toFloat(), 10.0f, 2.0f);
-
-        // Draw logo at top of dialog
-        if (logoImage.isValid())
-        {
-            int logoMaxWidth = dialogBounds.getWidth() - 40;
-            int logoMaxHeight = 50;
-
-            float scale = juce::jmin((float)logoMaxWidth / logoImage.getWidth(),
-                                      (float)logoMaxHeight / logoImage.getHeight());
-
-            int logoWidth = (int)(logoImage.getWidth() * scale);
-            int logoHeight = (int)(logoImage.getHeight() * scale);
-            int logoX = dialogBounds.getX() + (dialogBounds.getWidth() - logoWidth) / 2;
-            int logoY = dialogBounds.getY() + 15;
-
-            g.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight,
-                        0, 0, logoImage.getWidth(), logoImage.getHeight());
-
-            dialogBounds.removeFromTop(logoHeight + 25);
-        }
-        else
-        {
-            // Fallback to text title
-            g.setFont(juce::Font(juce::FontOptions(24.0f).withStyle("Bold")));
-            g.setColour(juce::Colour(0xff00d4ff));
-            g.drawText(juce::String::fromUTF8("MIDI Xplorer"), dialogBounds.removeFromTop(60), juce::Justification::centred);
-        }
-
-        // Subtitle
-        g.setFont(juce::Font(juce::FontOptions(14.0f)));
-        g.setColour(juce::Colours::grey);
-        g.drawText("License Activation", dialogBounds.removeFromTop(20), juce::Justification::centred);
-
-        dialogBounds.removeFromTop(20);
-
-        // License status info
-        auto& info = licenseManager.getLicenseInfo();
-        if (licenseManager.getCurrentStatus() == LicenseManager::LicenseStatus::Valid) {
-            g.setColour(juce::Colour(0xff00c853));
-            g.setFont(juce::Font(juce::FontOptions(16.0f)));
-            g.drawText("License Active", dialogBounds.removeFromTop(30), juce::Justification::centred);
-
-            g.setColour(juce::Colours::white);
-            g.setFont(juce::Font(juce::FontOptions(12.0f)));
-            if (info.customerName.isNotEmpty())
-                g.drawText("Licensed to: " + info.customerName, dialogBounds.removeFromTop(25), juce::Justification::centred);
-            if (info.expiryDate.isNotEmpty())
-                g.drawText("Expires: " + info.expiryDate, dialogBounds.removeFromTop(25), juce::Justification::centred);
-        }
-    }
 }
 
 void MIDIXplorerEditor::resized() {
@@ -742,47 +644,6 @@ void MIDIXplorerEditor::resized() {
 
     // File list fills the rest
     fileListBox->setBounds(area.reduced(4));
-
-    // License dialog components (centered in dialog area)
-    if (showLicenseDialog) {
-        auto dialogBounds = getLocalBounds().reduced(300, 200);
-        dialogBounds.removeFromTop(130); // Skip title and status area
-
-        auto inputArea = dialogBounds.reduced(40, 0);
-        licenseKeyInput.setBounds(inputArea.removeFromTop(35));
-        licenseKeyInput.setVisible(true);
-
-        inputArea.removeFromTop(10);
-        auto buttonRow = inputArea.removeFromTop(35);
-
-        auto& info = licenseManager.getLicenseInfo();
-        if (licenseManager.getCurrentStatus() == LicenseManager::LicenseStatus::Valid) {
-            // Show deactivate button when licensed
-            deactivateLicenseBtn.setBounds(buttonRow.withSizeKeepingCentre(150, 30));
-            deactivateLicenseBtn.setVisible(true);
-            activateLicenseBtn.setVisible(false);
-        } else {
-            // Show activate button when not licensed
-            activateLicenseBtn.setBounds(buttonRow.withSizeKeepingCentre(150, 30));
-            activateLicenseBtn.setVisible(true);
-            deactivateLicenseBtn.setVisible(false);
-        }
-
-        inputArea.removeFromTop(10);
-        licenseStatusLabel.setBounds(inputArea.removeFromTop(25));
-        licenseStatusLabel.setVisible(true);
-
-        // Close button for licensed users
-        if (licenseManager.getCurrentStatus() == LicenseManager::LicenseStatus::Valid) {
-            inputArea.removeFromTop(20);
-            // Users can close dialog by clicking outside or pressing Escape
-        }
-    } else {
-        licenseKeyInput.setVisible(false);
-        activateLicenseBtn.setVisible(false);
-        deactivateLicenseBtn.setVisible(false);
-        licenseStatusLabel.setVisible(false);
-    }
 }
 
 void MIDIXplorerEditor::timerCallback() {
@@ -1077,12 +938,6 @@ void MIDIXplorerEditor::timerCallback() {
 }
 
 bool MIDIXplorerEditor::keyPressed(const juce::KeyPress& key) {
-    // Handle Escape to close license dialog (only if licensed)
-    if (key == juce::KeyPress::escapeKey && showLicenseDialog && licenseManager.isLicenseValid()) {
-        hideLicenseDialog();
-        return true;
-    }
-
     if (filteredFiles.empty()) return false;
 
     int currentRow = fileListBox->getSelectedRow();
@@ -3114,53 +2969,16 @@ void MIDIXplorerEditor::quantizeMidi() {
 
 // License management callbacks
 void MIDIXplorerEditor::licenseStatusChanged(LicenseManager::LicenseStatus status, const LicenseManager::LicenseInfo& info) {
-    juce::ignoreUnused(info);
-    switch (status) {
-        case LicenseManager::LicenseStatus::Valid:
-            licenseStatusLabel.setText("License activated successfully!", juce::dontSendNotification);
-            licenseStatusLabel.setColour(juce::Label::textColourId, juce::Colour(0xff00c853));
-            break;
-        case LicenseManager::LicenseStatus::Invalid:
-            licenseStatusLabel.setText("Invalid license key", juce::dontSendNotification);
-            licenseStatusLabel.setColour(juce::Label::textColourId, juce::Colour(0xffff4444));
-            break;
-        case LicenseManager::LicenseStatus::Expired:
-            licenseStatusLabel.setText("License has expired", juce::dontSendNotification);
-            licenseStatusLabel.setColour(juce::Label::textColourId, juce::Colour(0xffffaa00));
-            break;
-        case LicenseManager::LicenseStatus::MaxActivationsReached:
-            licenseStatusLabel.setText("Maximum activations reached", juce::dontSendNotification);
-            licenseStatusLabel.setColour(juce::Label::textColourId, juce::Colour(0xffffaa00));
-            break;
-        case LicenseManager::LicenseStatus::NetworkError:
-            licenseStatusLabel.setText("Network error - check connection", juce::dontSendNotification);
-            licenseStatusLabel.setColour(juce::Label::textColourId, juce::Colour(0xffffaa00));
-            break;
-        case LicenseManager::LicenseStatus::Trial:
-            licenseStatusLabel.setText("Trial mode - " + juce::String(LicenseManager::getInstance().getTrialDaysRemaining()) + " days remaining", juce::dontSendNotification);
-            licenseStatusLabel.setColour(juce::Label::textColourId, juce::Colour(0xff4a9eff));
-            break;
-        case LicenseManager::LicenseStatus::TrialExpired:
-            licenseStatusLabel.setText("Trial expired - please activate", juce::dontSendNotification);
-            licenseStatusLabel.setColour(juce::Label::textColourId, juce::Colour(0xffff4444));
-            break;
-        default:
-            break;
-    }
+    juce::ignoreUnused(info, status);
+    // Refresh UI to update status bar
     resized();
     repaint();
 }
 
 void MIDIXplorerEditor::showLicenseActivation() {
-    showLicenseDialog = true;
-    resized();
-    repaint();
-}
-
-void MIDIXplorerEditor::hideLicenseDialog() {
-    if (licenseManager.isLicenseValid()) {
-        showLicenseDialog = false;
-        resized();
+    // Use the ActivationDialog popup instead of inline dialog
+    ActivationDialog::showActivationDialog(this, [this](bool) {
+        // Refresh UI after dialog closes
         repaint();
-    }
+    });
 }

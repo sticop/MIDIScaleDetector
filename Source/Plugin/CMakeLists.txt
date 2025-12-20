@@ -36,6 +36,8 @@ target_sources(MIDIXplorerPlugin
         PluginEditor.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../Standalone/LicenseManager.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../Standalone/LicenseManager.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Standalone/ActivationDialog.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Standalone/ActivationDialog.h
 )
 
 # Link libraries

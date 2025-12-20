@@ -277,15 +277,8 @@ private:
 
     // License management
     LicenseManager licenseManager;
-    juce::Image logoImage;  // Logo for license dialog
-    bool showLicenseDialog = false;
-    juce::TextEditor licenseKeyInput;
-    juce::TextButton activateLicenseBtn{"Activate"};
-    juce::TextButton deactivateLicenseBtn{"Deactivate"};
     juce::TextButton statusBarActivateBtn{"Activate License"};  // Button in status bar
-    juce::Label licenseStatusLabel;
     void showLicenseActivation();
-    void hideLicenseDialog();
 
     void addLibrary();
     void scanLibraries();
