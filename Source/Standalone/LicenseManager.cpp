@@ -36,15 +36,15 @@ juce::String LicenseManager::getMachineId() const
     #if JUCE_MAC
     // Use system serial number or UUID on Mac
     systemInfo = juce::SystemStats::getComputerName() +
-                 juce::SystemStats::getUserName() +
+                 juce::SystemStats::getLogonName() +
                  juce::String(juce::SystemStats::getNumCpus());
     #elif JUCE_WINDOWS
     systemInfo = juce::SystemStats::getComputerName() +
-                 juce::SystemStats::getUserName() +
+                 juce::SystemStats::getLogonName() +
                  juce::String(juce::SystemStats::getNumCpus());
     #else
     systemInfo = juce::SystemStats::getComputerName() +
-                 juce::SystemStats::getUserName();
+                 juce::SystemStats::getLogonName();
     #endif
 
     // Hash to create consistent ID
@@ -145,9 +145,9 @@ void LicenseManager::sendPostRequest(const juce::String& endpoint, const juce::v
     // Create a thread to perform the request
     juce::Thread::launch([url, callback]()
     {
-        juce::URL::InputStreamOptions options(juce::URL::ParameterHandling::inPostData);
-        options.withExtraHeaders("Content-Type: application/json");
-        options.withConnectionTimeoutMs(10000);
+        auto options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inPostData)
+            .withExtraHeaders("Content-Type: application/json")
+            .withConnectionTimeoutMs(10000);
 
         auto stream = url.createInputStream(options);
 
@@ -395,23 +395,23 @@ juce::File LicenseManager::getTrialFile() const
 void LicenseManager::saveTrialStartDate(juce::Time date)
 {
     auto file = getTrialFile();
-    
+
     // Store as obfuscated timestamp
     juce::int64 timestamp = date.toMilliseconds();
     juce::String data = juce::String(timestamp) + "|" + getMachineId();
-    
+
     juce::MemoryOutputStream stream;
     stream.writeString(data);
-    
+
     juce::MemoryBlock block;
     block.append(stream.getData(), stream.getDataSize());
-    
+
     // XOR obfuscation
     for (size_t i = 0; i < block.getSize(); ++i)
     {
         static_cast<char*>(block.getData())[i] ^= 0x7B;
     }
-    
+
     file.replaceWithData(block.getData(), block.getSize());
 }
 
@@ -420,20 +420,20 @@ juce::Time LicenseManager::loadTrialStartDate() const
     auto file = getTrialFile();
     if (!file.existsAsFile())
         return juce::Time();
-    
+
     juce::MemoryBlock block;
     if (!file.loadFileAsData(block))
         return juce::Time();
-    
+
     // XOR to decode
     for (size_t i = 0; i < block.getSize(); ++i)
     {
         static_cast<char*>(block.getData())[i] ^= 0x7B;
     }
-    
+
     juce::MemoryInputStream stream(block, false);
     juce::String data = stream.readString();
-    
+
     // Parse timestamp and verify machine ID
     auto parts = juce::StringArray::fromTokens(data, "|", "");
     if (parts.size() >= 2)
@@ -445,7 +445,7 @@ juce::Time LicenseManager::loadTrialStartDate() const
             return juce::Time(timestamp);
         }
     }
-    
+
     return juce::Time();
 }
 
@@ -458,17 +458,17 @@ void LicenseManager::initializeTrial()
         // Has license key - don't initialize trial
         return;
     }
-    
+
     // Check if trial already started
     juce::Time startDate = loadTrialStartDate();
-    
+
     if (startDate == juce::Time())
     {
         // First launch - start trial now
         startDate = juce::Time::getCurrentTime();
         saveTrialStartDate(startDate);
     }
-    
+
     trialInfo.firstLaunchDate = startDate;
     checkTrialStatus();
 }
@@ -482,27 +482,27 @@ void LicenseManager::checkTrialStatus()
         trialInfo.isTrialExpired = false;
         return;
     }
-    
+
     juce::Time startDate = loadTrialStartDate();
-    
+
     if (startDate == juce::Time())
     {
         // No trial started yet - initialize
         initializeTrial();
         startDate = trialInfo.firstLaunchDate;
     }
-    
+
     if (startDate != juce::Time())
     {
         juce::Time now = juce::Time::getCurrentTime();
         juce::RelativeTime elapsed = now - startDate;
         int daysPassed = static_cast<int>(elapsed.inDays());
-        
+
         trialInfo.firstLaunchDate = startDate;
         trialInfo.daysRemaining = juce::jmax(0, trialInfo.trialDays - daysPassed);
         trialInfo.isTrialActive = true;
         trialInfo.isTrialExpired = (trialInfo.daysRemaining <= 0);
-        
+
         // Update current status
         if (trialInfo.isTrialExpired)
         {
@@ -512,7 +512,7 @@ void LicenseManager::checkTrialStatus()
         {
             currentStatus = LicenseStatus::Trial;
         }
-        
+
         // Notify listeners
         listeners.call([this](Listener& l) { l.licenseStatusChanged(currentStatus, licenseInfo); });
     }

@@ -123,7 +123,7 @@ private:
     // Settings file
     juce::File getSettingsFile() const;
     juce::File getTrialFile() const;
-    
+
     // Trial file operations
     void saveTrialStartDate(juce::Time date);
     juce::Time loadTrialStartDate() const;

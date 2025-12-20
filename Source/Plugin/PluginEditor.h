@@ -5,7 +5,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <juce_audio_formats/juce_audio_formats.h>
-#include "LicenseManager.h"
+#include "../Standalone/LicenseManager.h"
 
 namespace MIDIScaleDetector {
     class MIDIScalePlugin;
@@ -25,7 +25,7 @@ public:
     bool keyPressed(const juce::KeyPress& key) override;
 
     // LicenseManager::Listener
-    void licenseStatusChanged(const LicenseManager::LicenseInfo& info) override;
+    void licenseStatusChanged(LicenseManager::LicenseStatus status, const LicenseManager::LicenseInfo& info) override;
 
     struct Library {
         juce::String name;

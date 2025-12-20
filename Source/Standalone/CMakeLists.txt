@@ -21,6 +21,20 @@ target_sources(MIDIXplorerStandalone
         LicenseManager.cpp
         ActivationDialog.h
         ActivationDialog.cpp
+        # Include plugin sources for the standalone
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Plugin/MIDIScalePlugin.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Plugin/MIDIScalePlugin.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Plugin/PluginEditor.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Plugin/PluginEditor.h
+        # Core sources
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Core/MIDIParser/MIDIParser.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Core/MIDIParser/MIDIParser.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Core/Database/Database.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Core/Database/Database.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Core/ScaleDetector/ScaleDetector.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Core/ScaleDetector/ScaleDetector.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Core/FileScanner/FileScanner.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../Core/FileScanner/FileScanner.h
 )
 
 # Link libraries

@@ -19,27 +19,27 @@ public:
     {
         setAlwaysOnTop(true);
         setInterceptsMouseClicks(true, true);
-        
+
         titleLabel.setText("Trial Expired", juce::dontSendNotification);
         titleLabel.setFont(juce::Font(28.0f, juce::Font::bold));
         titleLabel.setColour(juce::Label::textColourId, juce::Colours::white);
         titleLabel.setJustificationType(juce::Justification::centred);
         addAndMakeVisible(titleLabel);
-        
+
         messageLabel.setText("Your 14-day free trial has expired.\nPlease activate a license to continue using MIDI Xplorer.",
                             juce::dontSendNotification);
         messageLabel.setFont(juce::Font(16.0f));
         messageLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(0.8f));
         messageLabel.setJustificationType(juce::Justification::centred);
         addAndMakeVisible(messageLabel);
-        
+
         activateButton.setButtonText("Activate License");
         activateButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a9eff));
         activateButton.onClick = [this]() {
             ActivationDialog::showActivationDialog(this, [](bool) {});
         };
         addAndMakeVisible(activateButton);
-        
+
         purchaseButton.setButtonText("Purchase License");
         purchaseButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2ecc71));
         purchaseButton.onClick = []() {
@@ -47,43 +47,43 @@ public:
         };
         addAndMakeVisible(purchaseButton);
     }
-    
+
     void paint(juce::Graphics& g) override
     {
         // Dark semi-transparent overlay
         g.fillAll(juce::Colour(0xe0101020));
-        
+
         // Central panel
         auto bounds = getLocalBounds();
         auto panelBounds = bounds.reduced(bounds.getWidth() / 4, bounds.getHeight() / 4);
-        
+
         g.setColour(juce::Colour(0xff1a1a2e));
         g.fillRoundedRectangle(panelBounds.toFloat(), 15.0f);
-        
+
         g.setColour(juce::Colour(0xff4a9eff));
         g.drawRoundedRectangle(panelBounds.toFloat(), 15.0f, 2.0f);
     }
-    
+
     void resized() override
     {
         auto bounds = getLocalBounds();
         auto panelBounds = bounds.reduced(bounds.getWidth() / 4, bounds.getHeight() / 4);
         auto content = panelBounds.reduced(30);
-        
+
         titleLabel.setBounds(content.removeFromTop(50));
         content.removeFromTop(20);
         messageLabel.setBounds(content.removeFromTop(60));
         content.removeFromTop(30);
-        
+
         auto buttonArea = content.removeFromTop(45);
         auto buttonWidth = 180;
         auto totalWidth = buttonWidth * 2 + 20;
         auto startX = (buttonArea.getWidth() - totalWidth) / 2;
-        
+
         activateButton.setBounds(buttonArea.getX() + startX, buttonArea.getY(), buttonWidth, 45);
         purchaseButton.setBounds(buttonArea.getX() + startX + buttonWidth + 20, buttonArea.getY(), buttonWidth, 45);
     }
-    
+
 private:
     juce::Label titleLabel;
     juce::Label messageLabel;
@@ -102,21 +102,21 @@ public:
         statusLabel.setFont(juce::Font(13.0f));
         statusLabel.setJustificationType(juce::Justification::centred);
         addAndMakeVisible(statusLabel);
-        
+
         activateButton.setButtonText("Activate Now");
         activateButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a9eff));
         activateButton.onClick = [this]() {
             ActivationDialog::showActivationDialog(this, [](bool) {});
         };
         addAndMakeVisible(activateButton);
-        
+
         updateStatus();
     }
-    
+
     void updateStatus()
     {
         auto& license = LicenseManager::getInstance();
-        
+
         if (license.isLicenseValid())
         {
             setVisible(false);
@@ -126,12 +126,12 @@ public:
             int days = license.getTrialDaysRemaining();
             statusLabel.setText("Trial: " + juce::String(days) + " day" + (days != 1 ? "s" : "") + " remaining",
                                juce::dontSendNotification);
-            
+
             if (days <= 3)
                 statusLabel.setColour(juce::Label::textColourId, juce::Colour(0xffff6b6b));
             else
                 statusLabel.setColour(juce::Label::textColourId, juce::Colours::white);
-            
+
             setVisible(true);
         }
         else
@@ -139,14 +139,14 @@ public:
             setVisible(false);
         }
     }
-    
+
     void paint(juce::Graphics& g) override
     {
         g.fillAll(juce::Colour(0xff2a2a3a));
         g.setColour(juce::Colour(0xff4a4a5a));
         g.drawLine(0, static_cast<float>(getHeight()) - 0.5f, static_cast<float>(getWidth()), static_cast<float>(getHeight()) - 0.5f);
     }
-    
+
     void resized() override
     {
         auto bounds = getLocalBounds().reduced(10, 5);
@@ -154,7 +154,7 @@ public:
         bounds.removeFromRight(10);
         statusLabel.setBounds(bounds);
     }
-    
+
 private:
     juce::Label statusLabel;
     juce::TextButton activateButton;
@@ -179,15 +179,21 @@ public:
     void initialise(const juce::String&) override
     {
         // Register as license listener
-        LicenseManager::getInstance().addListener(this);
-        
+        getLicenseManager().addListener(this);
+
         // Initialize and check license/trial status
         checkLicenseAndLaunch();
     }
 
+    // Helper to avoid ambiguity with JUCEApplication::getInstance()
+    static LicenseManager& getLicenseManager()
+    {
+        return LicenseManager::getInstance();
+    }
+
     void checkLicenseAndLaunch()
     {
-        auto& licenseManager = LicenseManager::getInstance();
+        auto& licenseManager = getLicenseManager();
         juce::String savedKey = licenseManager.loadLicenseKey();
 
         if (savedKey.isNotEmpty())
@@ -200,7 +206,7 @@ public:
                 {
                     // License valid - launch fully
                     launchMainWindow(false);
-                    LicenseManager::getInstance().startPeriodicValidation(3600);
+                    getLicenseManager().startPeriodicValidation(3600);
                 }
                 else if (status == LicenseManager::LicenseStatus::NetworkError && info.isValid)
                 {
@@ -220,13 +226,13 @@ public:
             checkTrialAndLaunch();
         }
     }
-    
+
     void checkTrialAndLaunch()
     {
-        auto& licenseManager = LicenseManager::getInstance();
+        auto& licenseManager = getLicenseManager();
         licenseManager.initializeTrial();
         licenseManager.checkTrialStatus();
-        
+
         if (licenseManager.isInTrialPeriod())
         {
             // Trial active - launch with trial bar
@@ -239,7 +245,7 @@ public:
             showTrialExpiredOverlay();
         }
     }
-    
+
     void showTrialExpiredOverlay()
     {
         if (mainWindow)
@@ -252,7 +258,7 @@ public:
     {
         mainWindow = std::make_unique<MainWindow>(getApplicationName(), showTrialBar);
     }
-    
+
     void licenseStatusChanged(LicenseManager::LicenseStatus status,
                               const LicenseManager::LicenseInfo& /*info*/) override
     {
@@ -275,7 +281,7 @@ public:
             }
         }
     }
-    
+
     void timerCallback() override
     {
         // Not used anymore
@@ -283,8 +289,8 @@ public:
 
     void shutdown() override
     {
-        LicenseManager::getInstance().removeListener(this);
-        LicenseManager::getInstance().stopPeriodicValidation();
+        getLicenseManager().removeListener(this);
+        getLicenseManager().stopPeriodicValidation();
         mainWindow = nullptr;
     }
 
@@ -305,7 +311,7 @@ private:
             : DocumentWindow(name, juce::Colour(0xff1a1a1a), DocumentWindow::allButtons)
         {
             setUsingNativeTitleBar(true);
-            
+
             // Set up menu bar (macOS uses native menu bar)
             #if JUCE_MAC
             juce::MenuBarModel::setMacMainMenu(this);
@@ -313,14 +319,14 @@ private:
 
             // Create main content wrapper
             contentWrapper = std::make_unique<juce::Component>();
-            
+
             // Create trial status bar
             trialBar = std::make_unique<TrialStatusBar>();
             if (showTrialBar && LicenseManager::getInstance().isInTrialPeriod())
             {
                 contentWrapper->addAndMakeVisible(trialBar.get());
             }
-            
+
             // Create the processor (full plugin)
             processor = std::make_unique<MIDIScaleDetector::MIDIScalePlugin>();
             processor->prepareToPlay(44100.0, 512);
@@ -336,15 +342,15 @@ private:
             // Create the full plugin editor UI
             pluginEditor = processor->createEditor();
             contentWrapper->addAndMakeVisible(pluginEditor);
-            
+
             // Set up content wrapper size
             int editorWidth = pluginEditor->getWidth();
             int editorHeight = pluginEditor->getHeight();
             int trialBarHeight = (showTrialBar && LicenseManager::getInstance().isInTrialPeriod()) ? 35 : 0;
             contentWrapper->setSize(editorWidth, editorHeight + trialBarHeight);
-            
+
             setContentOwned(contentWrapper.release(), true);
-            
+
             // Create expired overlay (hidden by default)
             expiredOverlay = std::make_unique<TrialExpiredOverlay>();
             expiredOverlay->setVisible(false);
@@ -358,7 +364,7 @@ private:
             #endif
 
             setVisible(true);
-            
+
             // Register for license updates
             LicenseManager::getInstance().addListener(this);
         }
@@ -373,29 +379,29 @@ private:
             pluginEditor = nullptr;
             processor = nullptr;
         }
-        
+
         void resized() override
         {
             DocumentWindow::resized();
-            
+
             if (auto* content = getContentComponent())
             {
                 auto bounds = content->getLocalBounds();
                 int trialBarHeight = (trialBar && trialBar->isVisible()) ? 35 : 0;
-                
+
                 if (trialBar)
                     trialBar->setBounds(bounds.removeFromTop(trialBarHeight));
-                
+
                 if (pluginEditor)
                     pluginEditor->setBounds(bounds);
             }
-            
+
             if (expiredOverlay)
             {
                 expiredOverlay->setBounds(getLocalBounds());
             }
         }
-        
+
         void showExpiredOverlay()
         {
             if (expiredOverlay)
@@ -405,7 +411,7 @@ private:
                 expiredOverlay->setBounds(getLocalBounds());
             }
         }
-        
+
         void hideExpiredOverlay()
         {
             if (expiredOverlay)
@@ -413,7 +419,7 @@ private:
                 expiredOverlay->setVisible(false);
             }
         }
-        
+
         void hideTrialBar()
         {
             if (trialBar)
@@ -422,7 +428,7 @@ private:
                 resized();
             }
         }
-        
+
         void licenseStatusChanged(LicenseManager::LicenseStatus status,
                                   const LicenseManager::LicenseInfo& /*info*/) override
         {
@@ -652,7 +658,7 @@ private:
                 // Render MIDI through piano synth
                 buffer.clear();
                 if (pianoSynth) {
-                    pianoSynth->renderNextBlock(buffer, midiMessages, 0, numSamples);
+                    pianoSynth->processBlock(buffer, midiMessages);
                 }
             }
 
@@ -670,7 +676,7 @@ private:
 
             void audioDeviceStopped() override
             {
-                if (pianoSynth) pianoSynth->releaseResources();
+                // PianoSynthesizer doesn't have releaseResources
                 if (processor) processor->releaseResources();
             }
 
