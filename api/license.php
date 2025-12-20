@@ -90,7 +90,7 @@ function handleActivation($pdo, $input) {
     // Check license status
     if ($license['status'] !== 'active') {
         logAction($pdo, $license['id'], 'activation_failed_status', "Status: {$license['status']}", $ipAddress);
-        
+
         if ($license['status'] === 'expired') {
             sendError('License has expired', 'expired');
         } elseif ($license['status'] === 'revoked') {
@@ -105,7 +105,7 @@ function handleActivation($pdo, $input) {
         // Update status to expired
         $stmt = $pdo->prepare("UPDATE licenses SET status = 'expired' WHERE id = ?");
         $stmt->execute([$license['id']]);
-        
+
         logAction($pdo, $license['id'], 'activation_failed_expired', "Expiry: {$license['expiry_date']}", $ipAddress);
         sendError('License has expired', 'expired');
     }
@@ -119,9 +119,9 @@ function handleActivation($pdo, $input) {
         // Update last seen
         $stmt = $pdo->prepare("UPDATE activations SET last_seen = NOW(), app_version = ?, ip_address = ? WHERE id = ?");
         $stmt->execute([$appVersion, $ipAddress, $existingActivation['id']]);
-        
+
         logAction($pdo, $license['id'], 'reactivation', "Machine: $machineName", $ipAddress);
-        
+
         sendSuccess('License reactivated successfully', [
             'email' => $license['email'],
             'customer_name' => $license['customer_name'],
@@ -184,8 +184,8 @@ function handleDeactivation($pdo, $input) {
 
     // Find and deactivate the machine
     $stmt = $pdo->prepare("
-        UPDATE activations 
-        SET is_active = 0, deactivated_at = NOW() 
+        UPDATE activations
+        SET is_active = 0, deactivated_at = NOW()
         WHERE license_id = ? AND machine_id = ? AND is_active = 1
     ");
     $stmt->execute([$license['id'], $machineId]);
@@ -269,7 +269,7 @@ function handleValidation($pdo, $input) {
  */
 function logAction($pdo, $licenseId, $action, $details, $ipAddress) {
     $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-    
+
     $stmt = $pdo->prepare("
         INSERT INTO license_logs (license_id, action, details, ip_address, user_agent)
         VALUES (?, ?, ?, ?, ?)
@@ -285,11 +285,11 @@ function sendSuccess($message, $data = null) {
         'success' => true,
         'message' => $message
     ];
-    
+
     if ($data !== null) {
         $response['data'] = $data;
     }
-    
+
     echo json_encode($response);
     exit();
 }

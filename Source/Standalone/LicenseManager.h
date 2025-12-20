@@ -54,12 +54,12 @@ public:
     void activateLicense(const juce::String& licenseKey, std::function<void(LicenseStatus, const juce::String&)> callback);
     void deactivateLicense(std::function<void(bool, const juce::String&)> callback);
     void validateLicense(std::function<void(LicenseStatus, const LicenseInfo&)> callback);
-    
+
     // Status checks
     bool isLicenseValid() const { return currentStatus == LicenseStatus::Valid; }
     LicenseStatus getCurrentStatus() const { return currentStatus; }
     const LicenseInfo& getLicenseInfo() const { return licenseInfo; }
-    
+
     // License key storage
     void saveLicenseKey(const juce::String& key);
     juce::String loadLicenseKey() const;
@@ -90,16 +90,16 @@ private:
 
     // Server configuration
     const juce::String serverUrl = "https://reliablehandy.ca/midixplorer/api";
-    
+
     // Current state
     LicenseStatus currentStatus = LicenseStatus::Unknown;
     LicenseInfo licenseInfo;
-    
+
     // Listeners
     juce::ListenerList<Listener> listeners;
-    
+
     // Settings file
     juce::File getSettingsFile() const;
-    
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LicenseManager)
 };

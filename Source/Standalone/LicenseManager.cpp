@@ -32,21 +32,21 @@ juce::String LicenseManager::getMachineId() const
 {
     // Generate a unique machine ID based on system info
     juce::String systemInfo;
-    
+
     #if JUCE_MAC
     // Use system serial number or UUID on Mac
-    systemInfo = juce::SystemStats::getComputerName() + 
+    systemInfo = juce::SystemStats::getComputerName() +
                  juce::SystemStats::getUserName() +
                  juce::String(juce::SystemStats::getNumCpus());
     #elif JUCE_WINDOWS
-    systemInfo = juce::SystemStats::getComputerName() + 
+    systemInfo = juce::SystemStats::getComputerName() +
                  juce::SystemStats::getUserName() +
                  juce::String(juce::SystemStats::getNumCpus());
     #else
-    systemInfo = juce::SystemStats::getComputerName() + 
+    systemInfo = juce::SystemStats::getComputerName() +
                  juce::SystemStats::getUserName();
     #endif
-    
+
     // Hash to create consistent ID
     return juce::SHA256(systemInfo.toUTF8()).toHexString().substring(0, 32);
 }
@@ -90,20 +90,20 @@ juce::File LicenseManager::getSettingsFile() const
 void LicenseManager::saveLicenseKey(const juce::String& key)
 {
     auto file = getSettingsFile();
-    
+
     // Simple obfuscation (not secure, but prevents casual viewing)
     juce::MemoryOutputStream stream;
     stream.writeString(key);
-    
+
     juce::MemoryBlock block;
     block.append(stream.getData(), stream.getDataSize());
-    
+
     // XOR with simple key
     for (size_t i = 0; i < block.getSize(); ++i)
     {
         static_cast<char*>(block.getData())[i] ^= 0x5A;
     }
-    
+
     file.replaceWithData(block.getData(), block.getSize());
     licenseInfo.licenseKey = key;
 }
@@ -113,17 +113,17 @@ juce::String LicenseManager::loadLicenseKey() const
     auto file = getSettingsFile();
     if (!file.existsAsFile())
         return {};
-    
+
     juce::MemoryBlock block;
     if (!file.loadFileAsData(block))
         return {};
-    
+
     // XOR to decode
     for (size_t i = 0; i < block.getSize(); ++i)
     {
         static_cast<char*>(block.getData())[i] ^= 0x5A;
     }
-    
+
     juce::MemoryInputStream stream(block, false);
     return stream.readString();
 }
@@ -148,9 +148,9 @@ void LicenseManager::sendPostRequest(const juce::String& endpoint, const juce::v
         juce::URL::InputStreamOptions options(juce::URL::ParameterHandling::inPostData);
         options.withExtraHeaders("Content-Type: application/json");
         options.withConnectionTimeoutMs(10000);
-        
+
         auto stream = url.createInputStream(options);
-        
+
         if (stream == nullptr)
         {
             juce::MessageManager::callAsync([callback]()
@@ -159,14 +159,14 @@ void LicenseManager::sendPostRequest(const juce::String& endpoint, const juce::v
             });
             return;
         }
-        
+
         auto response = stream->readEntireStreamAsString();
-        int statusCode = dynamic_cast<juce::WebInputStream*>(stream.get()) 
-                             ? dynamic_cast<juce::WebInputStream*>(stream.get())->getStatusCode() 
+        int statusCode = dynamic_cast<juce::WebInputStream*>(stream.get())
+                             ? dynamic_cast<juce::WebInputStream*>(stream.get())->getStatusCode()
                              : 200;
-        
+
         auto jsonResult = juce::JSON::parse(response);
-        
+
         juce::MessageManager::callAsync([callback, statusCode, jsonResult]()
         {
             callback(statusCode, jsonResult);
@@ -186,7 +186,7 @@ void LicenseManager::activateLicense(const juce::String& licenseKey,
     postData->setProperty("os_version", getOSVersion());
     postData->setProperty("app_version", getAppVersion());
 
-    sendPostRequest("license.php", juce::var(postData.get()), 
+    sendPostRequest("license.php", juce::var(postData.get()),
         [this, licenseKey, callback](int statusCode, const juce::var& response)
     {
         if (statusCode < 0)
@@ -210,7 +210,7 @@ void LicenseManager::activateLicense(const juce::String& licenseKey,
         {
             // Save the license key
             saveLicenseKey(licenseKey);
-            
+
             // Update license info from response
             auto data = response.getProperty("data", juce::var());
             if (data.isObject())
@@ -223,17 +223,17 @@ void LicenseManager::activateLicense(const juce::String& licenseKey,
                 licenseInfo.currentActivations = data.getProperty("current_activations", 1);
                 licenseInfo.isValid = true;
             }
-            
+
             currentStatus = LicenseStatus::Valid;
             callback(currentStatus, "License activated successfully!");
-            
+
             // Notify listeners
             listeners.call([this](Listener& l) { l.licenseStatusChanged(currentStatus, licenseInfo); });
         }
         else
         {
             juce::String errorCode = response.getProperty("error_code", "").toString();
-            
+
             if (errorCode == "max_activations")
                 currentStatus = LicenseStatus::MaxActivationsReached;
             else if (errorCode == "expired")
@@ -242,7 +242,7 @@ void LicenseManager::activateLicense(const juce::String& licenseKey,
                 currentStatus = LicenseStatus::Revoked;
             else
                 currentStatus = LicenseStatus::Invalid;
-            
+
             callback(currentStatus, message);
         }
     });
@@ -319,7 +319,7 @@ void LicenseManager::validateLicense(std::function<void(LicenseStatus, const Lic
         }
 
         bool success = response.getProperty("success", false);
-        
+
         if (success)
         {
             auto data = response.getProperty("data", juce::var());
@@ -333,20 +333,20 @@ void LicenseManager::validateLicense(std::function<void(LicenseStatus, const Lic
                 licenseInfo.currentActivations = data.getProperty("current_activations", 1);
                 licenseInfo.isValid = true;
             }
-            
+
             currentStatus = LicenseStatus::Valid;
         }
         else
         {
             juce::String errorCode = response.getProperty("error_code", "").toString();
-            
+
             if (errorCode == "expired")
                 currentStatus = LicenseStatus::Expired;
             else if (errorCode == "revoked")
                 currentStatus = LicenseStatus::Revoked;
             else
                 currentStatus = LicenseStatus::Invalid;
-            
+
             licenseInfo.isValid = false;
         }
 

@@ -29,12 +29,12 @@ public:
         // Check license before launching main window
         checkLicenseAndLaunch();
     }
-    
+
     void checkLicenseAndLaunch()
     {
         auto& licenseManager = LicenseManager::getInstance();
         juce::String savedKey = licenseManager.loadLicenseKey();
-        
+
         if (savedKey.isEmpty())
         {
             // No license saved - show activation dialog
@@ -43,14 +43,14 @@ public:
         else
         {
             // Validate existing license
-            licenseManager.validateLicense([this](LicenseManager::LicenseStatus status, 
+            licenseManager.validateLicense([this](LicenseManager::LicenseStatus status,
                                                    const LicenseManager::LicenseInfo& info)
             {
                 if (status == LicenseManager::LicenseStatus::Valid)
                 {
                     // License is valid - launch the app
                     launchMainWindow();
-                    
+
                     // Start periodic validation (every hour)
                     LicenseManager::getInstance().startPeriodicValidation(3600);
                 }
@@ -67,7 +67,7 @@ public:
             });
         }
     }
-    
+
     void showActivationDialog()
     {
         // Create a temporary window to host the activation dialog
@@ -75,20 +75,20 @@ public:
             "MIDI Xplorer - License Activation",
             juce::Colour(0xff2a2a2a),
             true);
-        
+
         auto* dialog = new ActivationDialog();
         activationWindow->setContentOwned(dialog, true);
         activationWindow->setUsingNativeTitleBar(true);
         activationWindow->centreWithSize(450, 350);
         activationWindow->setVisible(true);
-        
+
         // Override close button to check license status
         activationWindow->setConstrainer(nullptr);
-        
+
         // Poll for license status
         startTimer(500);
     }
-    
+
     void timerCallback()
     {
         if (LicenseManager::getInstance().isLicenseValid())
@@ -99,7 +99,7 @@ public:
             LicenseManager::getInstance().startPeriodicValidation(3600);
         }
     }
-    
+
     void launchMainWindow()
     {
         mainWindow = std::make_unique<MainWindow>(getApplicationName());
@@ -120,13 +120,19 @@ public:
     void anotherInstanceStarted(const juce::String&) override {}
 
 private:
-    class MainWindow : public juce::DocumentWindow
+    class MainWindow : public juce::DocumentWindow,
+                       public juce::MenuBarModel
     {
     public:
         explicit MainWindow(const juce::String& name)
             : DocumentWindow(name, juce::Colour(0xff1a1a1a), DocumentWindow::allButtons)
         {
             setUsingNativeTitleBar(true);
+            
+            // Set up menu bar (macOS uses native menu bar)
+            #if JUCE_MAC
+            juce::MenuBarModel::setMacMainMenu(this);
+            #endif
 
             // Create the processor (full plugin)
             processor = std::make_unique<MIDIScaleDetector::MIDIScalePlugin>();
@@ -156,6 +162,9 @@ private:
 
         ~MainWindow() override
         {
+            #if JUCE_MAC
+            juce::MenuBarModel::setMacMainMenu(nullptr);
+            #endif
             audioDeviceManager.removeAudioCallback(&audioCallback);
             setContentOwned(nullptr, false);
             processor = nullptr;
@@ -164,6 +173,135 @@ private:
         void closeButtonPressed() override
         {
             JUCEApplication::getInstance()->systemRequestedQuit();
+        }
+        
+        // MenuBarModel implementation
+        juce::StringArray getMenuBarNames() override
+        {
+            return { "File", "Help" };
+        }
+        
+        juce::PopupMenu getMenuForIndex(int menuIndex, const juce::String& /*menuName*/) override
+        {
+            juce::PopupMenu menu;
+            
+            if (menuIndex == 0) // File menu
+            {
+                menu.addItem(1, "Manage License...");
+                menu.addSeparator();
+                menu.addItem(2, "Audio Settings...");
+                menu.addSeparator();
+                #if ! JUCE_MAC
+                menu.addItem(3, "Quit");
+                #endif
+            }
+            else if (menuIndex == 1) // Help menu
+            {
+                menu.addItem(10, "About MIDI Xplorer");
+                menu.addItem(11, "License Status");
+            }
+            
+            return menu;
+        }
+        
+        void menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/) override
+        {
+            if (menuItemID == 1) // Manage License
+            {
+                ActivationDialog::showActivationDialog(this, nullptr);
+            }
+            else if (menuItemID == 2) // Audio Settings
+            {
+                showAudioSettings();
+            }
+            else if (menuItemID == 3) // Quit
+            {
+                JUCEApplication::getInstance()->systemRequestedQuit();
+            }
+            else if (menuItemID == 10) // About
+            {
+                showAboutDialog();
+            }
+            else if (menuItemID == 11) // License Status
+            {
+                showLicenseStatus();
+            }
+        }
+        
+        void showAudioSettings()
+        {
+            auto* selector = new juce::AudioDeviceSelectorComponent(
+                audioDeviceManager, 0, 0, 0, 2, false, false, true, false);
+            selector->setSize(500, 400);
+            
+            juce::DialogWindow::LaunchOptions options;
+            options.content.setOwned(selector);
+            options.dialogTitle = "Audio Settings";
+            options.dialogBackgroundColour = juce::Colour(0xff2a2a2a);
+            options.escapeKeyTriggersCloseButton = true;
+            options.useNativeTitleBar = true;
+            options.resizable = false;
+            options.launchAsync();
+        }
+        
+        void showAboutDialog()
+        {
+            auto& license = LicenseManager::getInstance();
+            auto info = license.getLicenseInfo();
+            
+            juce::String message = "MIDI Xplorer v1.0.0\n\n";
+            message += "A powerful MIDI file browser and analyzer\n";
+            message += "with built-in piano synthesizer.\n\n";
+            
+            if (license.isLicenseValid())
+            {
+                message += "Licensed to: " + info.customerName + "\n";
+                message += "License type: " + info.licenseType + "\n";
+            }
+            else
+            {
+                message += "Unlicensed - Trial Mode\n";
+            }
+            
+            juce::AlertWindow::showMessageBoxAsync(
+                juce::AlertWindow::InfoIcon,
+                "About MIDI Xplorer",
+                message,
+                "OK");
+        }
+        
+        void showLicenseStatus()
+        {
+            auto& license = LicenseManager::getInstance();
+            auto info = license.getLicenseInfo();
+            
+            juce::String message;
+            
+            if (license.isLicenseValid())
+            {
+                message = "License Status: ACTIVE\n\n";
+                message += "Customer: " + info.customerName + "\n";
+                message += "Email: " + info.email + "\n";
+                message += "Type: " + info.licenseType + "\n";
+                message += "Activations: " + juce::String(info.currentActivations) + 
+                           "/" + juce::String(info.maxActivations) + "\n";
+                
+                if (info.expiryDate.isNotEmpty())
+                    message += "Expires: " + info.expiryDate + "\n";
+                else
+                    message += "Expires: Never\n";
+            }
+            else
+            {
+                message = "License Status: NOT ACTIVATED\n\n";
+                message += "Please activate your license to unlock all features.";
+            }
+            
+            juce::AlertWindow::showMessageBoxAsync(
+                license.isLicenseValid() ? juce::AlertWindow::InfoIcon : juce::AlertWindow::WarningIcon,
+                "License Status",
+                message,
+                "OK");
         }
 
     private:

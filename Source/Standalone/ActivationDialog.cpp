@@ -78,7 +78,7 @@ ActivationDialog::ActivationDialog()
 
     // Register as listener
     LicenseManager::getInstance().addListener(this);
-    
+
     // Update UI based on current status
     updateUI();
 }
@@ -91,7 +91,7 @@ ActivationDialog::~ActivationDialog()
 void ActivationDialog::paint(juce::Graphics& g)
 {
     g.fillAll(backgroundColour);
-    
+
     // Border
     g.setColour(juce::Colour(0xff4a4a4a));
     g.drawRect(getLocalBounds(), 1);
@@ -100,19 +100,19 @@ void ActivationDialog::paint(juce::Graphics& g)
 void ActivationDialog::resized()
 {
     auto bounds = getLocalBounds().reduced(30);
-    
+
     titleLabel.setBounds(bounds.removeFromTop(35));
     bounds.removeFromTop(10);
-    
+
     statusLabel.setBounds(bounds.removeFromTop(25));
     bounds.removeFromTop(25);
-    
+
     licenseKeyLabel.setBounds(bounds.removeFromTop(20));
     bounds.removeFromTop(5);
-    
+
     licenseKeyEditor.setBounds(bounds.removeFromTop(40));
     bounds.removeFromTop(20);
-    
+
     // Buttons row
     auto buttonArea = bounds.removeFromTop(40);
     activateButton.setBounds(buttonArea.removeFromLeft(150));
@@ -120,9 +120,9 @@ void ActivationDialog::resized()
     deactivateButton.setBounds(buttonArea.removeFromLeft(100));
     buttonArea.removeFromLeft(10);
     closeButton.setBounds(buttonArea.removeFromLeft(80));
-    
+
     bounds.removeFromTop(30);
-    
+
     infoLabel.setBounds(bounds.removeFromTop(20));
     bounds.removeFromTop(5);
     purchaseLink.setBounds(bounds.removeFromTop(25));
@@ -150,30 +150,30 @@ void ActivationDialog::buttonClicked(juce::Button* button)
 void ActivationDialog::attemptActivation()
 {
     juce::String key = licenseKeyEditor.getText().trim();
-    
+
     if (key.isEmpty())
     {
         statusLabel.setText("Please enter a license key", juce::dontSendNotification);
         statusLabel.setColour(juce::Label::textColourId, errorColour);
         return;
     }
-    
+
     isProcessing = true;
     activateButton.setEnabled(false);
     statusLabel.setText("Activating license...", juce::dontSendNotification);
     statusLabel.setColour(juce::Label::textColourId, textColour.withAlpha(0.7f));
-    
+
     LicenseManager::getInstance().activateLicense(key,
         [this](LicenseManager::LicenseStatus status, const juce::String& message)
     {
         isProcessing = false;
         activateButton.setEnabled(true);
         statusLabel.setText(message, juce::dontSendNotification);
-        
+
         if (status == LicenseManager::LicenseStatus::Valid)
         {
             statusLabel.setColour(juce::Label::textColourId, successColour);
-            
+
             // Close dialog after successful activation
             juce::Timer::callAfterDelay(1500, [this]()
             {
@@ -196,14 +196,14 @@ void ActivationDialog::attemptDeactivation()
     deactivateButton.setEnabled(false);
     statusLabel.setText("Deactivating license...", juce::dontSendNotification);
     statusLabel.setColour(juce::Label::textColourId, textColour.withAlpha(0.7f));
-    
+
     LicenseManager::getInstance().deactivateLicense(
         [this](bool success, const juce::String& message)
     {
         isProcessing = false;
         deactivateButton.setEnabled(true);
         statusLabel.setText(message, juce::dontSendNotification);
-        
+
         if (success)
         {
             statusLabel.setColour(juce::Label::textColourId, successColour);
@@ -221,9 +221,9 @@ void ActivationDialog::updateUI()
 {
     bool isValid = LicenseManager::getInstance().isLicenseValid();
     auto info = LicenseManager::getInstance().getLicenseInfo();
-    
+
     deactivateButton.setEnabled(info.licenseKey.isNotEmpty());
-    
+
     if (isValid)
     {
         statusLabel.setText("License is active - " + info.licenseType, juce::dontSendNotification);
@@ -242,7 +242,7 @@ void ActivationDialog::showActivationDialog(juce::Component* parent,
 {
     auto* dialog = new ActivationDialog();
     dialog->completionCallback = callback;
-    
+
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned(dialog);
     options.dialogTitle = "License Activation";
@@ -250,9 +250,9 @@ void ActivationDialog::showActivationDialog(juce::Component* parent,
     options.escapeKeyTriggersCloseButton = true;
     options.useNativeTitleBar = true;
     options.resizable = false;
-    
+
     auto* window = options.launchAsync();
-    
+
     if (parent != nullptr)
     {
         window->centreAroundComponent(parent, window->getWidth(), window->getHeight());
@@ -294,7 +294,7 @@ LicenseInfoPanel::LicenseInfoPanel()
     addAndMakeVisible(manageButton);
 
     LicenseManager::getInstance().addListener(this);
-    
+
     // Get initial status
     auto status = LicenseManager::getInstance().getCurrentStatus();
     auto info = LicenseManager::getInstance().getLicenseInfo();
@@ -314,12 +314,12 @@ void LicenseInfoPanel::paint(juce::Graphics& g)
 void LicenseInfoPanel::resized()
 {
     auto bounds = getLocalBounds().reduced(10);
-    
+
     statusLabel.setBounds(bounds.removeFromTop(20));
     licenseTypeLabel.setBounds(bounds.removeFromTop(20));
     customerLabel.setBounds(bounds.removeFromTop(20));
     expiryLabel.setBounds(bounds.removeFromTop(20));
-    
+
     bounds.removeFromTop(10);
     manageButton.setBounds(bounds.removeFromTop(30).withWidth(120));
 }
@@ -329,7 +329,7 @@ void LicenseInfoPanel::licenseStatusChanged(LicenseManager::LicenseStatus status
 {
     juce::String statusText = "License Status: ";
     juce::Colour statusColour;
-    
+
     switch (status)
     {
         case LicenseManager::LicenseStatus::Valid:
@@ -353,15 +353,15 @@ void LicenseInfoPanel::licenseStatusChanged(LicenseManager::LicenseStatus status
             statusColour = juce::Colour(0xffaaaaaa);
             break;
     }
-    
+
     statusLabel.setText(statusText, juce::dontSendNotification);
     statusLabel.setColour(juce::Label::textColourId, statusColour);
-    
+
     if (info.isValid)
     {
         licenseTypeLabel.setText("Type: " + info.licenseType, juce::dontSendNotification);
         customerLabel.setText("Customer: " + info.customerName, juce::dontSendNotification);
-        
+
         if (info.expiryDate.isNotEmpty())
             expiryLabel.setText("Expires: " + info.expiryDate, juce::dontSendNotification);
         else

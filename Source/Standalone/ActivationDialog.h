@@ -50,7 +50,7 @@ private:
 
     // Progress indicator
     bool isProcessing = false;
-    
+
     // Callback for modal result
     std::function<void(bool)> completionCallback;
 
