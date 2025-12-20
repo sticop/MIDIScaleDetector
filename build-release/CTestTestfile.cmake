@@ -7,5 +7,4 @@
 subdirs("JUCE")
 subdirs("Source/Core")
 subdirs("Source/Standalone")
-subdirs("Source/Plugin")
 subdirs("Tests")

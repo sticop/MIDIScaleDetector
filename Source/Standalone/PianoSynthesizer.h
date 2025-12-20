@@ -235,7 +235,7 @@ public:
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
     {
         synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
-        
+
         // Apply master gain to ensure audible output
         buffer.applyGain(2.0f);
     }

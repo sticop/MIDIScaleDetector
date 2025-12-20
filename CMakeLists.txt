@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(MIDIXplorer VERSION 1.0.7 LANGUAGES C CXX)
+project(MIDIXplorer VERSION 1.0.8 LANGUAGES C CXX)
 
 # C++ Standard
 set(CMAKE_CXX_STANDARD 17)
