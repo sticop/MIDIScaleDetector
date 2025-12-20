@@ -27,6 +27,10 @@ public:
     // LicenseManager::Listener
     void licenseStatusChanged(LicenseManager::LicenseStatus status, const LicenseManager::LicenseInfo& info) override;
 
+    // License status helpers
+    bool isLicenseExpiredOrTrialExpired() const;
+    int getLicenseStatusBarHeight() const;
+
     struct Library {
         juce::String name;
         juce::String path;

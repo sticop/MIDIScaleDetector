@@ -441,7 +441,7 @@ void MIDIScalePlugin::updatePlayback() {
 void MIDIScalePlugin::sendActiveNoteOffs() {
     // Set flag for processBlock to send note-offs immediately
     playbackState.pendingNoteOffs.store(true);
-    
+
     // Also clear active notes tracking
     std::lock_guard<std::mutex> noteLock(activeNotesMutex);
     activeNotes.clear();

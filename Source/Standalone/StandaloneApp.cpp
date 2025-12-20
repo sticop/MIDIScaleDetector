@@ -100,7 +100,7 @@ public:
     TrialStatusBar()
     {
         statusLabel.setFont(juce::Font(13.0f));
-        statusLabel.setJustificationType(juce::Justification::centred);
+        statusLabel.setJustificationType(juce::Justification::centredLeft);
         addAndMakeVisible(statusLabel);
 
         activateButton.setButtonText("Activate Now");
@@ -120,6 +120,7 @@ public:
         if (license.isLicenseValid())
         {
             setVisible(false);
+            isExpired = false;
         }
         else if (license.isInTrialPeriod())
         {
@@ -127,23 +128,36 @@ public:
             statusLabel.setText("Trial: " + juce::String(days) + " day" + (days != 1 ? "s" : "") + " remaining",
                                juce::dontSendNotification);
 
-            if (days <= 3)
-                statusLabel.setColour(juce::Label::textColourId, juce::Colour(0xffff6b6b));
-            else
+            if (days <= 3) {
                 statusLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+                barColour = juce::Colour(0xffff8833);  // Orange
+            } else {
+                statusLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+                barColour = juce::Colour(0xff3366aa);  // Blue
+            }
 
             setVisible(true);
+            isExpired = false;
         }
         else
         {
-            setVisible(false);
+            // Trial expired - show red bar
+            statusLabel.setText("Trial Expired - Audio preview disabled. Please activate a license.",
+                               juce::dontSendNotification);
+            statusLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+            barColour = juce::Colour(0xffcc3333);  // Red
+            setVisible(true);
+            isExpired = true;
         }
+        repaint();
     }
+
+    bool isLicenseExpired() const { return isExpired; }
 
     void paint(juce::Graphics& g) override
     {
-        g.fillAll(juce::Colour(0xff2a2a3a));
-        g.setColour(juce::Colour(0xff4a4a5a));
+        g.fillAll(barColour);
+        g.setColour(juce::Colours::black.withAlpha(0.3f));
         g.drawLine(0, static_cast<float>(getHeight()) - 0.5f, static_cast<float>(getWidth()), static_cast<float>(getHeight()) - 0.5f);
     }
 
@@ -158,6 +172,8 @@ public:
 private:
     juce::Label statusLabel;
     juce::TextButton activateButton;
+    juce::Colour barColour { 0xff3366aa };  // Default blue
+    bool isExpired = false;
 };
 
 /**
@@ -240,18 +256,15 @@ public:
         }
         else
         {
-            // Trial expired - launch disabled
+            // Trial expired - launch with status bar (no blocking overlay)
             launchMainWindow(true);
-            showTrialExpiredOverlay();
+            // Note: Trial bar will show red "expired" message automatically
         }
     }
 
     void showTrialExpiredOverlay()
     {
-        if (mainWindow)
-        {
-            mainWindow->showExpiredOverlay();
-        }
+        // No longer show blocking overlay - the trial bar shows red message instead
     }
 
     void launchMainWindow(bool showTrialBar)
@@ -439,12 +452,22 @@ private:
             }
             else if (status == LicenseManager::LicenseStatus::Trial)
             {
-                if (trialBar)
+                if (trialBar) {
                     trialBar->updateStatus();
+                    trialBar->setVisible(true);
+                    resized();
+                }
             }
-            else if (status == LicenseManager::LicenseStatus::TrialExpired)
+            else if (status == LicenseManager::LicenseStatus::TrialExpired ||
+                     status == LicenseManager::LicenseStatus::Expired ||
+                     status == LicenseManager::LicenseStatus::Invalid)
             {
-                showExpiredOverlay();
+                // Show red status bar instead of blocking overlay
+                if (trialBar) {
+                    trialBar->updateStatus();
+                    trialBar->setVisible(true);
+                    resized();
+                }
             }
         }
 
@@ -649,6 +672,17 @@ private:
                 // Create buffers
                 juce::AudioBuffer<float> buffer(outputChannelData, numOutputChannels, numSamples);
                 juce::MidiBuffer midiMessages;
+
+                // Check license status - mute audio if expired
+                bool licenseExpired = !LicenseManager::getInstance().isLicenseValid() &&
+                                     !LicenseManager::getInstance().isInTrialPeriod();
+                if (licenseExpired) {
+                    buffer.clear();
+                    if (pianoSynth) {
+                        pianoSynth->allNotesOff();
+                    }
+                    return;
+                }
 
                 // Check if playback just stopped (to silence all notes)
                 bool currentlyPlaying = processor && processor->isPlaybackPlaying();

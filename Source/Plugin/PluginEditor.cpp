@@ -137,6 +137,16 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     playPauseButton.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
     isPlaying = false;  // Start with playback stopped
     playPauseButton.onClick = [this]() {
+        // Block playback if license is expired
+        if (isLicenseExpiredOrTrialExpired()) {
+            juce::AlertWindow::showMessageBoxAsync(
+                juce::AlertWindow::WarningIcon,
+                "License Required",
+                "MIDI preview is disabled. Please activate a license to enable playback.",
+                "OK");
+            return;
+        }
+
         if (!isPlaying) {
             // Start playing
             isPlaying = true;
@@ -338,10 +348,12 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     licenseStatusLabel.setColour(juce::Label::textColourId, juce::Colours::grey);
     addChildComponent(licenseStatusLabel);
 
-    // Show license dialog if not licensed
-    if (!licenseManager.isLicenseValid() && !licenseManager.isInTrialPeriod()) {
-        showLicenseDialog = true;
-    }
+    // License dialog is shown via menu, not on startup
+    showLicenseDialog = false;
+
+    // Initialize license manager and check trial status
+    licenseManager.initializeTrial();
+    licenseManager.checkTrialStatus();
 
     setSize(1200, 750);
 
@@ -531,16 +543,71 @@ void MIDIXplorerEditor::loadLibraries() {
     }
 }
 
+bool MIDIXplorerEditor::isLicenseExpiredOrTrialExpired() const {
+    auto status = licenseManager.getCurrentStatus();
+    return status == LicenseManager::LicenseStatus::Expired ||
+           status == LicenseManager::LicenseStatus::TrialExpired ||
+           status == LicenseManager::LicenseStatus::Invalid ||
+           status == LicenseManager::LicenseStatus::Revoked;
+}
+
+int MIDIXplorerEditor::getLicenseStatusBarHeight() const {
+    // Show bar for trial, expired, or invalid states
+    auto status = licenseManager.getCurrentStatus();
+    if (status == LicenseManager::LicenseStatus::Valid)
+        return 0;  // No bar for valid license
+    return 30;  // Height of status bar
+}
+
 void MIDIXplorerEditor::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour(0xff1a1a1a));
 
-    // Sidebar background
+    // Draw license status bar at top if needed
+    int barHeight = getLicenseStatusBarHeight();
+    if (barHeight > 0) {
+        auto status = licenseManager.getCurrentStatus();
+        juce::Colour barColour;
+        juce::String statusText;
+
+        if (isLicenseExpiredOrTrialExpired()) {
+            barColour = juce::Colour(0xffcc3333);  // Red for expired
+            if (status == LicenseManager::LicenseStatus::TrialExpired)
+                statusText = "Trial Expired - MIDI preview disabled. Please activate a license.";
+            else if (status == LicenseManager::LicenseStatus::Expired)
+                statusText = "License Expired - MIDI preview disabled. Please renew your license.";
+            else
+                statusText = "License Invalid - MIDI preview disabled. Please activate a license.";
+        } else if (status == LicenseManager::LicenseStatus::Trial) {
+            int days = licenseManager.getTrialDaysRemaining();
+            if (days <= 3)
+                barColour = juce::Colour(0xffff8833);  // Orange for low trial days
+            else
+                barColour = juce::Colour(0xff3366aa);  // Blue for trial
+            statusText = "Trial: " + juce::String(days) + " day" + (days != 1 ? "s" : "") + " remaining";
+        } else {
+            barColour = juce::Colour(0xff3366aa);  // Blue default
+            statusText = "Unlicensed";
+        }
+
+        g.setColour(barColour);
+        g.fillRect(0, 0, getWidth(), barHeight);
+
+        g.setColour(juce::Colours::white);
+        g.setFont(juce::Font(juce::FontOptions(13.0f)));
+        g.drawText(statusText, 10, 0, getWidth() - 150, barHeight, juce::Justification::centredLeft);
+
+        // Activate button area hint
+        g.setFont(juce::Font(juce::FontOptions(12.0f)));
+        g.drawText("Activate License", getWidth() - 140, 0, 130, barHeight, juce::Justification::centredRight);
+    }
+
+    // Adjust sidebar background for status bar
     g.setColour(juce::Colour(0xff252525));
-    g.fillRect(0, 0, 200, getHeight());
+    g.fillRect(0, barHeight, 200, getHeight() - barHeight);
 
     // Separator line
     g.setColour(juce::Colour(0xff3a3a3a));
-    g.drawVerticalLine(200, 0.0f, (float)getHeight());
+    g.drawVerticalLine(200, (float)barHeight, (float)getHeight());
 
     // License dialog overlay
     if (showLicenseDialog) {
@@ -587,6 +654,12 @@ void MIDIXplorerEditor::paint(juce::Graphics& g) {
 
 void MIDIXplorerEditor::resized() {
     auto area = getLocalBounds();
+
+    // Reserve space for license status bar at top
+    int barHeight = getLicenseStatusBarHeight();
+    if (barHeight > 0) {
+        area.removeFromTop(barHeight);
+    }
 
     // Sidebar
     auto sidebar = area.removeFromLeft(200);
@@ -1009,9 +1082,17 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
     // Add to recently played
     addToRecentlyPlayed(filteredFiles[(size_t)row].fullPath);
 
-    // Resume playback when selecting a file
-    isPlaying = true;
-    playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
+    // Don't auto-start playback if license is expired
+    if (!isLicenseExpiredOrTrialExpired()) {
+        // Resume playback when selecting a file
+        isPlaying = true;
+        playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
+
+        // Set processor playback state
+        if (pluginProcessor) {
+            pluginProcessor->setPlaybackPlaying(true);
+        }
+    }
 
     // Send note-offs for any currently playing notes before switching files
     if (pluginProcessor) {
@@ -1021,7 +1102,7 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
     // Reset velocity/volume to 100% on file change
     velocitySlider.setValue(100.0, juce::sendNotification);
 
-    // Always load immediately for responsive browsing
+    // Always load immediately for responsive browsing (but playback won't start if expired)
     // The file will sync to DAW tempo if sync is enabled
     loadSelectedFile();
 }
