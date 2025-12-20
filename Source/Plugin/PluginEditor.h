@@ -281,6 +281,7 @@ private:
     juce::TextEditor licenseKeyInput;
     juce::TextButton activateLicenseBtn{"Activate"};
     juce::TextButton deactivateLicenseBtn{"Deactivate"};
+    juce::TextButton statusBarActivateBtn{"Activate License"};  // Button in status bar
     juce::Label licenseStatusLabel;
     void showLicenseActivation();
     void hideLicenseDialog();

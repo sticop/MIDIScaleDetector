@@ -348,6 +348,14 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     licenseStatusLabel.setColour(juce::Label::textColourId, juce::Colours::grey);
     addChildComponent(licenseStatusLabel);
 
+    // Status bar activate button (visible when in trial or expired)
+    statusBarActivateBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a9eff));
+    statusBarActivateBtn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    statusBarActivateBtn.onClick = [this]() {
+        showLicenseActivation();
+    };
+    addAndMakeVisible(statusBarActivateBtn);
+
     // License dialog is shown via menu, not on startup
     showLicenseDialog = false;
 
@@ -594,11 +602,8 @@ void MIDIXplorerEditor::paint(juce::Graphics& g) {
 
         g.setColour(juce::Colours::white);
         g.setFont(juce::Font(juce::FontOptions(13.0f)));
-        g.drawText(statusText, 10, 0, getWidth() - 150, barHeight, juce::Justification::centredLeft);
-
-        // Activate button area hint
-        g.setFont(juce::Font(juce::FontOptions(12.0f)));
-        g.drawText("Activate License", getWidth() - 140, 0, 130, barHeight, juce::Justification::centredRight);
+        g.drawText(statusText, 10, 0, getWidth() - 160, barHeight, juce::Justification::centredLeft);
+        // Button is positioned in resized()
     }
 
     // Adjust sidebar background for status bar
@@ -655,10 +660,14 @@ void MIDIXplorerEditor::paint(juce::Graphics& g) {
 void MIDIXplorerEditor::resized() {
     auto area = getLocalBounds();
 
-    // Reserve space for license status bar at top
+    // Reserve space for license status bar at top and position activate button
     int barHeight = getLicenseStatusBarHeight();
     if (barHeight > 0) {
+        statusBarActivateBtn.setVisible(true);
+        statusBarActivateBtn.setBounds(getWidth() - 140, 3, 130, barHeight - 6);
         area.removeFromTop(barHeight);
+    } else {
+        statusBarActivateBtn.setVisible(false);
     }
 
     // Sidebar
