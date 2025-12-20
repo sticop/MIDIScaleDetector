@@ -318,6 +318,14 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     addAndMakeVisible(timeDisplayLabel);
     addAndMakeVisible(midiNoteViewer);
 
+    // Setup fullscreen toggle callback for MIDI viewer
+    midiNoteViewer.onFullscreenToggle = [this]() {
+        midiViewerFullscreen = !midiViewerFullscreen;
+        midiNoteViewer.setFullscreen(midiViewerFullscreen);
+        resized();
+        repaint();
+    };
+
     // License management UI
     licenseManager.addListener(this);
 
@@ -591,12 +599,51 @@ void MIDIXplorerEditor::resized() {
     // Reserve space for license status bar at top and position activate button
     int barHeight = getLicenseStatusBarHeight();
     if (barHeight > 0) {
-        statusBarActivateBtn.setVisible(true);
+        statusBarActivateBtn.setVisible(!midiViewerFullscreen);
         statusBarActivateBtn.setBounds(getWidth() - 140, 3, 130, barHeight - 6);
         area.removeFromTop(barHeight);
     } else {
         statusBarActivateBtn.setVisible(false);
     }
+
+    // Fullscreen mode for MIDI viewer
+    if (midiViewerFullscreen) {
+        // Hide all other components
+        librariesLabel.setVisible(false);
+        addLibraryBtn.setVisible(false);
+        libraryListBox.setVisible(false);
+        searchBox.setVisible(false);
+        fileCountLabel.setVisible(false);
+        keyFilterCombo.setVisible(false);
+        sortCombo.setVisible(false);
+        velocitySlider.setVisible(false);
+        velocityLabel.setVisible(false);
+        playPauseButton.setVisible(false);
+        dragButton.setVisible(false);
+        transposeComboBox.setVisible(false);
+        quantizeCombo.setVisible(false);
+        fileListBox->setVisible(false);
+
+        // MIDI viewer takes entire area
+        midiNoteViewer.setBounds(area.reduced(4));
+        return;
+    }
+
+    // Normal mode - show all components
+    librariesLabel.setVisible(true);
+    addLibraryBtn.setVisible(true);
+    libraryListBox.setVisible(true);
+    searchBox.setVisible(true);
+    fileCountLabel.setVisible(true);
+    keyFilterCombo.setVisible(true);
+    sortCombo.setVisible(true);
+    velocitySlider.setVisible(true);
+    velocityLabel.setVisible(true);
+    playPauseButton.setVisible(true);
+    dragButton.setVisible(true);
+    transposeComboBox.setVisible(true);
+    quantizeCombo.setVisible(true);
+    fileListBox->setVisible(true);
 
     // Sidebar
     auto sidebar = area.removeFromLeft(200);
@@ -2077,6 +2124,47 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
         g.setColour(juce::Colour(0xff0078d4));  // Blue border
         g.drawRect(selRect, 2);
     }
+
+    // Draw fullscreen toggle button in bottom right corner
+    fullscreenBtnBounds = juce::Rectangle<int>(getWidth() - 34, getHeight() - 34, 28, 28);
+
+    // Button background
+    g.setColour(juce::Colour(0x99333333));
+    g.fillRoundedRectangle(fullscreenBtnBounds.toFloat(), 4.0f);
+    g.setColour(juce::Colour(0xff555555));
+    g.drawRoundedRectangle(fullscreenBtnBounds.toFloat(), 4.0f, 1.0f);
+
+    // Draw fullscreen/exit icon
+    g.setColour(juce::Colours::white);
+    auto iconBounds = fullscreenBtnBounds.reduced(6);
+    if (fullscreenMode) {
+        // Exit fullscreen icon (arrows pointing inward)
+        g.drawLine((float)iconBounds.getX(), (float)iconBounds.getY() + 4, (float)iconBounds.getX() + 5, (float)iconBounds.getY(), 2.0f);
+        g.drawLine((float)iconBounds.getX(), (float)iconBounds.getY() + 4, (float)iconBounds.getX() + 4, (float)iconBounds.getY() + 4, 2.0f);
+        g.drawLine((float)iconBounds.getX(), (float)iconBounds.getY() + 4, (float)iconBounds.getX(), (float)iconBounds.getY(), 2.0f);
+
+        g.drawLine((float)iconBounds.getRight(), (float)iconBounds.getBottom() - 4, (float)iconBounds.getRight() - 5, (float)iconBounds.getBottom(), 2.0f);
+        g.drawLine((float)iconBounds.getRight(), (float)iconBounds.getBottom() - 4, (float)iconBounds.getRight() - 4, (float)iconBounds.getBottom() - 4, 2.0f);
+        g.drawLine((float)iconBounds.getRight(), (float)iconBounds.getBottom() - 4, (float)iconBounds.getRight(), (float)iconBounds.getBottom(), 2.0f);
+    } else {
+        // Fullscreen icon (arrows pointing outward from corners)
+        g.drawLine((float)iconBounds.getX(), (float)iconBounds.getY(), (float)iconBounds.getX() + 5, (float)iconBounds.getY(), 2.0f);
+        g.drawLine((float)iconBounds.getX(), (float)iconBounds.getY(), (float)iconBounds.getX(), (float)iconBounds.getY() + 5, 2.0f);
+
+        g.drawLine((float)iconBounds.getRight(), (float)iconBounds.getY(), (float)iconBounds.getRight() - 5, (float)iconBounds.getY(), 2.0f);
+        g.drawLine((float)iconBounds.getRight(), (float)iconBounds.getY(), (float)iconBounds.getRight(), (float)iconBounds.getY() + 5, 2.0f);
+
+        g.drawLine((float)iconBounds.getX(), (float)iconBounds.getBottom(), (float)iconBounds.getX() + 5, (float)iconBounds.getBottom(), 2.0f);
+        g.drawLine((float)iconBounds.getX(), (float)iconBounds.getBottom(), (float)iconBounds.getX(), (float)iconBounds.getBottom() - 5, 2.0f);
+
+        g.drawLine((float)iconBounds.getRight(), (float)iconBounds.getBottom(), (float)iconBounds.getRight() - 5, (float)iconBounds.getBottom(), 2.0f);
+        g.drawLine((float)iconBounds.getRight(), (float)iconBounds.getBottom(), (float)iconBounds.getRight(), (float)iconBounds.getBottom() - 5, 2.0f);
+    }
+}
+
+void MIDIXplorerEditor::MIDINoteViewer::resized() {
+    // Update fullscreen button bounds when resized
+    fullscreenBtnBounds = juce::Rectangle<int>(getWidth() - 34, getHeight() - 34, 28, 28);
 }
 
 void MIDIXplorerEditor::MIDINoteViewer::setSequence(const juce::MidiMessageSequence* seq, double duration) {
@@ -2355,6 +2443,14 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseMagnify(const juce::MouseEvent& eve
 }
 
 void MIDIXplorerEditor::MIDINoteViewer::mouseDown(const juce::MouseEvent& e) {
+    // Check if clicking on fullscreen button
+    if (fullscreenBtnBounds.contains(e.getPosition())) {
+        if (onFullscreenToggle) {
+            onFullscreenToggle();
+        }
+        return;
+    }
+
     if (e.mods.isRightButtonDown()) {
         // Right-click: reset zoom completely
         resetZoom();

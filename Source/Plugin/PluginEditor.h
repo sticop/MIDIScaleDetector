@@ -172,9 +172,16 @@ private:
         void resetZoom() { zoomLevel = 1.0f; scrollOffset = 0.0f; repaint(); }
         void setPlayingNotes(const std::vector<int>& notes) { playingNotes = notes; repaint(); }
         static constexpr int PIANO_WIDTH = 40;  // Width of piano keyboard on left
+
+        // Fullscreen mode
+        bool isFullscreen() const { return fullscreenMode; }
+        void setFullscreen(bool fs) { fullscreenMode = fs; }
+        std::function<void()> onFullscreenToggle;  // Callback when fullscreen button clicked
+
     public:
         MIDINoteViewer() { setMouseCursor(juce::MouseCursor::CrosshairCursor); }
         void paint(juce::Graphics& g) override;
+        void resized() override;
         void setSequence(const juce::MidiMessageSequence* seq, double duration);
         void setPlaybackPosition(double position);
         void mouseMove(const juce::MouseEvent& e) override;
@@ -193,6 +200,10 @@ private:
         float zoomLevel = 1.0f;
         float scrollOffset = 0.0f;
         std::vector<int> playingNotes;  // Currently playing notes
+        bool fullscreenMode = false;
+
+        // Fullscreen toggle button bounds
+        juce::Rectangle<int> fullscreenBtnBounds;
 
         // Selection for click-to-zoom
         bool isDraggingSelection = false;
@@ -228,6 +239,7 @@ private:
     juce::Label velocityLabel;
     juce::Label timeDisplayLabel;  // Shows elapsed / total time
     MIDINoteViewer midiNoteViewer;
+    bool midiViewerFullscreen = false;  // Fullscreen mode for MIDI viewer
 
     std::vector<Library> libraries;
     std::vector<MIDIFileInfo> allFiles;
