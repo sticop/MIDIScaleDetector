@@ -317,7 +317,7 @@ private:
                        public LicenseManager::Listener
     {
     public:
-        explicit MainWindow(const juce::String& name, bool showTrialBar)
+        explicit MainWindow(const juce::String& name, bool /*showTrialBar*/)
             : DocumentWindow(name, juce::Colour(0xff1a1a1a), DocumentWindow::allButtons)
         {
             setUsingNativeTitleBar(true);
@@ -330,12 +330,7 @@ private:
             // Create main content wrapper
             contentWrapper = std::make_unique<juce::Component>();
 
-            // Create trial status bar
-            trialBar = std::make_unique<TrialStatusBar>();
-            if (showTrialBar && LicenseManager::getInstance().isInTrialPeriod())
-            {
-                contentWrapper->addAndMakeVisible(trialBar.get());
-            }
+            // Note: TrialStatusBar removed - PluginEditor now has built-in license status bar
 
             // Create the processor (full plugin)
             processor = std::make_unique<MIDIScaleDetector::MIDIScalePlugin>();
@@ -353,18 +348,14 @@ private:
             pluginEditor = processor->createEditor();
             contentWrapper->addAndMakeVisible(pluginEditor);
 
-            // Set up content wrapper size
+            // Set up content wrapper size (PluginEditor handles its own license bar)
             int editorWidth = pluginEditor->getWidth();
             int editorHeight = pluginEditor->getHeight();
-            int trialBarHeight = (showTrialBar && LicenseManager::getInstance().isInTrialPeriod()) ? 35 : 0;
-            contentWrapper->setSize(editorWidth, editorHeight + trialBarHeight);
+            contentWrapper->setSize(editorWidth, editorHeight);
 
             setContentOwned(contentWrapper.release(), true);
 
-            // Create expired overlay (hidden by default)
-            expiredOverlay = std::make_unique<TrialExpiredOverlay>();
-            expiredOverlay->setVisible(false);
-            addChildComponent(expiredOverlay.get());
+            // Expired overlay no longer used - PluginEditor shows red status bar instead
 
             #if JUCE_IOS || JUCE_ANDROID
             setFullScreen(true);
@@ -397,75 +388,32 @@ private:
             if (auto* content = getContentComponent())
             {
                 auto bounds = content->getLocalBounds();
-                int trialBarHeight = (trialBar && trialBar->isVisible()) ? 35 : 0;
-
-                if (trialBar)
-                    trialBar->setBounds(bounds.removeFromTop(trialBarHeight));
 
                 if (pluginEditor)
                     pluginEditor->setBounds(bounds);
-            }
-
-            if (expiredOverlay)
-            {
-                expiredOverlay->setBounds(getLocalBounds());
             }
         }
 
         void showExpiredOverlay()
         {
-            if (expiredOverlay)
-            {
-                expiredOverlay->setVisible(true);
-                expiredOverlay->toFront(true);
-                expiredOverlay->setBounds(getLocalBounds());
-            }
+            // No longer used - PluginEditor shows red status bar
         }
 
         void hideExpiredOverlay()
         {
-            if (expiredOverlay)
-            {
-                expiredOverlay->setVisible(false);
-            }
+            // No longer used
         }
 
         void hideTrialBar()
         {
-            if (trialBar)
-            {
-                trialBar->setVisible(false);
-                resized();
-            }
+            // No longer used - PluginEditor handles license status bar
         }
 
-        void licenseStatusChanged(LicenseManager::LicenseStatus status,
+        void licenseStatusChanged(LicenseManager::LicenseStatus /*status*/,
                                   const LicenseManager::LicenseInfo& /*info*/) override
         {
-            if (status == LicenseManager::LicenseStatus::Valid)
-            {
-                hideExpiredOverlay();
-                hideTrialBar();
-            }
-            else if (status == LicenseManager::LicenseStatus::Trial)
-            {
-                if (trialBar) {
-                    trialBar->updateStatus();
-                    trialBar->setVisible(true);
-                    resized();
-                }
-            }
-            else if (status == LicenseManager::LicenseStatus::TrialExpired ||
-                     status == LicenseManager::LicenseStatus::Expired ||
-                     status == LicenseManager::LicenseStatus::Invalid)
-            {
-                // Show red status bar instead of blocking overlay
-                if (trialBar) {
-                    trialBar->updateStatus();
-                    trialBar->setVisible(true);
-                    resized();
-                }
-            }
+            // PluginEditor handles all license status display
+            // This callback is still registered to ensure license updates are processed
         }
 
         void closeButtonPressed() override
@@ -647,8 +595,6 @@ private:
         PianoSynthesizer pianoSynth;
         juce::AudioProcessorEditor* pluginEditor = nullptr;
         std::unique_ptr<juce::Component> contentWrapper;
-        std::unique_ptr<TrialStatusBar> trialBar;
-        std::unique_ptr<TrialExpiredOverlay> expiredOverlay;
 
         // Audio callback that combines processor output with piano synth
         class AudioCallback : public juce::AudioIODeviceCallback
