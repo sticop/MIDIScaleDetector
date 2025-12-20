@@ -5,7 +5,7 @@
 
 /**
  * License Manager for MIDI Xplorer
- * Handles license validation, activation, and deactivation with the server
+ * Handles license validation, activation, deactivation, and trial period
  */
 class LicenseManager : public juce::Timer
 {
@@ -15,6 +15,8 @@ public:
     {
         Unknown,
         Valid,
+        Trial,
+        TrialExpired,
         Invalid,
         Expired,
         Revoked,
@@ -34,6 +36,16 @@ public:
         int maxActivations = 0;
         int currentActivations = 0;
         bool isValid = false;
+    };
+
+    // Trial info structure
+    struct TrialInfo
+    {
+        juce::Time firstLaunchDate;
+        int trialDays = 14;
+        int daysRemaining = 14;
+        bool isTrialActive = false;
+        bool isTrialExpired = false;
     };
 
     // Listener interface for license status changes
@@ -57,8 +69,17 @@ public:
 
     // Status checks
     bool isLicenseValid() const { return currentStatus == LicenseStatus::Valid; }
+    bool isTrialValid() const { return currentStatus == LicenseStatus::Trial; }
+    bool isAppUsable() const { return currentStatus == LicenseStatus::Valid || currentStatus == LicenseStatus::Trial; }
     LicenseStatus getCurrentStatus() const { return currentStatus; }
     const LicenseInfo& getLicenseInfo() const { return licenseInfo; }
+    const TrialInfo& getTrialInfo() const { return trialInfo; }
+
+    // Trial management
+    void initializeTrial();
+    void checkTrialStatus();
+    int getTrialDaysRemaining() const { return trialInfo.daysRemaining; }
+    bool isInTrialPeriod() const { return trialInfo.isTrialActive && !trialInfo.isTrialExpired; }
 
     // License key storage
     void saveLicenseKey(const juce::String& key);
@@ -94,12 +115,18 @@ private:
     // Current state
     LicenseStatus currentStatus = LicenseStatus::Unknown;
     LicenseInfo licenseInfo;
+    TrialInfo trialInfo;
 
     // Listeners
     juce::ListenerList<Listener> listeners;
 
     // Settings file
     juce::File getSettingsFile() const;
+    juce::File getTrialFile() const;
+    
+    // Trial file operations
+    void saveTrialStartDate(juce::Time date);
+    juce::Time loadTrialStartDate() const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LicenseManager)
 };

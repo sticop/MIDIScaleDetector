@@ -10,12 +10,164 @@
 #include "ActivationDialog.h"
 
 /**
+ * Overlay component that blocks interaction when trial expires
+ */
+class TrialExpiredOverlay : public juce::Component
+{
+public:
+    TrialExpiredOverlay()
+    {
+        setAlwaysOnTop(true);
+        setInterceptsMouseClicks(true, true);
+        
+        titleLabel.setText("Trial Expired", juce::dontSendNotification);
+        titleLabel.setFont(juce::Font(28.0f, juce::Font::bold));
+        titleLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        titleLabel.setJustificationType(juce::Justification::centred);
+        addAndMakeVisible(titleLabel);
+        
+        messageLabel.setText("Your 14-day free trial has expired.\nPlease activate a license to continue using MIDI Xplorer.",
+                            juce::dontSendNotification);
+        messageLabel.setFont(juce::Font(16.0f));
+        messageLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(0.8f));
+        messageLabel.setJustificationType(juce::Justification::centred);
+        addAndMakeVisible(messageLabel);
+        
+        activateButton.setButtonText("Activate License");
+        activateButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a9eff));
+        activateButton.onClick = [this]() {
+            ActivationDialog::showActivationDialog(this, [](bool) {});
+        };
+        addAndMakeVisible(activateButton);
+        
+        purchaseButton.setButtonText("Purchase License");
+        purchaseButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2ecc71));
+        purchaseButton.onClick = []() {
+            juce::URL("https://reliablehandy.ca/midixplorer/purchase").launchInDefaultBrowser();
+        };
+        addAndMakeVisible(purchaseButton);
+    }
+    
+    void paint(juce::Graphics& g) override
+    {
+        // Dark semi-transparent overlay
+        g.fillAll(juce::Colour(0xe0101020));
+        
+        // Central panel
+        auto bounds = getLocalBounds();
+        auto panelBounds = bounds.reduced(bounds.getWidth() / 4, bounds.getHeight() / 4);
+        
+        g.setColour(juce::Colour(0xff1a1a2e));
+        g.fillRoundedRectangle(panelBounds.toFloat(), 15.0f);
+        
+        g.setColour(juce::Colour(0xff4a9eff));
+        g.drawRoundedRectangle(panelBounds.toFloat(), 15.0f, 2.0f);
+    }
+    
+    void resized() override
+    {
+        auto bounds = getLocalBounds();
+        auto panelBounds = bounds.reduced(bounds.getWidth() / 4, bounds.getHeight() / 4);
+        auto content = panelBounds.reduced(30);
+        
+        titleLabel.setBounds(content.removeFromTop(50));
+        content.removeFromTop(20);
+        messageLabel.setBounds(content.removeFromTop(60));
+        content.removeFromTop(30);
+        
+        auto buttonArea = content.removeFromTop(45);
+        auto buttonWidth = 180;
+        auto totalWidth = buttonWidth * 2 + 20;
+        auto startX = (buttonArea.getWidth() - totalWidth) / 2;
+        
+        activateButton.setBounds(buttonArea.getX() + startX, buttonArea.getY(), buttonWidth, 45);
+        purchaseButton.setBounds(buttonArea.getX() + startX + buttonWidth + 20, buttonArea.getY(), buttonWidth, 45);
+    }
+    
+private:
+    juce::Label titleLabel;
+    juce::Label messageLabel;
+    juce::TextButton activateButton;
+    juce::TextButton purchaseButton;
+};
+
+/**
+ * Trial status bar shown at top of window
+ */
+class TrialStatusBar : public juce::Component
+{
+public:
+    TrialStatusBar()
+    {
+        statusLabel.setFont(juce::Font(13.0f));
+        statusLabel.setJustificationType(juce::Justification::centred);
+        addAndMakeVisible(statusLabel);
+        
+        activateButton.setButtonText("Activate Now");
+        activateButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a9eff));
+        activateButton.onClick = [this]() {
+            ActivationDialog::showActivationDialog(this, [](bool) {});
+        };
+        addAndMakeVisible(activateButton);
+        
+        updateStatus();
+    }
+    
+    void updateStatus()
+    {
+        auto& license = LicenseManager::getInstance();
+        
+        if (license.isLicenseValid())
+        {
+            setVisible(false);
+        }
+        else if (license.isInTrialPeriod())
+        {
+            int days = license.getTrialDaysRemaining();
+            statusLabel.setText("Trial: " + juce::String(days) + " day" + (days != 1 ? "s" : "") + " remaining",
+                               juce::dontSendNotification);
+            
+            if (days <= 3)
+                statusLabel.setColour(juce::Label::textColourId, juce::Colour(0xffff6b6b));
+            else
+                statusLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+            
+            setVisible(true);
+        }
+        else
+        {
+            setVisible(false);
+        }
+    }
+    
+    void paint(juce::Graphics& g) override
+    {
+        g.fillAll(juce::Colour(0xff2a2a3a));
+        g.setColour(juce::Colour(0xff4a4a5a));
+        g.drawLine(0, static_cast<float>(getHeight()) - 0.5f, static_cast<float>(getWidth()), static_cast<float>(getHeight()) - 0.5f);
+    }
+    
+    void resized() override
+    {
+        auto bounds = getLocalBounds().reduced(10, 5);
+        activateButton.setBounds(bounds.removeFromRight(120));
+        bounds.removeFromRight(10);
+        statusLabel.setBounds(bounds);
+    }
+    
+private:
+    juce::Label statusLabel;
+    juce::TextButton activateButton;
+};
+
+/**
  * Standalone MIDI Xplorer Application
  * Full-featured MIDI file browser and player with built-in piano synthesizer
- * Uses the same UI and functionality as the plugin version
+ * Features 14-day free trial and license activation system
  */
 class MIDIXplorerStandaloneApp : public juce::JUCEApplication,
-                                  private juce::Timer
+                                  private juce::Timer,
+                                  private LicenseManager::Listener
 {
 public:
     MIDIXplorerStandaloneApp() = default;
@@ -26,7 +178,10 @@ public:
 
     void initialise(const juce::String&) override
     {
-        // Check license before launching main window
+        // Register as license listener
+        LicenseManager::getInstance().addListener(this);
+        
+        // Initialize and check license/trial status
         checkLicenseAndLaunch();
     }
 
@@ -35,81 +190,102 @@ public:
         auto& licenseManager = LicenseManager::getInstance();
         juce::String savedKey = licenseManager.loadLicenseKey();
 
-        if (savedKey.isEmpty())
+        if (savedKey.isNotEmpty())
         {
-            // No license saved - show activation dialog
-            showActivationDialog();
-        }
-        else
-        {
-            // Validate existing license
+            // Has saved license - validate it
             licenseManager.validateLicense([this](LicenseManager::LicenseStatus status,
                                                    const LicenseManager::LicenseInfo& info)
             {
                 if (status == LicenseManager::LicenseStatus::Valid)
                 {
-                    // License is valid - launch the app
-                    launchMainWindow();
-
-                    // Start periodic validation (every hour)
+                    // License valid - launch fully
+                    launchMainWindow(false);
                     LicenseManager::getInstance().startPeriodicValidation(3600);
                 }
                 else if (status == LicenseManager::LicenseStatus::NetworkError && info.isValid)
                 {
-                    // Offline but previously validated - allow usage
-                    launchMainWindow();
+                    // Offline but previously validated
+                    launchMainWindow(false);
                 }
                 else
                 {
-                    // License invalid - show activation dialog
-                    showActivationDialog();
+                    // License invalid - check trial
+                    checkTrialAndLaunch();
                 }
             });
         }
-    }
-
-    void showActivationDialog()
-    {
-        // Create a temporary window to host the activation dialog
-        activationWindow = std::make_unique<juce::DialogWindow>(
-            "MIDI Xplorer - License Activation",
-            juce::Colour(0xff2a2a2a),
-            true);
-
-        auto* dialog = new ActivationDialog();
-        activationWindow->setContentOwned(dialog, true);
-        activationWindow->setUsingNativeTitleBar(true);
-        activationWindow->centreWithSize(450, 350);
-        activationWindow->setVisible(true);
-
-        // Override close button to check license status
-        activationWindow->setConstrainer(nullptr);
-
-        // Poll for license status
-        startTimer(500);
-    }
-
-    void timerCallback()
-    {
-        if (LicenseManager::getInstance().isLicenseValid())
+        else
         {
-            stopTimer();
-            activationWindow.reset();
-            launchMainWindow();
-            LicenseManager::getInstance().startPeriodicValidation(3600);
+            // No license - check/start trial
+            checkTrialAndLaunch();
+        }
+    }
+    
+    void checkTrialAndLaunch()
+    {
+        auto& licenseManager = LicenseManager::getInstance();
+        licenseManager.initializeTrial();
+        licenseManager.checkTrialStatus();
+        
+        if (licenseManager.isInTrialPeriod())
+        {
+            // Trial active - launch with trial bar
+            launchMainWindow(true);
+        }
+        else
+        {
+            // Trial expired - launch disabled
+            launchMainWindow(true);
+            showTrialExpiredOverlay();
+        }
+    }
+    
+    void showTrialExpiredOverlay()
+    {
+        if (mainWindow)
+        {
+            mainWindow->showExpiredOverlay();
         }
     }
 
-    void launchMainWindow()
+    void launchMainWindow(bool showTrialBar)
     {
-        mainWindow = std::make_unique<MainWindow>(getApplicationName());
+        mainWindow = std::make_unique<MainWindow>(getApplicationName(), showTrialBar);
+    }
+    
+    void licenseStatusChanged(LicenseManager::LicenseStatus status,
+                              const LicenseManager::LicenseInfo& /*info*/) override
+    {
+        // Handle license status changes
+        if (status == LicenseManager::LicenseStatus::Valid)
+        {
+            // License activated - hide overlay and trial bar
+            if (mainWindow)
+            {
+                mainWindow->hideExpiredOverlay();
+                mainWindow->hideTrialBar();
+            }
+        }
+        else if (status == LicenseManager::LicenseStatus::TrialExpired)
+        {
+            // Trial expired - show overlay
+            if (mainWindow)
+            {
+                mainWindow->showExpiredOverlay();
+            }
+        }
+    }
+    
+    void timerCallback() override
+    {
+        // Not used anymore
     }
 
     void shutdown() override
     {
+        LicenseManager::getInstance().removeListener(this);
         LicenseManager::getInstance().stopPeriodicValidation();
         mainWindow = nullptr;
-        activationWindow = nullptr;
     }
 
     void systemRequestedQuit() override
@@ -121,10 +297,11 @@ public:
 
 private:
     class MainWindow : public juce::DocumentWindow,
-                       public juce::MenuBarModel
+                       public juce::MenuBarModel,
+                       public LicenseManager::Listener
     {
     public:
-        explicit MainWindow(const juce::String& name)
+        explicit MainWindow(const juce::String& name, bool showTrialBar)
             : DocumentWindow(name, juce::Colour(0xff1a1a1a), DocumentWindow::allButtons)
         {
             setUsingNativeTitleBar(true);
@@ -134,6 +311,16 @@ private:
             juce::MenuBarModel::setMacMainMenu(this);
             #endif
 
+            // Create main content wrapper
+            contentWrapper = std::make_unique<juce::Component>();
+            
+            // Create trial status bar
+            trialBar = std::make_unique<TrialStatusBar>();
+            if (showTrialBar && LicenseManager::getInstance().isInTrialPeriod())
+            {
+                contentWrapper->addAndMakeVisible(trialBar.get());
+            }
+            
             // Create the processor (full plugin)
             processor = std::make_unique<MIDIScaleDetector::MIDIScalePlugin>();
             processor->prepareToPlay(44100.0, 512);
@@ -147,8 +334,21 @@ private:
             }
 
             // Create the full plugin editor UI
-            auto* editorComponent = processor->createEditor();
-            setContentOwned(editorComponent, true);
+            pluginEditor = processor->createEditor();
+            contentWrapper->addAndMakeVisible(pluginEditor);
+            
+            // Set up content wrapper size
+            int editorWidth = pluginEditor->getWidth();
+            int editorHeight = pluginEditor->getHeight();
+            int trialBarHeight = (showTrialBar && LicenseManager::getInstance().isInTrialPeriod()) ? 35 : 0;
+            contentWrapper->setSize(editorWidth, editorHeight + trialBarHeight);
+            
+            setContentOwned(contentWrapper.release(), true);
+            
+            // Create expired overlay (hidden by default)
+            expiredOverlay = std::make_unique<TrialExpiredOverlay>();
+            expiredOverlay->setVisible(false);
+            addChildComponent(expiredOverlay.get());
 
             #if JUCE_IOS || JUCE_ANDROID
             setFullScreen(true);
@@ -158,82 +358,178 @@ private:
             #endif
 
             setVisible(true);
+            
+            // Register for license updates
+            LicenseManager::getInstance().addListener(this);
         }
 
         ~MainWindow() override
         {
+            LicenseManager::getInstance().removeListener(this);
             #if JUCE_MAC
             juce::MenuBarModel::setMacMainMenu(nullptr);
             #endif
             audioDeviceManager.removeAudioCallback(&audioCallback);
-            setContentOwned(nullptr, false);
+            pluginEditor = nullptr;
             processor = nullptr;
+        }
+        
+        void resized() override
+        {
+            DocumentWindow::resized();
+            
+            if (auto* content = getContentComponent())
+            {
+                auto bounds = content->getLocalBounds();
+                int trialBarHeight = (trialBar && trialBar->isVisible()) ? 35 : 0;
+                
+                if (trialBar)
+                    trialBar->setBounds(bounds.removeFromTop(trialBarHeight));
+                
+                if (pluginEditor)
+                    pluginEditor->setBounds(bounds);
+            }
+            
+            if (expiredOverlay)
+            {
+                expiredOverlay->setBounds(getLocalBounds());
+            }
+        }
+        
+        void showExpiredOverlay()
+        {
+            if (expiredOverlay)
+            {
+                expiredOverlay->setVisible(true);
+                expiredOverlay->toFront(true);
+                expiredOverlay->setBounds(getLocalBounds());
+            }
+        }
+        
+        void hideExpiredOverlay()
+        {
+            if (expiredOverlay)
+            {
+                expiredOverlay->setVisible(false);
+            }
+        }
+        
+        void hideTrialBar()
+        {
+            if (trialBar)
+            {
+                trialBar->setVisible(false);
+                resized();
+            }
+        }
+        
+        void licenseStatusChanged(LicenseManager::LicenseStatus status,
+                                  const LicenseManager::LicenseInfo& /*info*/) override
+        {
+            if (status == LicenseManager::LicenseStatus::Valid)
+            {
+                hideExpiredOverlay();
+                hideTrialBar();
+            }
+            else if (status == LicenseManager::LicenseStatus::Trial)
+            {
+                if (trialBar)
+                    trialBar->updateStatus();
+            }
+            else if (status == LicenseManager::LicenseStatus::TrialExpired)
+            {
+                showExpiredOverlay();
+            }
         }
 
         void closeButtonPressed() override
         {
             JUCEApplication::getInstance()->systemRequestedQuit();
         }
-        
+
         // MenuBarModel implementation
         juce::StringArray getMenuBarNames() override
         {
-            return { "File", "Help" };
+            return { "File", "Settings", "Help" };
         }
-        
+
         juce::PopupMenu getMenuForIndex(int menuIndex, const juce::String& /*menuName*/) override
         {
             juce::PopupMenu menu;
-            
+
             if (menuIndex == 0) // File menu
             {
-                menu.addItem(1, "Manage License...");
-                menu.addSeparator();
-                menu.addItem(2, "Audio Settings...");
+                menu.addItem(1, "Open MIDI File...");
                 menu.addSeparator();
                 #if ! JUCE_MAC
-                menu.addItem(3, "Quit");
+                menu.addItem(2, "Quit");
                 #endif
             }
-            else if (menuIndex == 1) // Help menu
+            else if (menuIndex == 1) // Settings menu
             {
-                menu.addItem(10, "About MIDI Xplorer");
-                menu.addItem(11, "License Status");
+                menu.addItem(10, "Audio Settings...");
+                menu.addSeparator();
+                menu.addItem(11, "License...");
+                menu.addItem(12, "Enter License Key...");
             }
-            
+            else if (menuIndex == 2) // Help menu
+            {
+                menu.addItem(20, "About MIDI Xplorer");
+                menu.addItem(21, "License Status");
+                menu.addSeparator();
+                menu.addItem(22, "Purchase License...");
+                menu.addItem(23, "Online Help...");
+            }
+
             return menu;
         }
-        
+
         void menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/) override
         {
-            if (menuItemID == 1) // Manage License
+            if (menuItemID == 1) // Open MIDI File
             {
-                ActivationDialog::showActivationDialog(this, nullptr);
+                // TODO: Implement file open
             }
-            else if (menuItemID == 2) // Audio Settings
-            {
-                showAudioSettings();
-            }
-            else if (menuItemID == 3) // Quit
+            else if (menuItemID == 2) // Quit
             {
                 JUCEApplication::getInstance()->systemRequestedQuit();
             }
-            else if (menuItemID == 10) // About
+            else if (menuItemID == 10) // Audio Settings
             {
-                showAboutDialog();
+                showAudioSettings();
             }
-            else if (menuItemID == 11) // License Status
+            else if (menuItemID == 11) // License
             {
                 showLicenseStatus();
             }
+            else if (menuItemID == 12) // Enter License Key
+            {
+                ActivationDialog::showActivationDialog(this, nullptr);
+            }
+            else if (menuItemID == 20) // About
+            {
+                showAboutDialog();
+            }
+            else if (menuItemID == 21) // License Status
+            {
+                showLicenseStatus();
+            }
+            else if (menuItemID == 22) // Purchase License
+            {
+                juce::URL("https://reliablehandy.ca/midixplorer/purchase").launchInDefaultBrowser();
+            }
+            else if (menuItemID == 23) // Online Help
+            {
+                juce::URL("https://reliablehandy.ca/midixplorer/help").launchInDefaultBrowser();
+            }
         }
-        
+
         void showAudioSettings()
         {
             auto* selector = new juce::AudioDeviceSelectorComponent(
                 audioDeviceManager, 0, 0, 0, 2, false, false, true, false);
             selector->setSize(500, 400);
-            
+
             juce::DialogWindow::LaunchOptions options;
             options.content.setOwned(selector);
             options.dialogTitle = "Audio Settings";
@@ -243,60 +539,75 @@ private:
             options.resizable = false;
             options.launchAsync();
         }
-        
+
         void showAboutDialog()
         {
             auto& license = LicenseManager::getInstance();
             auto info = license.getLicenseInfo();
-            
+
             juce::String message = "MIDI Xplorer v1.0.0\n\n";
             message += "A powerful MIDI file browser and analyzer\n";
             message += "with built-in piano synthesizer.\n\n";
-            
+
             if (license.isLicenseValid())
             {
                 message += "Licensed to: " + info.customerName + "\n";
                 message += "License type: " + info.licenseType + "\n";
             }
+            else if (license.isInTrialPeriod())
+            {
+                int days = license.getTrialDaysRemaining();
+                message += "Trial Version - " + juce::String(days) + " days remaining\n";
+            }
             else
             {
-                message += "Unlicensed - Trial Mode\n";
+                message += "Trial Expired - Please activate license\n";
             }
-            
+
             juce::AlertWindow::showMessageBoxAsync(
                 juce::AlertWindow::InfoIcon,
                 "About MIDI Xplorer",
                 message,
                 "OK");
         }
-        
+
         void showLicenseStatus()
         {
             auto& license = LicenseManager::getInstance();
             auto info = license.getLicenseInfo();
-            
+            auto trial = license.getTrialInfo();
+
             juce::String message;
-            
+
             if (license.isLicenseValid())
             {
                 message = "License Status: ACTIVE\n\n";
                 message += "Customer: " + info.customerName + "\n";
                 message += "Email: " + info.email + "\n";
                 message += "Type: " + info.licenseType + "\n";
-                message += "Activations: " + juce::String(info.currentActivations) + 
+                message += "Activations: " + juce::String(info.currentActivations) +
                            "/" + juce::String(info.maxActivations) + "\n";
-                
+
                 if (info.expiryDate.isNotEmpty())
                     message += "Expires: " + info.expiryDate + "\n";
                 else
                     message += "Expires: Never\n";
             }
+            else if (license.isInTrialPeriod())
+            {
+                int days = license.getTrialDaysRemaining();
+                message = "License Status: FREE TRIAL\n\n";
+                message += "Days Remaining: " + juce::String(days) + "\n";
+                message += "Trial Started: " + trial.firstLaunchDate.toString(true, false) + "\n\n";
+                message += "Activate a license to unlock unlimited usage.";
+            }
             else
             {
-                message = "License Status: NOT ACTIVATED\n\n";
-                message += "Please activate your license to unlock all features.";
+                message = "License Status: TRIAL EXPIRED\n\n";
+                message += "Your 14-day free trial has ended.\n";
+                message += "Please activate a license to continue using MIDI Xplorer.";
             }
-            
+
             juce::AlertWindow::showMessageBoxAsync(
                 license.isLicenseValid() ? juce::AlertWindow::InfoIcon : juce::AlertWindow::WarningIcon,
                 "License Status",
@@ -308,6 +619,10 @@ private:
         std::unique_ptr<MIDIScaleDetector::MIDIScalePlugin> processor;
         juce::AudioDeviceManager audioDeviceManager;
         PianoSynthesizer pianoSynth;
+        juce::AudioProcessorEditor* pluginEditor = nullptr;
+        std::unique_ptr<juce::Component> contentWrapper;
+        std::unique_ptr<TrialStatusBar> trialBar;
+        std::unique_ptr<TrialExpiredOverlay> expiredOverlay;
 
         // Audio callback that combines processor output with piano synth
         class AudioCallback : public juce::AudioIODeviceCallback
@@ -368,7 +683,6 @@ private:
     };
 
     std::unique_ptr<MainWindow> mainWindow;
-    std::unique_ptr<juce::DialogWindow> activationWindow;
 };
 
 // Application entry point

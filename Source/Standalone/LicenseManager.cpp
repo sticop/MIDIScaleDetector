@@ -381,3 +381,139 @@ void LicenseManager::timerCallback()
         // Periodic validation callback - listeners are notified automatically
     });
 }
+
+// Trial Management Functions
+
+juce::File LicenseManager::getTrialFile() const
+{
+    auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                          .getChildFile("MIDI Xplorer");
+    appDataDir.createDirectory();
+    return appDataDir.getChildFile("trial.dat");
+}
+
+void LicenseManager::saveTrialStartDate(juce::Time date)
+{
+    auto file = getTrialFile();
+    
+    // Store as obfuscated timestamp
+    juce::int64 timestamp = date.toMilliseconds();
+    juce::String data = juce::String(timestamp) + "|" + getMachineId();
+    
+    juce::MemoryOutputStream stream;
+    stream.writeString(data);
+    
+    juce::MemoryBlock block;
+    block.append(stream.getData(), stream.getDataSize());
+    
+    // XOR obfuscation
+    for (size_t i = 0; i < block.getSize(); ++i)
+    {
+        static_cast<char*>(block.getData())[i] ^= 0x7B;
+    }
+    
+    file.replaceWithData(block.getData(), block.getSize());
+}
+
+juce::Time LicenseManager::loadTrialStartDate() const
+{
+    auto file = getTrialFile();
+    if (!file.existsAsFile())
+        return juce::Time();
+    
+    juce::MemoryBlock block;
+    if (!file.loadFileAsData(block))
+        return juce::Time();
+    
+    // XOR to decode
+    for (size_t i = 0; i < block.getSize(); ++i)
+    {
+        static_cast<char*>(block.getData())[i] ^= 0x7B;
+    }
+    
+    juce::MemoryInputStream stream(block, false);
+    juce::String data = stream.readString();
+    
+    // Parse timestamp and verify machine ID
+    auto parts = juce::StringArray::fromTokens(data, "|", "");
+    if (parts.size() >= 2)
+    {
+        juce::String storedMachineId = parts[1];
+        if (storedMachineId == getMachineId())
+        {
+            juce::int64 timestamp = parts[0].getLargeIntValue();
+            return juce::Time(timestamp);
+        }
+    }
+    
+    return juce::Time();
+}
+
+void LicenseManager::initializeTrial()
+{
+    // Check if we already have a valid license
+    juce::String savedKey = loadLicenseKey();
+    if (savedKey.isNotEmpty())
+    {
+        // Has license key - don't initialize trial
+        return;
+    }
+    
+    // Check if trial already started
+    juce::Time startDate = loadTrialStartDate();
+    
+    if (startDate == juce::Time())
+    {
+        // First launch - start trial now
+        startDate = juce::Time::getCurrentTime();
+        saveTrialStartDate(startDate);
+    }
+    
+    trialInfo.firstLaunchDate = startDate;
+    checkTrialStatus();
+}
+
+void LicenseManager::checkTrialStatus()
+{
+    // If license is valid, trial doesn't matter
+    if (currentStatus == LicenseStatus::Valid)
+    {
+        trialInfo.isTrialActive = false;
+        trialInfo.isTrialExpired = false;
+        return;
+    }
+    
+    juce::Time startDate = loadTrialStartDate();
+    
+    if (startDate == juce::Time())
+    {
+        // No trial started yet - initialize
+        initializeTrial();
+        startDate = trialInfo.firstLaunchDate;
+    }
+    
+    if (startDate != juce::Time())
+    {
+        juce::Time now = juce::Time::getCurrentTime();
+        juce::RelativeTime elapsed = now - startDate;
+        int daysPassed = static_cast<int>(elapsed.inDays());
+        
+        trialInfo.firstLaunchDate = startDate;
+        trialInfo.daysRemaining = juce::jmax(0, trialInfo.trialDays - daysPassed);
+        trialInfo.isTrialActive = true;
+        trialInfo.isTrialExpired = (trialInfo.daysRemaining <= 0);
+        
+        // Update current status
+        if (trialInfo.isTrialExpired)
+        {
+            currentStatus = LicenseStatus::TrialExpired;
+        }
+        else
+        {
+            currentStatus = LicenseStatus::Trial;
+        }
+        
+        // Notify listeners
+        listeners.call([this](Listener& l) { l.licenseStatusChanged(currentStatus, licenseInfo); });
+    }
+}
