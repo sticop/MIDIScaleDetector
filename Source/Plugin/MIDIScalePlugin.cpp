@@ -435,10 +435,18 @@ void MIDIScalePlugin::updatePlayback() {
 
 void MIDIScalePlugin::sendActiveNoteOffs() {
     std::lock_guard<std::mutex> noteLock(activeNotesMutex);
+    
+    // Send individual note-offs for each active note
     for (const auto& an : activeNotes) {
         addMidiMessage(juce::MidiMessage::noteOff(an.channel, an.noteNumber));
     }
     activeNotes.clear();
+    
+    // Also send All-Notes-Off (CC 123) and All-Sound-Off (CC 120) on all channels for reliability
+    for (int channel = 1; channel <= 16; ++channel) {
+        addMidiMessage(juce::MidiMessage::allNotesOff(channel));
+        addMidiMessage(juce::MidiMessage::allSoundOff(channel));
+    }
 }
 
 

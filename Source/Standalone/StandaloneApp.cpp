@@ -650,6 +650,16 @@ private:
                 juce::AudioBuffer<float> buffer(outputChannelData, numOutputChannels, numSamples);
                 juce::MidiBuffer midiMessages;
 
+                // Check if playback just stopped (to silence all notes)
+                bool currentlyPlaying = processor && processor->isPlaybackPlaying();
+                if (wasPlaying && !currentlyPlaying) {
+                    // Playback just stopped - silence all notes immediately
+                    if (pianoSynth) {
+                        pianoSynth->allNotesOff();
+                    }
+                }
+                wasPlaying = currentlyPlaying;
+
                 // Get processor output (MIDI events)
                 if (processor) {
                     processor->processBlock(buffer, midiMessages);
@@ -683,6 +693,7 @@ private:
         private:
             MIDIScaleDetector::MIDIScalePlugin* processor;
             PianoSynthesizer* pianoSynth;
+            bool wasPlaying = false;
         } audioCallback{processor.get(), &pianoSynth};
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainWindow)
