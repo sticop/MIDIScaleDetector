@@ -287,11 +287,8 @@ public:
         }
         else if (status == LicenseManager::LicenseStatus::TrialExpired)
         {
-            // Trial expired - show overlay
-            if (mainWindow)
-            {
-                mainWindow->showExpiredOverlay();
-            }
+            // Trial expired - just update the bar (no overlay)
+            // The MainWindow's licenseStatusChanged will handle showing the red bar
         }
     }
 
