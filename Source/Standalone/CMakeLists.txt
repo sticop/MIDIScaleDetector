@@ -6,7 +6,7 @@ juce_add_gui_app(MIDIXplorerStandalone
     PRODUCT_NAME "MIDI Xplorer"
     BUNDLE_ID "com.midixplorer.standalone"
 
-    NEEDS_CURL FALSE
+    NEEDS_CURL TRUE
     NEEDS_WEB_BROWSER FALSE
 
     DOCUMENT_EXTENSIONS "mid" "midi"
@@ -17,6 +17,10 @@ target_sources(MIDIXplorerStandalone
     PRIVATE
         StandaloneApp.cpp
         PianoSynthesizer.h
+        LicenseManager.h
+        LicenseManager.cpp
+        ActivationDialog.h
+        ActivationDialog.cpp
 )
 
 # Link libraries
@@ -28,6 +32,7 @@ target_link_libraries(MIDIXplorerStandalone
         juce::juce_audio_processors
         juce::juce_audio_utils
         juce::juce_core
+        juce::juce_cryptography
         juce::juce_data_structures
         juce::juce_events
         juce::juce_graphics
@@ -43,7 +48,7 @@ target_link_libraries(MIDIXplorerStandalone
 target_compile_definitions(MIDIXplorerStandalone
     PRIVATE
         JUCE_WEB_BROWSER=0
-        JUCE_USE_CURL=0
+        JUCE_USE_CURL=1
         JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:MIDIXplorerStandalone,JUCE_PRODUCT_NAME>"
         JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:MIDIXplorerStandalone,JUCE_VERSION>"
         JUCE_DISPLAY_SPLASH_SCREEN=0

@@ -6,13 +6,16 @@
 #include "../Plugin/MIDIScalePlugin.h"
 #include "../Plugin/PluginEditor.h"
 #include "PianoSynthesizer.h"
+#include "LicenseManager.h"
+#include "ActivationDialog.h"
 
 /**
  * Standalone MIDI Xplorer Application
  * Full-featured MIDI file browser and player with built-in piano synthesizer
  * Uses the same UI and functionality as the plugin version
  */
-class MIDIXplorerStandaloneApp : public juce::JUCEApplication
+class MIDIXplorerStandaloneApp : public juce::JUCEApplication,
+                                  private juce::Timer
 {
 public:
     MIDIXplorerStandaloneApp() = default;
@@ -23,12 +26,90 @@ public:
 
     void initialise(const juce::String&) override
     {
+        // Check license before launching main window
+        checkLicenseAndLaunch();
+    }
+    
+    void checkLicenseAndLaunch()
+    {
+        auto& licenseManager = LicenseManager::getInstance();
+        juce::String savedKey = licenseManager.loadLicenseKey();
+        
+        if (savedKey.isEmpty())
+        {
+            // No license saved - show activation dialog
+            showActivationDialog();
+        }
+        else
+        {
+            // Validate existing license
+            licenseManager.validateLicense([this](LicenseManager::LicenseStatus status, 
+                                                   const LicenseManager::LicenseInfo& info)
+            {
+                if (status == LicenseManager::LicenseStatus::Valid)
+                {
+                    // License is valid - launch the app
+                    launchMainWindow();
+                    
+                    // Start periodic validation (every hour)
+                    LicenseManager::getInstance().startPeriodicValidation(3600);
+                }
+                else if (status == LicenseManager::LicenseStatus::NetworkError && info.isValid)
+                {
+                    // Offline but previously validated - allow usage
+                    launchMainWindow();
+                }
+                else
+                {
+                    // License invalid - show activation dialog
+                    showActivationDialog();
+                }
+            });
+        }
+    }
+    
+    void showActivationDialog()
+    {
+        // Create a temporary window to host the activation dialog
+        activationWindow = std::make_unique<juce::DialogWindow>(
+            "MIDI Xplorer - License Activation",
+            juce::Colour(0xff2a2a2a),
+            true);
+        
+        auto* dialog = new ActivationDialog();
+        activationWindow->setContentOwned(dialog, true);
+        activationWindow->setUsingNativeTitleBar(true);
+        activationWindow->centreWithSize(450, 350);
+        activationWindow->setVisible(true);
+        
+        // Override close button to check license status
+        activationWindow->setConstrainer(nullptr);
+        
+        // Poll for license status
+        startTimer(500);
+    }
+    
+    void timerCallback()
+    {
+        if (LicenseManager::getInstance().isLicenseValid())
+        {
+            stopTimer();
+            activationWindow.reset();
+            launchMainWindow();
+            LicenseManager::getInstance().startPeriodicValidation(3600);
+        }
+    }
+    
+    void launchMainWindow()
+    {
         mainWindow = std::make_unique<MainWindow>(getApplicationName());
     }
 
     void shutdown() override
     {
+        LicenseManager::getInstance().stopPeriodicValidation();
         mainWindow = nullptr;
+        activationWindow = nullptr;
     }
 
     void systemRequestedQuit() override
@@ -149,6 +230,7 @@ private:
     };
 
     std::unique_ptr<MainWindow> mainWindow;
+    std::unique_ptr<juce::DialogWindow> activationWindow;
 };
 
 // Application entry point
