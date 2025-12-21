@@ -19,23 +19,23 @@ class SettingsDialogComponent : public juce::Component
 {
 public:
     enum class Tab { Registration, Credits, Help, Legal };
-    
+
     SettingsDialogComponent(LicenseManager& lm, juce::AudioDeviceManager* adm = nullptr)
         : licenseManager(lm), audioDeviceManager(adm)
     {
         setSize(750, 500);
-        
+
         // Add sidebar buttons
         addAndMakeVisible(registrationBtn);
         addAndMakeVisible(creditsBtn);
         addAndMakeVisible(helpBtn);
         addAndMakeVisible(legalBtn);
-        
+
         registrationBtn.setButtonText("Registration");
         creditsBtn.setButtonText("Credits");
         helpBtn.setButtonText("Help");
         legalBtn.setButtonText("Legal");
-        
+
         auto setupBtn = [this](juce::TextButton& btn, Tab t) {
             btn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a4a4a));
             btn.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff5ba8a0));
@@ -45,12 +45,12 @@ public:
             btn.setRadioGroupId(1);
             btn.onClick = [this, t]() { setCurrentTab(t); };
         };
-        
+
         setupBtn(registrationBtn, Tab::Registration);
         setupBtn(creditsBtn, Tab::Credits);
         setupBtn(helpBtn, Tab::Help);
         setupBtn(legalBtn, Tab::Legal);
-        
+
         // Audio settings (only for standalone)
         if (audioDeviceManager != nullptr) {
             audioSettingsBtn = std::make_unique<juce::TextButton>("Audio Settings");
@@ -59,54 +59,54 @@ public:
             audioSettingsBtn->onClick = [this]() { showAudioSettings(); };
             addAndMakeVisible(*audioSettingsBtn);
         }
-        
+
         // Help buttons
         addAndMakeVisible(websiteBtn);
         addAndMakeVisible(tutorialsBtn);
         addAndMakeVisible(manualBtn);
         addAndMakeVisible(forumBtn);
         addAndMakeVisible(faqBtn);
-        
+
         websiteBtn.setButtonText("Our Website");
         tutorialsBtn.setButtonText("Video Tutorials");
         manualBtn.setButtonText("Open Manual");
         forumBtn.setButtonText("Community Forum");
         faqBtn.setButtonText("FAQ");
-        
+
         auto styleHelpBtn = [](juce::TextButton& btn) {
             btn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff5ba8a0));
             btn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
         };
-        
+
         styleHelpBtn(websiteBtn);
         styleHelpBtn(tutorialsBtn);
         styleHelpBtn(manualBtn);
         styleHelpBtn(forumBtn);
         styleHelpBtn(faqBtn);
-        
-        websiteBtn.onClick = []() { juce::URL("https://reliablehandy.ca/midixplorer").launchInDefaultBrowser(); };
-        tutorialsBtn.onClick = []() { juce::URL("https://reliablehandy.ca/midixplorer/tutorials").launchInDefaultBrowser(); };
-        manualBtn.onClick = []() { juce::URL("https://reliablehandy.ca/midixplorer/manual").launchInDefaultBrowser(); };
-        forumBtn.onClick = []() { juce::URL("https://reliablehandy.ca/midixplorer/forum").launchInDefaultBrowser(); };
-        faqBtn.onClick = []() { juce::URL("https://reliablehandy.ca/midixplorer/faq").launchInDefaultBrowser(); };
-        
+
+        websiteBtn.onClick = []() { juce::URL("https://midixplorer.com").launchInDefaultBrowser(); };
+        tutorialsBtn.onClick = []() { juce::URL("https://midixplorer.com/tutorials").launchInDefaultBrowser(); };
+        manualBtn.onClick = []() { juce::URL("https://midixplorer.com/manual").launchInDefaultBrowser(); };
+        forumBtn.onClick = []() { juce::URL("https://midixplorer.com/forum").launchInDefaultBrowser(); };
+        faqBtn.onClick = []() { juce::URL("https://midixplorer.com/faq").launchInDefaultBrowser(); };
+
         setCurrentTab(Tab::Registration);
     }
-    
+
     void paint(juce::Graphics& g) override
     {
         g.fillAll(juce::Colour(0xff2a2a2a));
-        
+
         // Sidebar
         g.setColour(juce::Colour(0xff3a3a3a));
         g.fillRect(0, 0, sidebarWidth, getHeight());
-        
+
         // Content area
         auto contentArea = getLocalBounds().withTrimmedLeft(sidebarWidth).reduced(20);
-        
+
         g.setColour(juce::Colours::white);
         g.setFont(juce::Font(juce::FontOptions(24.0f).withStyle("Bold")));
-        
+
         switch (currentTab) {
             case Tab::Registration:
                 paintRegistration(g, contentArea);
@@ -122,15 +122,15 @@ public:
                 break;
         }
     }
-    
+
     void paintRegistration(juce::Graphics& g, juce::Rectangle<int> area)
     {
         g.drawText("Welcome to MIDI Xplorer", area.removeFromTop(40), juce::Justification::centredLeft);
         area.removeFromTop(20);
-        
+
         g.setFont(juce::Font(juce::FontOptions(14.0f)));
         g.setColour(juce::Colours::lightgrey);
-        
+
         auto& license = licenseManager;
         if (license.isLicenseValid()) {
             auto info = license.getLicenseInfo();
@@ -147,18 +147,18 @@ public:
             g.drawText("Trial Expired - Please activate a license to continue.", area.removeFromTop(25), juce::Justification::centredLeft);
         }
     }
-    
+
     void paintCredits(juce::Graphics& g, juce::Rectangle<int> area)
     {
         // Logo area
         auto logoArea = area.removeFromTop(80);
         g.setFont(juce::Font(juce::FontOptions(36.0f).withStyle("Bold")));
         g.drawText("MIDI Xplorer", logoArea, juce::Justification::centred);
-        
+
         area.removeFromTop(20);
         g.setFont(juce::Font(juce::FontOptions(13.0f)));
         g.setColour(juce::Colours::grey);
-        
+
         auto drawCredit = [&](const juce::String& label, const juce::String& value) {
             auto row = area.removeFromTop(22);
             g.setColour(juce::Colours::grey);
@@ -167,19 +167,19 @@ public:
             g.setColour(juce::Colours::white);
             g.drawText(value, row, juce::Justification::centredLeft);
         };
-        
+
         drawCredit("Developer", "MIDI Xplorer Team");
         drawCredit("Version", "1.0.0");
         drawCredit("Build Date", juce::String(__DATE__));
         drawCredit("Framework", "JUCE 8.x");
-        
+
         area.removeFromTop(30);
         g.setColour(juce::Colours::grey);
         g.setFont(juce::Font(juce::FontOptions(12.0f)));
-        g.drawText(juce::CharPointer_UTF8("\xc2\xa9 2024 MIDI Xplorer. All rights reserved."), 
+        g.drawText(juce::CharPointer_UTF8("\xc2\xa9 2024 MIDI Xplorer. All rights reserved."),
                    area.removeFromTop(20), juce::Justification::centred);
     }
-    
+
     void paintLegal(juce::Graphics& g, juce::Rectangle<int> area)
     {
         g.setFont(juce::Font(juce::FontOptions(13.0f)));
@@ -192,24 +192,24 @@ public:
             "All other trademarks are the property of their respective owners.",
             area, juce::Justification::topLeft, 10);
     }
-    
+
     void resized() override
     {
         auto bounds = getLocalBounds();
         auto sidebar = bounds.removeFromLeft(sidebarWidth);
         sidebar.removeFromTop(10);
-        
+
         // Sidebar buttons
         registrationBtn.setBounds(sidebar.removeFromTop(40).reduced(5, 2));
         creditsBtn.setBounds(sidebar.removeFromTop(40).reduced(5, 2));
         helpBtn.setBounds(sidebar.removeFromTop(40).reduced(5, 2));
         legalBtn.setBounds(sidebar.removeFromTop(40).reduced(5, 2));
-        
+
         if (audioSettingsBtn) {
             sidebar.removeFromTop(20);
             audioSettingsBtn->setBounds(sidebar.removeFromTop(40).reduced(5, 2));
         }
-        
+
         // Help buttons - only visible in Help tab
         bool helpVisible = (currentTab == Tab::Help);
         websiteBtn.setVisible(helpVisible);
@@ -217,17 +217,17 @@ public:
         manualBtn.setVisible(helpVisible);
         forumBtn.setVisible(helpVisible);
         faqBtn.setVisible(helpVisible);
-        
+
         if (helpVisible) {
             auto content = bounds.reduced(40);
             content.removeFromTop(60);
-            
+
             int btnWidth = 200;
             int btnHeight = 40;
             int spacing = 15;
-            
+
             auto centerX = content.getCentreX() - btnWidth / 2;
-            
+
             websiteBtn.setBounds(centerX, content.getY(), btnWidth, btnHeight);
             tutorialsBtn.setBounds(centerX, content.getY() + (btnHeight + spacing), btnWidth, btnHeight);
             manualBtn.setBounds(centerX, content.getY() + 2 * (btnHeight + spacing), btnWidth, btnHeight);
@@ -235,7 +235,7 @@ public:
             faqBtn.setBounds(centerX, content.getY() + 4 * (btnHeight + spacing), btnWidth, btnHeight);
         }
     }
-    
+
     void setCurrentTab(Tab tab)
     {
         currentTab = tab;
@@ -246,15 +246,15 @@ public:
         resized();
         repaint();
     }
-    
+
     void showAudioSettings()
     {
         if (audioDeviceManager == nullptr) return;
-        
+
         auto* selector = new juce::AudioDeviceSelectorComponent(
             *audioDeviceManager, 0, 0, 0, 2, false, false, true, false);
         selector->setSize(500, 450);
-        
+
         juce::DialogWindow::LaunchOptions options;
         options.content.setOwned(selector);
         options.dialogTitle = "Audio/MIDI Settings";
@@ -264,20 +264,20 @@ public:
         options.resizable = false;
         options.launchAsync();
     }
-    
+
 private:
     LicenseManager& licenseManager;
     juce::AudioDeviceManager* audioDeviceManager = nullptr;
-    
+
     Tab currentTab = Tab::Registration;
     static constexpr int sidebarWidth = 200;
-    
+
     juce::TextButton registrationBtn, creditsBtn, helpBtn, legalBtn;
     std::unique_ptr<juce::TextButton> audioSettingsBtn;
-    
+
     // Help buttons
     juce::TextButton websiteBtn, tutorialsBtn, manualBtn, forumBtn, faqBtn;
-    
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SettingsDialogComponent)
 };
 
@@ -300,7 +300,7 @@ public:
     // License status helpers
     bool isLicenseExpiredOrTrialExpired() const;
     int getLicenseStatusBarHeight() const;
-    
+
     // Audio device manager setter (called by standalone app)
     void setAudioDeviceManager(juce::AudioDeviceManager* adm) { audioDeviceManager = adm; }
 
@@ -563,7 +563,7 @@ private:
     std::unique_ptr<juce::FileChooser> fileChooser;
 
     MIDIScaleDetector::MIDIScalePlugin* pluginProcessor = nullptr;
-    
+
     // Audio device manager (set by standalone app, nullptr in plugin mode)
     juce::AudioDeviceManager* audioDeviceManager = nullptr;
 

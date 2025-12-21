@@ -1951,14 +1951,14 @@ void MIDIXplorerEditor::updateContentTypeFilter() {
     // Count files with chords and single notes
     int chordFileCount = 0;
     int noteFileCount = 0;
-    
+
     for (const auto& file : allFiles) {
         if (file.analyzed) {
             if (file.containsChords) chordFileCount++;
             if (file.containsSingleNotes && !file.containsChords) noteFileCount++;
         }
     }
-    
+
     // Update combo box items with counts
     int currentId = contentTypeFilterCombo.getSelectedId();
     contentTypeFilterCombo.clear();
@@ -3199,7 +3199,7 @@ void MIDIXplorerEditor::showLicenseActivation() {
 void MIDIXplorerEditor::showSettingsMenu() {
     // Create the settings dialog component (Scaler-style modal)
     auto* settingsDialog = new SettingsDialogComponent(licenseManager, audioDeviceManager);
-    
+
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned(settingsDialog);
     options.dialogTitle = "About";
@@ -3207,7 +3207,7 @@ void MIDIXplorerEditor::showSettingsMenu() {
     options.escapeKeyTriggersCloseButton = true;
     options.useNativeTitleBar = false;
     options.resizable = false;
-    
+
     auto* window = options.launchAsync();
     if (window) {
         window->centreWithSize(750, 500);

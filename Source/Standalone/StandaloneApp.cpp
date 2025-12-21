@@ -43,7 +43,7 @@ public:
         purchaseButton.setButtonText("Purchase License");
         purchaseButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2ecc71));
         purchaseButton.onClick = []() {
-            juce::URL("https://reliablehandy.ca/midixplorer/purchase").launchInDefaultBrowser();
+            juce::URL("https://midixplorer.com/purchase").launchInDefaultBrowser();
         };
         addAndMakeVisible(purchaseButton);
     }
@@ -350,12 +350,12 @@ private:
 
             // Create the full plugin editor UI
             pluginEditor = processor->createEditor();
-            
+
             // Pass audio device manager to the editor for settings dialog
             if (auto* midiEditor = dynamic_cast<MIDIXplorerEditor*>(pluginEditor)) {
                 midiEditor->setAudioDeviceManager(&audioDeviceManager);
             }
-            
+
             contentWrapper->addAndMakeVisible(pluginEditor);
 
             // Create audio control bar
@@ -579,15 +579,15 @@ private:
             }
             else if (menuItemID == 24) // Online Documentation
             {
-                juce::URL("https://reliablehandy.ca/midixplorer/docs").launchInDefaultBrowser();
+                juce::URL("https://midixplorer.com/docs").launchInDefaultBrowser();
             }
             else if (menuItemID == 25) // Report an Issue
             {
-                juce::URL("https://reliablehandy.ca/midixplorer/support").launchInDefaultBrowser();
+                juce::URL("https://midixplorer.com/support").launchInDefaultBrowser();
             }
             else if (menuItemID == 26) // Purchase License
             {
-                juce::URL("https://reliablehandy.ca/midixplorer/purchase").launchInDefaultBrowser();
+                juce::URL("https://midixplorer.com/purchase").launchInDefaultBrowser();
             }
         }
 
@@ -663,7 +663,7 @@ private:
                 "OK");
 
             // Launch update check in browser (or could implement proper version API)
-            juce::URL("https://reliablehandy.ca/midixplorer/updates?v=1.0.0").launchInDefaultBrowser();
+            juce::URL("https://midixplorer.com/updates?v=1.0.0").launchInDefaultBrowser();
         }
 
         void showHelpDialog(const juce::String& topic)

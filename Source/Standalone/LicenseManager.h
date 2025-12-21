@@ -110,7 +110,7 @@ private:
                          std::function<void(int, const juce::var&)> callback);
 
     // Server configuration
-    const juce::String serverUrl = "https://reliablehandy.ca/midixplorer/api";
+    const juce::String serverUrl = "https://midixplorer.com/api";
 
     // Current state
     LicenseStatus currentStatus = LicenseStatus::Unknown;

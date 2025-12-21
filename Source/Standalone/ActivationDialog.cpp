@@ -76,7 +76,7 @@ ActivationDialog::ActivationDialog()
 
     // Purchase link
     purchaseLink.setButtonText("Purchase License");
-    purchaseLink.setURL(juce::URL("https://reliablehandy.ca/midixplorer/purchase"));
+    purchaseLink.setURL(juce::URL("https://midixplorer.com/purchase"));
     purchaseLink.setColour(juce::HyperlinkButton::textColourId, accentColour);
     addAndMakeVisible(purchaseLink);
 
