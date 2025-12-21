@@ -20,8 +20,9 @@ class SettingsDialogComponent : public juce::Component
 public:
     enum class Tab { Registration, Credits, Help, Legal };
 
-    SettingsDialogComponent(LicenseManager& lm, juce::AudioDeviceManager* adm = nullptr)
-        : licenseManager(lm), audioDeviceManager(adm)
+    SettingsDialogComponent(LicenseManager& lm, juce::AudioDeviceManager* adm = nullptr,
+                            std::function<void(float)> volCallback = nullptr, float initialVol = 1.0f)
+        : licenseManager(lm), audioDeviceManager(adm), volumeCallback(volCallback), currentVolume(initialVol)
     {
         setSize(750, 500);
 
@@ -251,12 +252,44 @@ public:
     {
         if (audioDeviceManager == nullptr) return;
 
+        // Create a component that combines volume control with device selector
+        auto* content = new juce::Component();
+        content->setSize(500, 520);
+        
+        // Volume label
+        auto* volLabel = new juce::Label();
+        volLabel->setText("Piano Instrument Volume:", juce::dontSendNotification);
+        volLabel->setFont(juce::Font(juce::FontOptions(14.0f).withStyle("Bold")));
+        volLabel->setColour(juce::Label::textColourId, juce::Colours::white);
+        volLabel->setBounds(10, 10, 200, 20);
+        content->addAndMakeVisible(volLabel);
+        
+        // Volume slider
+        auto* volSlider = new juce::Slider();
+        volSlider->setSliderStyle(juce::Slider::LinearHorizontal);
+        volSlider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 50, 25);
+        volSlider->setRange(0.0, 1.0, 0.01);
+        volSlider->setValue(currentVolume);
+        volSlider->setColour(juce::Slider::backgroundColourId, juce::Colour(0xff3a3a3a));
+        volSlider->setColour(juce::Slider::trackColourId, juce::Colour(0xff5ba8a0));
+        volSlider->setColour(juce::Slider::thumbColourId, juce::Colours::white);
+        volSlider->setBounds(10, 30, 480, 25);
+        if (volumeCallback) {
+            volSlider->onValueChange = [this, volSlider]() {
+                currentVolume = (float)volSlider->getValue();
+                if (volumeCallback) volumeCallback(currentVolume);
+            };
+        }
+        content->addAndMakeVisible(volSlider);
+        
+        // Device selector
         auto* selector = new juce::AudioDeviceSelectorComponent(
             *audioDeviceManager, 0, 0, 0, 2, false, false, true, false);
-        selector->setSize(500, 450);
+        selector->setBounds(0, 65, 500, 455);
+        content->addAndMakeVisible(selector);
 
         juce::DialogWindow::LaunchOptions options;
-        options.content.setOwned(selector);
+        options.content.setOwned(content);
         options.dialogTitle = "Audio/MIDI Settings";
         options.dialogBackgroundColour = juce::Colour(0xff2a2a2a);
         options.escapeKeyTriggersCloseButton = true;
@@ -268,6 +301,8 @@ public:
 private:
     LicenseManager& licenseManager;
     juce::AudioDeviceManager* audioDeviceManager = nullptr;
+    std::function<void(float)> volumeCallback;
+    float currentVolume = 1.0f;
 
     Tab currentTab = Tab::Registration;
     static constexpr int sidebarWidth = 200;
@@ -303,6 +338,12 @@ public:
 
     // Audio device manager setter (called by standalone app)
     void setAudioDeviceManager(juce::AudioDeviceManager* adm) { audioDeviceManager = adm; }
+    
+    // Volume control callback (called by standalone app)
+    void setVolumeCallback(std::function<void(float)> callback, float initialVol) { 
+        volumeCallback = callback; 
+        currentVolume = initialVol;
+    }
 
     struct Library {
         juce::String name;
@@ -566,6 +607,10 @@ private:
 
     // Audio device manager (set by standalone app, nullptr in plugin mode)
     juce::AudioDeviceManager* audioDeviceManager = nullptr;
+    
+    // Volume callback (set by standalone app)
+    std::function<void(float)> volumeCallback;
+    float currentVolume = 1.0f;
 
     // License management - use singleton reference
     LicenseManager& licenseManager;

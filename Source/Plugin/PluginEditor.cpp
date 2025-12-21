@@ -3198,7 +3198,7 @@ void MIDIXplorerEditor::showLicenseActivation() {
 
 void MIDIXplorerEditor::showSettingsMenu() {
     // Create the settings dialog component (Scaler-style modal)
-    auto* settingsDialog = new SettingsDialogComponent(licenseManager, audioDeviceManager);
+    auto* settingsDialog = new SettingsDialogComponent(licenseManager, audioDeviceManager, volumeCallback, currentVolume);
 
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned(settingsDialog);

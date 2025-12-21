@@ -92,6 +92,76 @@ private:
 };
 
 /**
+ * Audio Settings Component with device selector and volume control
+ */
+class AudioSettingsComponent : public juce::Component
+{
+public:
+    AudioSettingsComponent(juce::AudioDeviceManager& adm, std::function<void(float)> volumeCallback, float initialVolume)
+        : deviceManager(adm), onVolumeChange(volumeCallback)
+    {
+        // Piano Volume section
+        volumeLabel.setText("Piano Instrument Volume:", juce::dontSendNotification);
+        volumeLabel.setFont(juce::Font(juce::FontOptions(14.0f).withStyle("Bold")));
+        volumeLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        addAndMakeVisible(volumeLabel);
+        
+        volumeSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+        volumeSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 50, 25);
+        volumeSlider.setRange(0.0, 1.0, 0.01);
+        volumeSlider.setValue(initialVolume);
+        volumeSlider.setColour(juce::Slider::backgroundColourId, juce::Colour(0xff3a3a3a));
+        volumeSlider.setColour(juce::Slider::trackColourId, juce::Colour(0xff5ba8a0));
+        volumeSlider.setColour(juce::Slider::thumbColourId, juce::Colours::white);
+        volumeSlider.onValueChange = [this]() {
+            if (onVolumeChange)
+                onVolumeChange((float)volumeSlider.getValue());
+        };
+        addAndMakeVisible(volumeSlider);
+        
+        // Audio device selector
+        deviceSelector = std::make_unique<juce::AudioDeviceSelectorComponent>(
+            deviceManager, 0, 0, 0, 2, false, false, true, false);
+        addAndMakeVisible(*deviceSelector);
+        
+        setSize(500, 520);
+    }
+    
+    void paint(juce::Graphics& g) override
+    {
+        g.fillAll(juce::Colour(0xff2a2a2a));
+        
+        // Separator line
+        g.setColour(juce::Colour(0xff4a4a4a));
+        g.drawHorizontalLine(55, 10, getWidth() - 10);
+    }
+    
+    void resized() override
+    {
+        auto bounds = getLocalBounds().reduced(10);
+        
+        // Volume section at top
+        auto volumeArea = bounds.removeFromTop(45);
+        volumeLabel.setBounds(volumeArea.removeFromTop(20));
+        volumeSlider.setBounds(volumeArea);
+        
+        bounds.removeFromTop(20); // Spacing after separator
+        
+        // Device selector takes the rest
+        if (deviceSelector)
+            deviceSelector->setBounds(bounds);
+    }
+    
+private:
+    juce::AudioDeviceManager& deviceManager;
+    std::function<void(float)> onVolumeChange;
+    
+    juce::Label volumeLabel;
+    juce::Slider volumeSlider;
+    std::unique_ptr<juce::AudioDeviceSelectorComponent> deviceSelector;
+};
+
+/**
  * Trial status bar shown at top of window
  */
 class TrialStatusBar : public juce::Component
@@ -351,9 +421,13 @@ private:
             // Create the full plugin editor UI
             pluginEditor = processor->createEditor();
 
-            // Pass audio device manager to the editor for settings dialog
+            // Pass audio device manager and volume callback to the editor for settings dialog
             if (auto* midiEditor = dynamic_cast<MIDIXplorerEditor*>(pluginEditor)) {
                 midiEditor->setAudioDeviceManager(&audioDeviceManager);
+                midiEditor->setVolumeCallback([this](float vol) {
+                    masterVolumeSlider.setValue(vol, juce::dontSendNotification);
+                    audioCallback.setMasterVolume(vol);
+                }, (float)masterVolumeSlider.getValue());
             }
 
             contentWrapper->addAndMakeVisible(pluginEditor);
@@ -593,13 +667,19 @@ private:
 
         void showAudioSettings()
         {
-            auto* selector = new juce::AudioDeviceSelectorComponent(
-                audioDeviceManager, 0, 0, 0, 2, false, false, true, false);
-            selector->setSize(500, 450);
+            float currentVolume = (float)masterVolumeSlider.getValue();
+            
+            auto* settingsComponent = new AudioSettingsComponent(
+                audioDeviceManager,
+                [this](float vol) {
+                    masterVolumeSlider.setValue(vol, juce::sendNotification);
+                    audioCallback.setMasterVolume(vol);
+                },
+                currentVolume);
 
             juce::DialogWindow::LaunchOptions options;
-            options.content.setOwned(selector);
-            options.dialogTitle = "Audio Settings";
+            options.content.setOwned(settingsComponent);
+            options.dialogTitle = "Audio/MIDI Settings";
             options.dialogBackgroundColour = juce::Colour(0xff2a2a2a);
             options.escapeKeyTriggersCloseButton = true;
             options.useNativeTitleBar = true;
