@@ -145,12 +145,17 @@ void ActivationDialog::resized()
     licenseKeyEditor.setBounds(bounds.removeFromTop(40));
     bounds.removeFromTop(20);
 
-    // Buttons row
+    // Buttons row - layout based on visibility
     auto buttonArea = bounds.removeFromTop(40);
-    activateButton.setBounds(buttonArea.removeFromLeft(150));
-    buttonArea.removeFromLeft(10);
-    deactivateButton.setBounds(buttonArea.removeFromLeft(100));
-    buttonArea.removeFromLeft(10);
+    
+    if (activateButton.isVisible()) {
+        activateButton.setBounds(buttonArea.removeFromLeft(150));
+        buttonArea.removeFromLeft(10);
+    }
+    if (deactivateButton.isVisible()) {
+        deactivateButton.setBounds(buttonArea.removeFromLeft(100));
+        buttonArea.removeFromLeft(10);
+    }
     closeButton.setBounds(buttonArea.removeFromLeft(80));
 
     bounds.removeFromTop(30);
@@ -254,13 +259,29 @@ void ActivationDialog::updateUI()
     bool isValid = LicenseManager::getInstance().isLicenseValid();
     auto info = LicenseManager::getInstance().getLicenseInfo();
 
-    deactivateButton.setEnabled(info.licenseKey.isNotEmpty());
-
     if (isValid)
     {
+        // License is active - hide activate button, show deactivate
         statusLabel.setText("License is active - " + info.licenseType, juce::dontSendNotification);
         statusLabel.setColour(juce::Label::textColourId, successColour);
+        activateButton.setVisible(false);
+        deactivateButton.setVisible(true);
+        deactivateButton.setEnabled(true);
+        licenseKeyEditor.setEnabled(false);  // Can't edit when active
+        licenseKeyEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff2a2a2a));
     }
+    else
+    {
+        // No active license - show activate button
+        activateButton.setVisible(true);
+        deactivateButton.setVisible(info.licenseKey.isNotEmpty());  // Only show if there's a key to deactivate
+        deactivateButton.setEnabled(info.licenseKey.isNotEmpty());
+        licenseKeyEditor.setEnabled(true);
+        licenseKeyEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff3a3a3a));
+    }
+    
+    // Trigger layout update
+    resized();
 }
 
 void ActivationDialog::licenseStatusChanged(LicenseManager::LicenseStatus status,
