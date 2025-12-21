@@ -233,6 +233,7 @@ private:
     juce::TextButton addToDAWButton;  // Add to DAW at playhead
     juce::TextButton zoomInButton;
     juce::TextButton zoomOutButton;
+    juce::TextButton settingsButton;  // Gear icon for settings menu
     juce::ComboBox transposeComboBox;    // Transpose dropdown
     int transposeAmount = 0;              // Current transpose in semitones
     bool isPlaying = true;
@@ -294,6 +295,9 @@ private:
     LicenseManager& licenseManager;
     juce::TextButton statusBarActivateBtn{"Activate License"};  // Button in status bar
     void showLicenseActivation();
+    void showSettingsMenu();
+    void showHelpDialog(const juce::String& topic);
+    void showAboutDialog();
 
     void addLibrary();
     void scanLibraries();
