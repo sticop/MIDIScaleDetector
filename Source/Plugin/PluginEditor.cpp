@@ -3235,7 +3235,6 @@ void MIDIXplorerEditor::showHelpDialog(const juce::String& topic) {
         content += "  F           - Toggle fullscreen piano roll\n";
         content += "  Escape      - Exit fullscreen\n\n";
         content += "FILE MANAGEMENT\n";
-        content += "  Cmd/Ctrl+O  - Open MIDI file\n";
         content += "  Star icon   - Toggle favorite";
     }
     else if (topic == "Scale Detection") {

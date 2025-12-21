@@ -809,7 +809,7 @@ private:
         PianoSynthesizer pianoSynth;
         juce::AudioProcessorEditor* pluginEditor = nullptr;
         std::unique_ptr<juce::Component> contentWrapper;
-        
+
         #if JUCE_MAC
         juce::PopupMenu appMenuExtra;  // Extra items for macOS app menu
         #endif
