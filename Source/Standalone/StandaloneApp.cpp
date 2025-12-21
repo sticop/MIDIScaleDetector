@@ -532,16 +532,23 @@ private:
             {
                 menu.addItem(10, "Audio Settings...");
                 menu.addSeparator();
-                menu.addItem(11, "License...");
-                menu.addItem(12, "Enter License Key...");
+                menu.addItem(11, "License Management...");
+                menu.addSeparator();
+                menu.addItem(12, "Check For Updates...");
+                menu.addSeparator();
+                menu.addItem(13, "About MIDI Xplorer");
             }
             else if (menuIndex == 2) // Help menu
             {
-                menu.addItem(20, "About MIDI Xplorer");
-                menu.addItem(21, "License Status");
+                menu.addItem(20, "Getting Started");
+                menu.addItem(21, "Keyboard Shortcuts");
+                menu.addItem(22, "Understanding Scale Detection");
+                menu.addItem(23, "MIDI File Management");
                 menu.addSeparator();
-                menu.addItem(22, "Purchase License...");
-                menu.addItem(23, "Online Help...");
+                menu.addItem(24, "Online Documentation...");
+                menu.addItem(25, "Report an Issue...");
+                menu.addSeparator();
+                menu.addItem(26, "Purchase License...");
             }
 
             return menu;
@@ -561,29 +568,45 @@ private:
             {
                 showAudioSettings();
             }
-            else if (menuItemID == 11) // License
-            {
-                showLicenseStatus();
-            }
-            else if (menuItemID == 12) // Enter License Key
+            else if (menuItemID == 11) // License Management
             {
                 ActivationDialog::showActivationDialog(this, nullptr);
             }
-            else if (menuItemID == 20) // About
+            else if (menuItemID == 12) // Check For Updates
+            {
+                checkForUpdates();
+            }
+            else if (menuItemID == 13) // About
             {
                 showAboutDialog();
             }
-            else if (menuItemID == 21) // License Status
+            else if (menuItemID == 20) // Getting Started
             {
-                showLicenseStatus();
+                showHelpDialog("Getting Started");
             }
-            else if (menuItemID == 22) // Purchase License
+            else if (menuItemID == 21) // Keyboard Shortcuts
+            {
+                showHelpDialog("Keyboard Shortcuts");
+            }
+            else if (menuItemID == 22) // Scale Detection
+            {
+                showHelpDialog("Scale Detection");
+            }
+            else if (menuItemID == 23) // MIDI Management
+            {
+                showHelpDialog("MIDI Management");
+            }
+            else if (menuItemID == 24) // Online Documentation
+            {
+                juce::URL("https://reliablehandy.ca/midixplorer/docs").launchInDefaultBrowser();
+            }
+            else if (menuItemID == 25) // Report an Issue
+            {
+                juce::URL("https://reliablehandy.ca/midixplorer/support").launchInDefaultBrowser();
+            }
+            else if (menuItemID == 26) // Purchase License
             {
                 juce::URL("https://reliablehandy.ca/midixplorer/purchase").launchInDefaultBrowser();
-            }
-            else if (menuItemID == 23) // Online Help
-            {
-                juce::URL("https://reliablehandy.ca/midixplorer/help").launchInDefaultBrowser();
             }
         }
 
@@ -616,29 +639,134 @@ private:
             auto& license = LicenseManager::getInstance();
             auto info = license.getLicenseInfo();
 
-            juce::String message = "MIDI Xplorer v1.0.0\n\n";
+            juce::String message;
+            message += "Version: 1.0.0\n";
+            message += "Build Date: " + juce::String(__DATE__) + "\n\n";
             message += "A powerful MIDI file browser and analyzer\n";
             message += "with built-in piano synthesizer.\n\n";
 
             if (license.isLicenseValid())
             {
+                message += "License Status: ACTIVE\n";
                 message += "Licensed to: " + info.customerName + "\n";
                 message += "License type: " + info.licenseType + "\n";
             }
             else if (license.isInTrialPeriod())
             {
                 int days = license.getTrialDaysRemaining();
-                message += "Trial Version - " + juce::String(days) + " days remaining\n";
+                message += "License Status: TRIAL\n";
+                message += "Days remaining: " + juce::String(days) + "\n";
             }
             else
             {
-                message += "Trial Expired - Please activate license\n";
+                message += "License Status: EXPIRED\n";
+                message += "Please activate a license to continue.\n";
             }
+
+            message += "\n© 2024 MIDI Xplorer. All rights reserved.";
 
             juce::AlertWindow::showMessageBoxAsync(
                 juce::AlertWindow::InfoIcon,
                 "About MIDI Xplorer",
                 message,
+                "OK");
+        }
+
+        void checkForUpdates()
+        {
+            // Show checking message
+            juce::AlertWindow::showMessageBoxAsync(
+                juce::AlertWindow::InfoIcon,
+                "Check For Updates",
+                "Checking for updates...\n\nCurrent Version: 1.0.0",
+                "OK");
+
+            // Launch update check in browser (or could implement proper version API)
+            juce::URL("https://reliablehandy.ca/midixplorer/updates?v=1.0.0").launchInDefaultBrowser();
+        }
+
+        void showHelpDialog(const juce::String& topic)
+        {
+            juce::String title;
+            juce::String content;
+
+            if (topic == "Getting Started")
+            {
+                title = "Getting Started with MIDI Xplorer";
+                content = "Welcome to MIDI Xplorer!\n\n";
+                content += "1. ADD A LIBRARY\n";
+                content += "   Click the '+' button in the left sidebar to add a folder containing MIDI files.\n\n";
+                content += "2. BROWSE YOUR FILES\n";
+                content += "   Click on a library to see all MIDI files. Use the search box to filter.\n\n";
+                content += "3. PREVIEW MIDI FILES\n";
+                content += "   Select a file to see the piano roll. Press Space to play/stop.\n\n";
+                content += "4. DRAG & DROP\n";
+                content += "   Drag any MIDI file from the list directly into your DAW.\n\n";
+                content += "5. FILTER BY KEY\n";
+                content += "   Use the 'All Keys' dropdown to filter by detected musical key.\n\n";
+                content += "6. FILTER BY TYPE\n";
+                content += "   Use 'All Types' to filter between chords and single notes.";
+            }
+            else if (topic == "Keyboard Shortcuts")
+            {
+                title = "Keyboard Shortcuts";
+                content = "PLAYBACK\n";
+                content += "  Space       - Play/Stop current MIDI file\n";
+                content += "  N           - Play next/random file\n";
+                content += "  L           - Toggle loop mode\n\n";
+                content += "NAVIGATION\n";
+                content += "  Up/Down     - Navigate file list\n";
+                content += "  Enter       - Load selected file\n";
+                content += "  Cmd/Ctrl+F  - Focus search box\n\n";
+                content += "VIEW\n";
+                content += "  F           - Toggle fullscreen piano roll\n";
+                content += "  Escape      - Exit fullscreen\n\n";
+                content += "FILE MANAGEMENT\n";
+                content += "  Cmd/Ctrl+O  - Open MIDI file\n";
+                content += "  Star icon   - Toggle favorite";
+            }
+            else if (topic == "Scale Detection")
+            {
+                title = "Understanding Scale Detection";
+                content = "MIDI Xplorer analyzes every note in your MIDI file to detect the most likely musical scale.\n\n";
+                content += "HOW IT WORKS\n";
+                content += "The analyzer counts notes in each pitch class and matches them against 25+ scale templates including:\n";
+                content += "  • Major & Minor modes (Ionian, Dorian, Phrygian, etc.)\n";
+                content += "  • Pentatonic scales\n";
+                content += "  • Blues scales\n";
+                content += "  • Exotic scales (Hungarian, Spanish, Arabic, etc.)\n\n";
+                content += "RELATIVE KEY DISPLAY\n";
+                content += "The relative key (e.g., 'C/Am') shows the parent major and relative minor, helping you mix tracks in the same key family.\n\n";
+                content += "CHORD vs NOTE DETECTION\n";
+                content += "Files are classified as containing chords (3+ simultaneous notes) or single notes (melodies), which you can filter using the 'All Types' dropdown.";
+            }
+            else if (topic == "MIDI Management")
+            {
+                title = "MIDI File Management";
+                content = "ORGANIZING YOUR LIBRARY\n";
+                content += "Add multiple library folders to organize MIDI files by project, genre, or source.\n\n";
+                content += "FAVORITES\n";
+                content += "Click the star icon next to any file to mark it as a favorite. Access all favorites from the 'Favorites' section.\n\n";
+                content += "RECENTLY PLAYED\n";
+                content += "Quick access to files you've recently previewed.\n\n";
+                content += "SEARCH & FILTER\n";
+                content += "  • Search by filename, key, or instrument\n";
+                content += "  • Filter by musical key (All Keys dropdown)\n";
+                content += "  • Filter by content type (Chords/Notes)\n";
+                content += "  • Sort by scale, duration, or name\n\n";
+                content += "DRAG TO DAW\n";
+                content += "Simply drag any file from the list into your DAW's arrangement or MIDI track. The file will be imported at the current position.";
+            }
+            else
+            {
+                title = "Help";
+                content = "Select a help topic from the Help menu.";
+            }
+
+            juce::AlertWindow::showMessageBoxAsync(
+                juce::AlertWindow::InfoIcon,
+                title,
+                content,
                 "OK");
         }
 

@@ -21,7 +21,7 @@ namespace {
 }
 
 MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
-    : AudioProcessorEditor(&p) {
+    : AudioProcessorEditor(&p), licenseManager(LicenseManager::getInstance()) {
 
     pluginProcessor = dynamic_cast<MIDIScaleDetector::MIDIScalePlugin*>(&p);
     setWantsKeyboardFocus(true);
@@ -1499,7 +1499,7 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
             }
         }
     }
-    
+
     // Initialize chord detection flags (will be set after timestamp conversion)
     info.containsChords = false;
     info.containsSingleNotes = false;
@@ -1688,7 +1688,7 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     double roundedBeats = bars * 4.0;
     info.duration = roundedBeats / beatsPerSecond;
     info.durationBeats = roundedBeats;
-    
+
     // Chord detection: analyze simultaneous notes (timestamps are now in seconds)
     // A chord is 3+ notes starting within a small time window (20ms)
     const double chordTimeWindow = 0.020;  // 20ms window for chord detection

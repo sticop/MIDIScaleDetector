@@ -290,8 +290,8 @@ private:
 
     MIDIScaleDetector::MIDIScalePlugin* pluginProcessor = nullptr;
 
-    // License management
-    LicenseManager licenseManager;
+    // License management - use singleton reference
+    LicenseManager& licenseManager;
     juce::TextButton statusBarActivateBtn{"Activate License"};  // Button in status bar
     void showLicenseActivation();
 
