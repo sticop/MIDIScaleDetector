@@ -1,5 +1,6 @@
 #include "MIDIScalePlugin.h"
 #include "PluginEditor.h"
+#include <fstream>
 
 namespace MIDIScaleDetector {
 
@@ -46,6 +47,13 @@ void MIDIScalePlugin::clearMidiQueue() {
 }
 
 void MIDIScalePlugin::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) {
+    static bool loggedProcessBlock = false;
+    if (!loggedProcessBlock) {
+        std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
+        logfile << "MIDIScalePlugin::processBlock() called" << std::endl;
+        loggedProcessBlock = true;
+    }
+
     buffer.clear();
 
     // Check if we need to send note-offs (from pause/stop/seek)
@@ -312,8 +320,22 @@ void MIDIScalePlugin::resetPlayback() {
 }
 
 void MIDIScalePlugin::updatePlayback() {
+    static bool loggedOnce = false;
+    if (!loggedOnce) {
+        std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
+        logfile << "updatePlayback() called" << std::endl;
+        loggedOnce = true;
+    }
+
     if (!playbackState.isPlaying.load() || !playbackState.fileLoaded.load()) {
         return;
+    }
+
+    static bool loggedPlaying = false;
+    if (!loggedPlaying) {
+        std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
+        logfile << "updatePlayback: isPlaying=true, fileLoaded=true" << std::endl;
+        loggedPlaying = true;
     }
 
     std::lock_guard<std::mutex> lock(sequenceMutex);

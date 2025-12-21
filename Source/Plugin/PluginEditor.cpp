@@ -2,6 +2,8 @@
 #include "MIDIScalePlugin.h"
 #include "BinaryData.h"
 #include "../Standalone/ActivationDialog.h"
+#include <fstream>
+#include <set>
 
 namespace {
     int getKeyOrder(const juce::String& key) {
@@ -49,6 +51,14 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     keyFilterCombo.setSelectedId(1);
     keyFilterCombo.onChange = [this]() { filterFiles(); };
     addAndMakeVisible(keyFilterCombo);
+
+    // Content type filter dropdown (chords vs notes)
+    contentTypeFilterCombo.addItem("All Types", 1);
+    contentTypeFilterCombo.addItem("Chords Only", 2);
+    contentTypeFilterCombo.addItem("Notes Only", 3);
+    contentTypeFilterCombo.setSelectedId(1);
+    contentTypeFilterCombo.onChange = [this]() { filterFiles(); };
+    addAndMakeVisible(contentTypeFilterCombo);
 
     // Sort dropdown
     sortCombo.addItem("Sort: Scale", 1);
@@ -139,8 +149,14 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     playPauseButton.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
     isPlaying = false;  // Start with playback stopped
     playPauseButton.onClick = [this]() {
+        // Debug: log button click
+        std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
+        logfile << "Play button clicked" << std::endl;
+
         // Block playback if license is expired
         if (isLicenseExpiredOrTrialExpired()) {
+            auto status = licenseManager.getCurrentStatus();
+            logfile << "Playback blocked - License status: " << (int)status << std::endl;
             juce::AlertWindow::showMessageBoxAsync(
                 juce::AlertWindow::WarningIcon,
                 "License Required",
@@ -149,21 +165,28 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
             return;
         }
 
+        logfile << "Playback not blocked" << std::endl;
+        logfile << "Playback not blocked" << std::endl;
+
         if (!isPlaying) {
             // Start playing
             isPlaying = true;
+            logfile << "Setting isPlaying = true" << std::endl;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
             // If no file is loaded, play the first file
             if (!fileLoaded && !filteredFiles.empty()) {
+                logfile << "No file loaded, selecting first file" << std::endl;
                 selectAndPreview(0);
             } else if (fileLoaded) {
                 // Start fresh playback
+                logfile << "File already loaded, starting playback" << std::endl;
                 playbackNoteIndex = 0;
                 playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
                 playbackStartBeat = getHostBeatPosition();
             }
             // Set processor playback state
             if (pluginProcessor) {
+                logfile << "Calling setPlaybackPlaying(true)" << std::endl;
                 pluginProcessor->setPlaybackPlaying(true);
                 pluginProcessor->resetPlayback();
             }
@@ -615,6 +638,7 @@ void MIDIXplorerEditor::resized() {
         searchBox.setVisible(false);
         fileCountLabel.setVisible(false);
         keyFilterCombo.setVisible(false);
+        contentTypeFilterCombo.setVisible(false);
         sortCombo.setVisible(false);
         velocitySlider.setVisible(false);
         velocityLabel.setVisible(false);
@@ -636,6 +660,7 @@ void MIDIXplorerEditor::resized() {
     searchBox.setVisible(true);
     fileCountLabel.setVisible(true);
     keyFilterCombo.setVisible(true);
+    contentTypeFilterCombo.setVisible(true);
     sortCombo.setVisible(true);
     velocitySlider.setVisible(true);
     velocityLabel.setVisible(true);
@@ -665,6 +690,7 @@ void MIDIXplorerEditor::resized() {
     topBar = topBar.reduced(8, 2);
     fileCountLabel.setBounds(topBar.removeFromLeft(70));
     keyFilterCombo.setBounds(topBar.removeFromLeft(105).reduced(2));
+    contentTypeFilterCombo.setBounds(topBar.removeFromLeft(100).reduced(2));
     sortCombo.setBounds(topBar.removeFromLeft(110).reduced(2));
     // Volume slider on the right
     velocitySlider.setBounds(topBar.removeFromRight(80).reduced(2));
@@ -1461,6 +1487,9 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     // Count notes per pitch class
     std::array<int, 12> noteHistogram = {0};
 
+    // Collect all note-on events with timestamps for chord detection
+    std::vector<std::pair<double, int>> noteEvents;  // timestamp, noteNumber
+
     for (int track = 0; track < midiFile.getNumTracks(); track++) {
         auto* sequence = midiFile.getTrack(track);
         if (sequence) {
@@ -1469,9 +1498,52 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
                 if (msg.isNoteOn() && msg.getVelocity() > 0) {
                     int pitchClass = msg.getNoteNumber() % 12;
                     noteHistogram[(size_t)pitchClass]++;
+                    noteEvents.push_back({msg.getTimeStamp(), msg.getNoteNumber()});
                 }
             }
         }
+    }
+
+    // Chord detection: analyze simultaneous notes
+    // A chord is 3+ notes starting within a small time window (20ms)
+    const double chordTimeWindow = 0.020;  // 20ms window for chord detection
+    info.containsChords = false;
+    info.containsSingleNotes = false;
+
+    if (!noteEvents.empty()) {
+        // Sort by timestamp
+        std::sort(noteEvents.begin(), noteEvents.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        int chordCount = 0;
+        int singleNoteCount = 0;
+        size_t i = 0;
+
+        while (i < noteEvents.size()) {
+            // Count notes within the time window
+            double windowStart = noteEvents[i].first;
+            size_t j = i;
+            std::set<int> simultaneousNotes;  // Use set to avoid duplicate pitches
+
+            while (j < noteEvents.size() && noteEvents[j].first - windowStart <= chordTimeWindow) {
+                simultaneousNotes.insert(noteEvents[j].second);
+                j++;
+            }
+
+            if (simultaneousNotes.size() >= 3) {
+                chordCount++;
+            } else if (simultaneousNotes.size() == 1) {
+                singleNoteCount++;
+            }
+
+            // Move to next group
+            i = j;
+        }
+
+        // Consider it a chord file if it has at least 2 chord events
+        info.containsChords = (chordCount >= 2);
+        // Consider it a single-note file if it has mostly single notes
+        info.containsSingleNotes = (singleNoteCount > chordCount);
     }
 
     // Comprehensive scale templates (intervals from root)
@@ -1775,6 +1847,16 @@ void MIDIXplorerEditor::filterFiles() {
         if (keyFilterCombo.getSelectedId() > 1) {
             bool matches = (file.key == keyFilter) || (file.relativeKey == keyFilter);
             if (!matches) continue;
+        }
+
+        // Check content type filter (chords vs notes)
+        int contentTypeFilter = contentTypeFilterCombo.getSelectedId();
+        if (contentTypeFilter == 2) {
+            // Chords Only - file must contain chords
+            if (!file.containsChords) continue;
+        } else if (contentTypeFilter == 3) {
+            // Notes Only - file must contain single notes (melody) and NOT be primarily chords
+            if (!file.containsSingleNotes || file.containsChords) continue;
         }
 
         // Check search filter (matches filename, key, relative key, or instrument)

@@ -53,6 +53,8 @@ public:
         bool analyzed = false;
         bool isAnalyzing = false;  // Currently being analyzed
         bool favorite = false;  // Marked as favorite
+        bool containsChords = false;  // Has simultaneous notes (3+ at once)
+        bool containsSingleNotes = false;  // Has melodic single notes
     };
 
 private:
@@ -220,6 +222,7 @@ private:
 
     juce::Label fileCountLabel;
     juce::ComboBox keyFilterCombo;
+    juce::ComboBox contentTypeFilterCombo;  // Filter by chords/notes
     juce::ComboBox sortCombo;
     juce::ComboBox quantizeCombo;
     juce::TextEditor searchBox;
