@@ -2,7 +2,6 @@
 #include "MIDIScalePlugin.h"
 #include "BinaryData.h"
 #include "../Standalone/ActivationDialog.h"
-#include <fstream>
 #include <set>
 
 namespace {
@@ -149,14 +148,8 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     playPauseButton.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
     isPlaying = false;  // Start with playback stopped
     playPauseButton.onClick = [this]() {
-        // Debug: log button click
-        std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
-        logfile << "Play button clicked" << std::endl;
-
         // Block playback if license is expired
         if (isLicenseExpiredOrTrialExpired()) {
-            auto status = licenseManager.getCurrentStatus();
-            logfile << "Playback blocked - License status: " << (int)status << std::endl;
             juce::AlertWindow::showMessageBoxAsync(
                 juce::AlertWindow::WarningIcon,
                 "License Required",
@@ -165,28 +158,21 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
             return;
         }
 
-        logfile << "Playback not blocked" << std::endl;
-        logfile << "Playback not blocked" << std::endl;
-
         if (!isPlaying) {
             // Start playing
             isPlaying = true;
-            logfile << "Setting isPlaying = true" << std::endl;
             playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
             // If no file is loaded, play the first file
             if (!fileLoaded && !filteredFiles.empty()) {
-                logfile << "No file loaded, selecting first file" << std::endl;
                 selectAndPreview(0);
             } else if (fileLoaded) {
                 // Start fresh playback
-                logfile << "File already loaded, starting playback" << std::endl;
                 playbackNoteIndex = 0;
                 playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
                 playbackStartBeat = getHostBeatPosition();
             }
             // Set processor playback state
             if (pluginProcessor) {
-                logfile << "Calling setPlaybackPlaying(true)" << std::endl;
                 pluginProcessor->setPlaybackPlaying(true);
                 pluginProcessor->resetPlayback();
             }
@@ -3187,7 +3173,7 @@ void MIDIXplorerEditor::showLicenseActivation() {
 
 void MIDIXplorerEditor::showSettingsMenu() {
     juce::PopupMenu menu;
-    
+
     // License section
     auto& license = licenseManager;
     if (license.isLicenseValid()) {
@@ -3202,28 +3188,28 @@ void MIDIXplorerEditor::showSettingsMenu() {
         menu.addSectionHeader("Trial Expired");
         menu.addItem(1, "Activate License...");
     }
-    
+
     menu.addSeparator();
-    
+
     // Help section
     menu.addSectionHeader("Help");
     menu.addItem(10, "Getting Started");
     menu.addItem(11, "Keyboard Shortcuts");
     menu.addItem(12, "Understanding Scale Detection");
     menu.addItem(13, "MIDI File Management");
-    
+
     menu.addSeparator();
-    
+
     // Links section
     menu.addItem(20, "Online Documentation...");
     menu.addItem(21, "Report an Issue...");
     menu.addItem(22, "Purchase License...");
-    
+
     menu.addSeparator();
-    
+
     // About
     menu.addItem(30, "About MIDI Xplorer");
-    
+
     menu.showMenuAsync(juce::PopupMenu::Options()
         .withTargetComponent(&settingsButton)
         .withMinimumWidth(200),

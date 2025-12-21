@@ -8,7 +8,6 @@
 #include "PianoSynthesizer.h"
 #include "LicenseManager.h"
 #include "ActivationDialog.h"
-#include <fstream>
 
 /**
  * Overlay component that blocks interaction when trial expires
@@ -331,14 +330,9 @@ private:
             // Create main content wrapper
             contentWrapper = std::make_unique<juce::Component>();
 
-            // Note: TrialStatusBar removed - PluginEditor now has built-in license status bar
-
             // Create the processor (full plugin)
             processor = std::make_unique<MIDIScaleDetector::MIDIScalePlugin>();
             processor->prepareToPlay(44100.0, 512);
-
-            std::ofstream logfile_proc("/tmp/midixplorer_debug.log", std::ios::app);
-            logfile_proc << "Processor created: " << (processor ? "YES" : "NO") << std::endl;
 
             // Initialize audio with piano synth
             pianoSynth.prepareToPlay(44100.0, 512);
@@ -350,18 +344,8 @@ private:
             auto audioError = audioDeviceManager.initialiseWithDefaultDevices(0, 2);
             if (audioError.isEmpty()) {
                 audioDeviceManager.addAudioCallback(&audioCallback);
-
-                // Log audio device info
-                if (auto* device = audioDeviceManager.getCurrentAudioDevice()) {
-                    std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
-                    logfile << "Audio device: " << device->getName().toStdString() << std::endl;
-                    logfile << "Sample rate: " << device->getCurrentSampleRate() << std::endl;
-                    logfile << "Buffer size: " << device->getCurrentBufferSizeSamples() << std::endl;
-                    logfile << "Output channels: " << device->getActiveOutputChannels().countNumberOfSetBits() << std::endl;
-                }
             } else {
-                std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
-                logfile << "Audio device error: " << audioError.toStdString() << std::endl;
+                DBG("Audio device error: " << audioError);
             }
 
             // Create the full plugin editor UI
@@ -378,8 +362,6 @@ private:
 
             setContentOwned(contentWrapper.release(), true);
 
-            // Expired overlay no longer used - PluginEditor shows red status bar instead
-
             #if JUCE_IOS || JUCE_ANDROID
             setFullScreen(true);
             #else
@@ -391,13 +373,6 @@ private:
 
             // Register for license updates
             LicenseManager::getInstance().addListener(this);
-
-            // Trigger a test note after 2 seconds to verify audio output works
-            juce::Timer::callAfterDelay(2000, [this]() {
-                std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
-                logfile << "Triggering test note..." << std::endl;
-                audioCallback.triggerTestNote();
-            });
         }
 
         ~MainWindow() override
@@ -851,12 +826,6 @@ private:
                 return masterVolume;
             }
 
-            // Test note trigger
-            void triggerTestNote() {
-                testNoteOn = true;
-                testNoteTimer = 44100;  // 1 second at 44100 Hz
-            }
-
             void audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
                                                  int numInputChannels,
                                                  float* const* outputChannelData,
@@ -874,16 +843,6 @@ private:
                 bool isLicenseValid = LicenseManager::getInstance().isLicenseValid();
                 bool isTrialActive = LicenseManager::getInstance().isInTrialPeriod();
                 bool licenseExpired = !isLicenseValid && !isTrialActive;
-
-                // Log license status once
-                static bool licensedLogged = false;
-                if (!licensedLogged) {
-                    std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
-                    logfile << "License valid: " << (isLicenseValid ? "YES" : "NO") << std::endl;
-                    logfile << "Trial active: " << (isTrialActive ? "YES" : "NO") << std::endl;
-                    logfile << "Audio muted: " << (licenseExpired ? "YES" : "NO") << std::endl;
-                    licensedLogged = true;
-                }
 
                 if (licenseExpired) {
                     buffer.clear();
@@ -904,58 +863,8 @@ private:
                 wasPlaying = currentlyPlaying;
 
                 // Get processor output (MIDI events)
-                static bool loggedProcessorStatus = false;
-                if (!loggedProcessorStatus) {
-                    std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
-                    logfile << "processor pointer: " << (processor ? "NOT NULL" : "NULL") << std::endl;
-                    loggedProcessorStatus = true;
-                }
                 if (processor) {
-                    static bool loggedProcessorCall = false;
-                    if (!loggedProcessorCall) {
-                        std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
-                        logfile << "Calling processor->processBlock()" << std::endl;
-                        loggedProcessorCall = true;
-                    }
                     processor->processBlock(buffer, midiMessages);
-                }
-
-                // Debug: log if we have MIDI messages from file playback
-                static int debugCounter = 0;
-                static int midiEventTotal = 0;
-                static bool loggedPlaying = false;
-                static bool logged = false;
-                if (!midiMessages.isEmpty()) {
-                    midiEventTotal += midiMessages.getNumEvents();
-                    debugCounter++;
-                    if (debugCounter <= 5) {  // Log first 5 times we get MIDI
-                        std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
-                        logfile << "MIDI events received: " << midiMessages.getNumEvents() << " (total: " << midiEventTotal << ")" << std::endl;
-                    }
-                }
-
-                // Also log if processor is playing
-                if (processor && processor->isPlaybackPlaying() && !loggedPlaying) {
-                    std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
-                    logfile << "Playback is PLAYING" << std::endl;
-                    loggedPlaying = true;
-                }
-
-                // Handle test note
-                if (testNoteOn && testNoteTimer > 0) {
-                    // Add a test note on
-                    midiMessages.addEvent(juce::MidiMessage::noteOn(1, 60, (juce::uint8)100), 0);
-                    testNoteOn = false;
-                    std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
-                    logfile << "Test note ON triggered" << std::endl;
-                }
-                if (testNoteTimer > 0) {
-                    testNoteTimer -= numSamples;
-                    if (testNoteTimer <= 0) {
-                        midiMessages.addEvent(juce::MidiMessage::noteOff(1, 60), 0);
-                        std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
-                        logfile << "Test note OFF triggered" << std::endl;
-                    }
                 }
 
                 // Render MIDI through piano synth
@@ -965,14 +874,6 @@ private:
 
                     // Apply master volume
                     buffer.applyGain(masterVolume);
-
-                    // Debug: check if buffer has audio
-                    float maxVal = buffer.getMagnitude(0, buffer.getNumSamples());
-                    if (maxVal > 0.001f && !logged) {
-                        std::ofstream logfile("/tmp/midixplorer_debug.log", std::ios::app);
-                        logfile << "Audio output magnitude: " << maxVal << std::endl;
-                        logged = true;
-                    }
                 }
             }
 
@@ -990,7 +891,6 @@ private:
 
             void audioDeviceStopped() override
             {
-                // PianoSynthesizer doesn't have releaseResources
                 if (processor) processor->releaseResources();
             }
 
@@ -999,8 +899,6 @@ private:
             PianoSynthesizer* pianoSynth;
             float masterVolume = 1.0f;
             bool wasPlaying = false;
-            bool testNoteOn = false;
-            int testNoteTimer = 0;
         } audioCallback;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainWindow)
