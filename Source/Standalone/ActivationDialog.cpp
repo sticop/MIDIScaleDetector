@@ -147,7 +147,7 @@ void ActivationDialog::resized()
 
     // Buttons row - layout based on visibility
     auto buttonArea = bounds.removeFromTop(40);
-    
+
     if (activateButton.isVisible()) {
         activateButton.setBounds(buttonArea.removeFromLeft(150));
         buttonArea.removeFromLeft(10);
@@ -279,7 +279,7 @@ void ActivationDialog::updateUI()
         licenseKeyEditor.setEnabled(true);
         licenseKeyEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff3a3a3a));
     }
-    
+
     // Trigger layout update
     resized();
 }

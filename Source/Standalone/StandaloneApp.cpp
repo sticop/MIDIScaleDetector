@@ -368,9 +368,12 @@ private:
             pluginEditor = processor->createEditor();
             contentWrapper->addAndMakeVisible(pluginEditor);
 
+            // Create audio control bar
+            setupAudioControlBar();
+
             // Set up content wrapper size (PluginEditor handles its own license bar)
             int editorWidth = pluginEditor->getWidth();
-            int editorHeight = pluginEditor->getHeight();
+            int editorHeight = pluginEditor->getHeight() + audioControlBarHeight;
             contentWrapper->setSize(editorWidth, editorHeight);
 
             setContentOwned(contentWrapper.release(), true);
@@ -408,6 +411,54 @@ private:
             processor = nullptr;
         }
 
+        void setupAudioControlBar()
+        {
+            // Audio settings button
+            audioSettingsButton.setButtonText("Audio Settings");
+            audioSettingsButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
+            audioSettingsButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+            audioSettingsButton.onClick = [this]() { showAudioSettings(); };
+            contentWrapper->addAndMakeVisible(audioSettingsButton);
+
+            // Volume label
+            volumeLabel.setText("Volume:", juce::dontSendNotification);
+            volumeLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
+            volumeLabel.setFont(juce::Font(juce::FontOptions(13.0f)));
+            contentWrapper->addAndMakeVisible(volumeLabel);
+
+            // Master volume slider
+            masterVolumeSlider.setSliderStyle(juce::Slider::LinearHorizontal);
+            masterVolumeSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 45, 20);
+            masterVolumeSlider.setRange(0.0, 1.0, 0.01);
+            masterVolumeSlider.setValue(1.0);
+            masterVolumeSlider.setColour(juce::Slider::backgroundColourId, juce::Colour(0xff3a3a3a));
+            masterVolumeSlider.setColour(juce::Slider::trackColourId, juce::Colour(0xff5588cc));
+            masterVolumeSlider.setColour(juce::Slider::thumbColourId, juce::Colours::white);
+            masterVolumeSlider.onValueChange = [this]() {
+                audioCallback.setMasterVolume((float)masterVolumeSlider.getValue());
+            };
+            contentWrapper->addAndMakeVisible(masterVolumeSlider);
+
+            // Audio device info label
+            updateAudioDeviceLabel();
+            audioDeviceLabel.setColour(juce::Label::textColourId, juce::Colours::grey);
+            audioDeviceLabel.setFont(juce::Font(juce::FontOptions(11.0f)));
+            audioDeviceLabel.setJustificationType(juce::Justification::centredRight);
+            contentWrapper->addAndMakeVisible(audioDeviceLabel);
+        }
+
+        void updateAudioDeviceLabel()
+        {
+            if (auto* device = audioDeviceManager.getCurrentAudioDevice()) {
+                juce::String info = device->getName() + " | " +
+                                   juce::String((int)device->getCurrentSampleRate()) + " Hz | " +
+                                   juce::String(device->getCurrentBufferSizeSamples()) + " samples";
+                audioDeviceLabel.setText(info, juce::dontSendNotification);
+            } else {
+                audioDeviceLabel.setText("No audio device", juce::dontSendNotification);
+            }
+        }
+
         void resized() override
         {
             DocumentWindow::resized();
@@ -415,6 +466,17 @@ private:
             if (auto* content = getContentComponent())
             {
                 auto bounds = content->getLocalBounds();
+
+                // Audio control bar at bottom
+                auto audioBar = bounds.removeFromBottom(audioControlBarHeight);
+                audioBar = audioBar.reduced(8, 4);
+
+                audioSettingsButton.setBounds(audioBar.removeFromLeft(110));
+                audioBar.removeFromLeft(15);
+                volumeLabel.setBounds(audioBar.removeFromLeft(55));
+                masterVolumeSlider.setBounds(audioBar.removeFromLeft(140));
+                audioBar.removeFromLeft(15);
+                audioDeviceLabel.setBounds(audioBar);
 
                 if (pluginEditor)
                     pluginEditor->setBounds(bounds);
@@ -529,7 +591,7 @@ private:
         {
             auto* selector = new juce::AudioDeviceSelectorComponent(
                 audioDeviceManager, 0, 0, 0, 2, false, false, true, false);
-            selector->setSize(500, 400);
+            selector->setSize(500, 450);
 
             juce::DialogWindow::LaunchOptions options;
             options.content.setOwned(selector);
@@ -538,7 +600,15 @@ private:
             options.escapeKeyTriggersCloseButton = true;
             options.useNativeTitleBar = true;
             options.resizable = false;
-            options.launchAsync();
+            
+            // Use a callback to update label after dialog closes
+            auto* window = options.launchAsync();
+            if (window) {
+                // Use a timer to periodically update the label while dialog is open
+                juce::Timer::callAfterDelay(500, [this]() {
+                    updateAudioDeviceLabel();
+                });
+            }
         }
 
         void showAboutDialog()
@@ -623,12 +693,19 @@ private:
         juce::AudioProcessorEditor* pluginEditor = nullptr;
         std::unique_ptr<juce::Component> contentWrapper;
 
+        // Audio control bar components
+        static constexpr int audioControlBarHeight = 36;
+        juce::TextButton audioSettingsButton;
+        juce::Slider masterVolumeSlider;
+        juce::Label volumeLabel;
+        juce::Label audioDeviceLabel;
+
         // Audio callback that combines processor output with piano synth
         class AudioCallback : public juce::AudioIODeviceCallback
         {
         public:
             AudioCallback()
-                : processor(nullptr), pianoSynth(nullptr) {}
+                : processor(nullptr), pianoSynth(nullptr), masterVolume(1.0f) {}
 
             void setProcessor(MIDIScaleDetector::MIDIScalePlugin* proc) {
                 processor = proc;
@@ -636,6 +713,14 @@ private:
 
             void setPianoSynth(PianoSynthesizer* synth) {
                 pianoSynth = synth;
+            }
+
+            void setMasterVolume(float volume) {
+                masterVolume = juce::jlimit(0.0f, 1.0f, volume);
+            }
+
+            float getMasterVolume() const {
+                return masterVolume;
             }
 
             // Test note trigger
@@ -750,6 +835,9 @@ private:
                 if (pianoSynth) {
                     pianoSynth->processBlock(buffer, midiMessages);
 
+                    // Apply master volume
+                    buffer.applyGain(masterVolume);
+
                     // Debug: check if buffer has audio
                     float maxVal = buffer.getMagnitude(0, buffer.getNumSamples());
                     if (maxVal > 0.001f && !logged) {
@@ -781,6 +869,7 @@ private:
         private:
             MIDIScaleDetector::MIDIScalePlugin* processor;
             PianoSynthesizer* pianoSynth;
+            float masterVolume = 1.0f;
             bool wasPlaying = false;
             bool testNoteOn = false;
             int testNoteTimer = 0;
