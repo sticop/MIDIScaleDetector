@@ -582,7 +582,6 @@ private:
     std::unique_ptr<DraggableListBox> fileListBox;
 
     juce::TextButton playPauseButton;
-    juce::TextButton dragButton;  // Drag to DAW button
     juce::TextButton addToDAWButton;  // Add to DAW at playhead
     juce::TextButton zoomInButton;
     juce::TextButton zoomOutButton;

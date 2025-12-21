@@ -395,7 +395,9 @@ private:
 
             // Set up menu bar (macOS uses native menu bar)
             #if JUCE_MAC
-            juce::MenuBarModel::setMacMainMenu(this);
+            // Create app menu extra items (About goes above Services)
+            appMenuExtra.addItem(1, "About MIDI Xplorer");
+            juce::MenuBarModel::setMacMainMenu(this, &appMenuExtra);
             #endif
 
             // Create main content wrapper
@@ -520,8 +522,6 @@ private:
 
             if (menuIndex == 0) // File menu
             {
-                menu.addItem(1, "Open MIDI File...");
-                menu.addSeparator();
                 #if ! JUCE_MAC
                 menu.addItem(2, "Quit");
                 #endif
@@ -533,8 +533,6 @@ private:
                 menu.addItem(11, "License Management...");
                 menu.addSeparator();
                 menu.addItem(12, "Check For Updates...");
-                menu.addSeparator();
-                menu.addItem(13, "About MIDI Xplorer");
             }
             else if (menuIndex == 2) // Help menu
             {
@@ -554,9 +552,9 @@ private:
 
         void menuItemSelected(int menuItemID, int /*topLevelMenuIndex*/) override
         {
-            if (menuItemID == 1) // Open MIDI File
+            if (menuItemID == 1) // About MIDI Xplorer (from app menu)
             {
-                // TODO: Implement file open
+                showAboutDialog();
             }
             else if (menuItemID == 2) // Quit
             {
@@ -573,10 +571,6 @@ private:
             else if (menuItemID == 12) // Check For Updates
             {
                 checkForUpdates();
-            }
-            else if (menuItemID == 13) // About
-            {
-                showAboutDialog();
             }
             else if (menuItemID == 20) // Getting Started
             {
@@ -718,7 +712,6 @@ private:
                 content += "  F           - Toggle fullscreen piano roll\n";
                 content += "  Escape      - Exit fullscreen\n\n";
                 content += "FILE MANAGEMENT\n";
-                content += "  Cmd/Ctrl+O  - Open MIDI file\n";
                 content += "  Star icon   - Toggle favorite";
             }
             else if (topic == "Scale Detection")
@@ -816,6 +809,10 @@ private:
         PianoSynthesizer pianoSynth;
         juce::AudioProcessorEditor* pluginEditor = nullptr;
         std::unique_ptr<juce::Component> contentWrapper;
+        
+        #if JUCE_MAC
+        juce::PopupMenu appMenuExtra;  // Extra items for macOS app menu
+        #endif
 
         // Audio control bar removed - settings accessible via menu
 

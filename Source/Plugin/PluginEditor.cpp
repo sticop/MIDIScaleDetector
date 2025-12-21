@@ -191,32 +191,6 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     };
     addAndMakeVisible(playPauseButton);
 
-    // Drag to DAW button
-    dragButton.setButtonText(juce::String::fromUTF8("\u2B07"));  // Down arrow icon
-    dragButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
-    dragButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff5a5a5a));
-    dragButton.setColour(juce::TextButton::textColourOffId, juce::Colours::orange);
-    dragButton.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
-    dragButton.setTooltip("Drag selected MIDI file to DAW");
-    dragButton.onClick = [this]() {
-        // Start drag operation for selected file
-        int selectedRow = fileListBox->getLastRowSelected();
-        if (selectedRow >= 0 && selectedRow < static_cast<int>(filteredFiles.size())) {
-            auto& selectedFile = filteredFiles[static_cast<size_t>(selectedRow)];
-            juce::File srcFile(selectedFile.fullPath);
-            if (srcFile.existsAsFile()) {
-                // Copy to temp for reliable drag
-                auto dragFile = makeTempCopyForDrag(srcFile);
-                if (dragFile.existsAsFile()) {
-                    juce::StringArray files;
-                    files.add(dragFile.getFullPathName());
-                    juce::DragAndDropContainer::performExternalDragDropOfFiles(files, false);
-                }
-            }
-        }
-    };
-    addAndMakeVisible(dragButton);
-
     // Add to DAW button
     addToDAWButton.setButtonText("Add to DAW");
     addToDAWButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a5a3a));
@@ -638,7 +612,6 @@ void MIDIXplorerEditor::resized() {
         velocitySlider.setVisible(false);
         velocityLabel.setVisible(false);
         playPauseButton.setVisible(false);
-        dragButton.setVisible(false);
         transposeComboBox.setVisible(false);
         quantizeCombo.setVisible(false);
         fileListBox->setVisible(false);
@@ -661,7 +634,6 @@ void MIDIXplorerEditor::resized() {
     velocitySlider.setVisible(true);
     velocityLabel.setVisible(true);
     playPauseButton.setVisible(true);
-    dragButton.setVisible(true);
     transposeComboBox.setVisible(true);
     quantizeCombo.setVisible(true);
     fileListBox->setVisible(true);
@@ -699,8 +671,6 @@ void MIDIXplorerEditor::resized() {
     // Bottom transport bar
     auto transport = area.removeFromBottom(40).reduced(8, 4);
     playPauseButton.setBounds(transport.removeFromLeft(40));
-    transport.removeFromLeft(4);
-    dragButton.setBounds(transport.removeFromLeft(40));
     // addToDAWButton hidden
 
     // Quantize and Transpose dropdowns on the right
