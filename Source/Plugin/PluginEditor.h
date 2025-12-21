@@ -267,7 +267,7 @@ public:
         // Create a component that combines volume control with device selector
         auto* content = new juce::Component();
         content->setSize(500, 520);
-        
+
         // Volume label
         auto* volLabel = new juce::Label();
         volLabel->setText("Piano Instrument Volume:", juce::dontSendNotification);
@@ -275,7 +275,7 @@ public:
         volLabel->setColour(juce::Label::textColourId, juce::Colours::white);
         volLabel->setBounds(10, 10, 200, 20);
         content->addAndMakeVisible(volLabel);
-        
+
         // Volume slider
         auto* volSlider = new juce::Slider();
         volSlider->setSliderStyle(juce::Slider::LinearHorizontal);
@@ -293,7 +293,7 @@ public:
             };
         }
         content->addAndMakeVisible(volSlider);
-        
+
         // Device selector
         auto* selector = new juce::AudioDeviceSelectorComponent(
             *audioDeviceManager, 0, 0, 0, 2, false, false, true, false);
@@ -331,12 +331,12 @@ private:
         // Clear the cache directory
         auto cacheDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
                             .getChildFile("MIDI Xplorer").getChildFile("cache");
-        
+
         if (cacheDir.exists())
         {
             cacheDir.deleteRecursively();
         }
-        
+
         // Also clear the analysis cache file
         auto analysisCache = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
                                  .getChildFile("MIDI Xplorer").getChildFile("analysis_cache.json");
@@ -344,7 +344,7 @@ private:
         {
             analysisCache.deleteFile();
         }
-        
+
         juce::AlertWindow::showMessageBoxAsync(
             juce::AlertWindow::InfoIcon,
             "Cache Cleared",
@@ -377,10 +377,10 @@ public:
 
     // Audio device manager setter (called by standalone app)
     void setAudioDeviceManager(juce::AudioDeviceManager* adm) { audioDeviceManager = adm; }
-    
+
     // Volume control callback (called by standalone app)
-    void setVolumeCallback(std::function<void(float)> callback, float initialVol) { 
-        volumeCallback = callback; 
+    void setVolumeCallback(std::function<void(float)> callback, float initialVol) {
+        volumeCallback = callback;
         currentVolume = initialVol;
     }
 
@@ -646,7 +646,7 @@ private:
 
     // Audio device manager (set by standalone app, nullptr in plugin mode)
     juce::AudioDeviceManager* audioDeviceManager = nullptr;
-    
+
     // Volume callback (set by standalone app)
     std::function<void(float)> volumeCallback;
     float currentVolume = 1.0f;

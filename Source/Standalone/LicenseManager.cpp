@@ -112,7 +112,7 @@ void LicenseManager::saveLicenseKey(const juce::String& key)
 
     bool success = file.replaceWithData(block.getData(), block.getSize());
     DBG("License key save result: " << (success ? "success" : "FAILED"));
-    
+
     if (success)
     {
         licenseInfo.licenseKey = key;

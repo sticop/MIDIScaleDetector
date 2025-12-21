@@ -1692,7 +1692,7 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     info.durationBeats = roundedBeats;
 
     // Chord detection: analyze simultaneous notes (timestamps are now in seconds)
-    // A chord is 3+ notes starting within a small time window (20ms)
+    // A chord is 2+ notes starting within a small time window (20ms)
     const double chordTimeWindow = 0.020;  // 20ms window for chord detection
     std::vector<std::pair<double, int>> noteEvents;  // timestamp, noteNumber
 
@@ -1728,10 +1728,10 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
                 j++;
             }
 
-            if (simultaneousNotes.size() >= 3) {
-                chordCount++;
-            } else if (simultaneousNotes.size() <= 2) {
-                singleNoteCount++;  // Count 1 or 2 notes as melodic/single notes
+            if (simultaneousNotes.size() >= 2) {
+                chordCount++;  // 2+ notes = chord (interval or chord)
+            } else {
+                singleNoteCount++;  // Single notes = melodic content
             }
 
             // Move to next group
@@ -1899,7 +1899,7 @@ void MIDIXplorerEditor::filterFiles() {
 
 void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
     detectedKeys.clear();
-    
+
     // Use maps to count files per key/scale
     std::map<juce::String, int> keyFileCounts;
     std::map<juce::String, int> scaleFileCounts;
