@@ -12,6 +12,8 @@ LicenseManager::LicenseManager()
     if (savedKey.isNotEmpty())
     {
         licenseInfo.licenseKey = savedKey;
+        licenseInfo.isValid = true;  // Mark as valid if we have a saved key
+        currentStatus = LicenseStatus::Valid;
     }
 }
 
@@ -82,20 +84,47 @@ juce::String LicenseManager::getAppVersion() const
 
 juce::File LicenseManager::getSettingsFile() const
 {
+    // On macOS, userApplicationDataDirectory returns ~/Library
+    // We need ~/Library/Application Support/MIDI Xplorer
     auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                          .getChildFile("Application Support")
                           .getChildFile("MIDI Xplorer");
+
+    DBG("License directory path: " << appDataDir.getFullPathName());
+
     if (!appDataDir.exists())
     {
         auto result = appDataDir.createDirectory();
         DBG("Creating license directory: " << appDataDir.getFullPathName() << " result: " << (result.wasOk() ? "OK" : result.getErrorMessage()));
+
+        if (!result.wasOk())
+        {
+            // Try alternative approach - create parent first
+            auto parent = appDataDir.getParentDirectory();
+            if (!parent.exists())
+            {
+                parent.createDirectory();
+            }
+            result = appDataDir.createDirectory();
+            DBG("Retry creating directory: " << (result.wasOk() ? "OK" : result.getErrorMessage()));
+        }
     }
-    return appDataDir.getChildFile("license.dat");
+
+    auto licenseFile = appDataDir.getChildFile("license.dat");
+    DBG("License file path: " << licenseFile.getFullPathName());
+    return licenseFile;
 }
 
 void LicenseManager::saveLicenseKey(const juce::String& key)
 {
     auto file = getSettingsFile();
-    DBG("Saving license key to: " << file.getFullPathName());
+
+    // Ensure parent directory exists
+    auto parentDir = file.getParentDirectory();
+    if (!parentDir.exists())
+    {
+        parentDir.createDirectory();
+    }
 
     // Simple obfuscation (not secure, but prevents casual viewing)
     juce::MemoryOutputStream stream;
@@ -111,7 +140,6 @@ void LicenseManager::saveLicenseKey(const juce::String& key)
     }
 
     bool success = file.replaceWithData(block.getData(), block.getSize());
-    DBG("License key save result: " << (success ? "success" : "FAILED"));
 
     if (success)
     {
@@ -216,6 +244,9 @@ void LicenseManager::activateLicense(const juce::String& licenseKey,
         }
 
         bool success = response.getProperty("success", false);
+        // Also check for "valid" key since server may use either
+        if (!success)
+            success = response.getProperty("valid", false);
         juce::String message = response.getProperty("message", "Unknown error").toString();
 
         if (success)
@@ -284,6 +315,9 @@ void LicenseManager::deactivateLicense(std::function<void(bool, const juce::Stri
         }
 
         bool success = response.getProperty("success", false);
+        // Also check for "valid" key since server may use either
+        if (!success)
+            success = response.getProperty("valid", false);
         juce::String message = response.getProperty("message", "Unknown error").toString();
 
         if (success)
@@ -331,18 +365,32 @@ void LicenseManager::validateLicense(std::function<void(LicenseStatus, const Lic
         }
 
         bool success = response.getProperty("success", false);
+        // Also check for "valid" key since server may use either
+        if (!success)
+            success = response.getProperty("valid", false);
 
         if (success)
         {
-            auto data = response.getProperty("data", juce::var());
+            // Server returns data at top level, not nested under "data"
+            // Also check for nested "data" object for backward compatibility
+            juce::var data = response.getProperty("data", juce::var());
+            if (!data.isObject())
+                data = response;  // Use response directly if no "data" object
+
             if (data.isObject())
             {
-                licenseInfo.email = data.getProperty("email", "").toString();
+                // Handle both field name variations
+                licenseInfo.email = data.getProperty("customer_email", data.getProperty("email", "")).toString();
                 licenseInfo.customerName = data.getProperty("customer_name", "").toString();
                 licenseInfo.licenseType = data.getProperty("license_type", "").toString();
-                licenseInfo.expiryDate = data.getProperty("expiry_date", "").toString();
+                licenseInfo.expiryDate = data.getProperty("expires_at", data.getProperty("expiry_date", "")).toString();
                 licenseInfo.maxActivations = data.getProperty("max_activations", 3);
                 licenseInfo.currentActivations = data.getProperty("current_activations", 1);
+                licenseInfo.isValid = true;
+            }
+            else
+            {
+                // Even without details, mark as valid
                 licenseInfo.isValid = true;
             }
 
@@ -398,7 +446,10 @@ void LicenseManager::timerCallback()
 
 juce::File LicenseManager::getTrialFile() const
 {
+    // On macOS, userApplicationDataDirectory returns ~/Library
+    // We need ~/Library/Application Support/MIDI Xplorer
     auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                          .getChildFile("Application Support")
                           .getChildFile("MIDI Xplorer");
     if (!appDataDir.exists())
     {
