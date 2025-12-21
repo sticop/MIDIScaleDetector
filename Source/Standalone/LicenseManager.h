@@ -109,8 +109,8 @@ private:
     void sendPostRequest(const juce::String& endpoint, const juce::var& postData,
                          std::function<void(int, const juce::var&)> callback);
 
-    // Server configuration
-    const juce::String serverUrl = "https://midixplorer.com/api";
+    // Server configuration (using reliablehandy.ca until midixplorer.com SSL is configured)
+    const juce::String serverUrl = "https://reliablehandy.ca/midixplorer/api";
 
     // Current state
     LicenseStatus currentStatus = LicenseStatus::Unknown;
