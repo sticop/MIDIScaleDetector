@@ -800,6 +800,7 @@ void MIDIXplorerEditor::timerCallback() {
         // Update UI if we analyzed files
         if (filesAnalyzed > 0) {
             updateKeyFilterFromDetectedScales();
+            updateContentTypeFilter();
             fileListBox->repaint();
             libraryListBox.repaint();
         }
@@ -1316,6 +1317,7 @@ void MIDIXplorerEditor::scanLibraries() {
         }
         filterFiles();
         updateKeyFilterFromDetectedScales();
+        updateContentTypeFilter();
         libraryListBox.repaint();
         return;  // Skip scanning - we have cached data
     }
@@ -1342,6 +1344,7 @@ void MIDIXplorerEditor::scanLibraries() {
 
     filterFiles();
     updateKeyFilterFromDetectedScales();
+    updateContentTypeFilter();
     libraryListBox.repaint();
 }
 
@@ -1726,18 +1729,18 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
 
             if (simultaneousNotes.size() >= 3) {
                 chordCount++;
-            } else if (simultaneousNotes.size() == 1) {
-                singleNoteCount++;
+            } else if (simultaneousNotes.size() <= 2) {
+                singleNoteCount++;  // Count 1 or 2 notes as melodic/single notes
             }
 
             // Move to next group
             i = j;
         }
 
-        // Consider it a chord file if it has at least 2 chord events
-        info.containsChords = (chordCount >= 2);
-        // Consider it a single-note file if it has mostly single notes
-        info.containsSingleNotes = (singleNoteCount > chordCount);
+        // Consider it a chord file if it has at least 1 chord event
+        info.containsChords = (chordCount >= 1);
+        // Consider it a single-note file if it has any single notes (melodic content)
+        info.containsSingleNotes = (singleNoteCount >= 1);
     }
 
     // Extract instrument from first program change
@@ -1942,6 +1945,27 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
     }
 
     keyFilterCombo.setSelectedId(1);
+}
+
+void MIDIXplorerEditor::updateContentTypeFilter() {
+    // Count files with chords and single notes
+    int chordFileCount = 0;
+    int noteFileCount = 0;
+    
+    for (const auto& file : allFiles) {
+        if (file.analyzed) {
+            if (file.containsChords) chordFileCount++;
+            if (file.containsSingleNotes && !file.containsChords) noteFileCount++;
+        }
+    }
+    
+    // Update combo box items with counts
+    int currentId = contentTypeFilterCombo.getSelectedId();
+    contentTypeFilterCombo.clear();
+    contentTypeFilterCombo.addItem("All Types", 1);
+    contentTypeFilterCombo.addItem("Chords (" + juce::String(chordFileCount) + ")", 2);
+    contentTypeFilterCombo.addItem("Notes (" + juce::String(noteFileCount) + ")", 3);
+    contentTypeFilterCombo.setSelectedId(currentId, juce::dontSendNotification);
 }
 
 void MIDIXplorerEditor::revealInFinder(const juce::String& path) {
@@ -2754,6 +2778,7 @@ void MIDIXplorerEditor::LibraryListModel::listBoxItemClicked(int row, const juce
                 owner.libraryListBox.updateContent();
                 owner.filterFiles();
                 owner.updateKeyFilterFromDetectedScales();
+                owner.updateContentTypeFilter();
             }
         });
     }
@@ -3172,68 +3197,21 @@ void MIDIXplorerEditor::showLicenseActivation() {
 }
 
 void MIDIXplorerEditor::showSettingsMenu() {
-    juce::PopupMenu menu;
-
-    // License section
-    auto& license = licenseManager;
-    if (license.isLicenseValid()) {
-        auto info = license.getLicenseInfo();
-        menu.addSectionHeader("License: " + info.licenseType);
-        menu.addItem(1, "License Management...");
-    } else if (license.isInTrialPeriod()) {
-        int days = license.getTrialDaysRemaining();
-        menu.addSectionHeader("Trial: " + juce::String(days) + " days left");
-        menu.addItem(1, "Activate License...");
-    } else {
-        menu.addSectionHeader("Trial Expired");
-        menu.addItem(1, "Activate License...");
+    // Create the settings dialog component (Scaler-style modal)
+    auto* settingsDialog = new SettingsDialogComponent(licenseManager, audioDeviceManager);
+    
+    juce::DialogWindow::LaunchOptions options;
+    options.content.setOwned(settingsDialog);
+    options.dialogTitle = "About";
+    options.dialogBackgroundColour = juce::Colour(0xff2a2a2a);
+    options.escapeKeyTriggersCloseButton = true;
+    options.useNativeTitleBar = false;
+    options.resizable = false;
+    
+    auto* window = options.launchAsync();
+    if (window) {
+        window->centreWithSize(750, 500);
     }
-
-    menu.addSeparator();
-
-    // Help section
-    menu.addSectionHeader("Help");
-    menu.addItem(10, "Getting Started");
-    menu.addItem(11, "Keyboard Shortcuts");
-    menu.addItem(12, "Understanding Scale Detection");
-    menu.addItem(13, "MIDI File Management");
-
-    menu.addSeparator();
-
-    // Links section
-    menu.addItem(20, "Online Documentation...");
-    menu.addItem(21, "Report an Issue...");
-    menu.addItem(22, "Purchase License...");
-
-    menu.addSeparator();
-
-    // About
-    menu.addItem(30, "About MIDI Xplorer");
-
-    menu.showMenuAsync(juce::PopupMenu::Options()
-        .withTargetComponent(&settingsButton)
-        .withMinimumWidth(200),
-        [this](int result) {
-            if (result == 1) {
-                showLicenseActivation();
-            } else if (result == 10) {
-                showHelpDialog("Getting Started");
-            } else if (result == 11) {
-                showHelpDialog("Keyboard Shortcuts");
-            } else if (result == 12) {
-                showHelpDialog("Scale Detection");
-            } else if (result == 13) {
-                showHelpDialog("MIDI Management");
-            } else if (result == 20) {
-                juce::URL("https://reliablehandy.ca/midixplorer/docs").launchInDefaultBrowser();
-            } else if (result == 21) {
-                juce::URL("https://reliablehandy.ca/midixplorer/support").launchInDefaultBrowser();
-            } else if (result == 22) {
-                juce::URL("https://reliablehandy.ca/midixplorer/purchase").launchInDefaultBrowser();
-            } else if (result == 30) {
-                showAboutDialog();
-            }
-        });
 }
 
 void MIDIXplorerEditor::showHelpDialog(const juce::String& topic) {

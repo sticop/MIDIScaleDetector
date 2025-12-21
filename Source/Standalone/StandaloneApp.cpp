@@ -350,6 +350,12 @@ private:
 
             // Create the full plugin editor UI
             pluginEditor = processor->createEditor();
+            
+            // Pass audio device manager to the editor for settings dialog
+            if (auto* midiEditor = dynamic_cast<MIDIXplorerEditor*>(pluginEditor)) {
+                midiEditor->setAudioDeviceManager(&audioDeviceManager);
+            }
+            
             contentWrapper->addAndMakeVisible(pluginEditor);
 
             // Create audio control bar
