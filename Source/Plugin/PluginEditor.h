@@ -7,6 +7,7 @@
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "../Standalone/LicenseManager.h"
+#include "../Version.h"
 
 namespace MIDIScaleDetector {
     class MIDIScalePlugin;
@@ -60,6 +61,13 @@ public:
             audioSettingsBtn->onClick = [this]() { showAudioSettings(); };
             addAndMakeVisible(*audioSettingsBtn);
         }
+
+        // Clear Cache button
+        clearCacheBtn = std::make_unique<juce::TextButton>("Clear Cache");
+        clearCacheBtn->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff8b4444));
+        clearCacheBtn->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+        clearCacheBtn->onClick = [this]() { clearCache(); };
+        addAndMakeVisible(*clearCacheBtn);
 
         // Help buttons
         addAndMakeVisible(websiteBtn);
@@ -170,9 +178,8 @@ public:
         };
 
         drawCredit("Developer", "MIDI Xplorer Team");
-        drawCredit("Version", "1.0.0");
+        drawCredit("Version", MIDIXPLORER_VERSION_STRING);
         drawCredit("Build Date", juce::String(__DATE__));
-        drawCredit("Framework", "JUCE 8.x");
 
         area.removeFromTop(30);
         g.setColour(juce::Colours::grey);
@@ -209,6 +216,11 @@ public:
         if (audioSettingsBtn) {
             sidebar.removeFromTop(20);
             audioSettingsBtn->setBounds(sidebar.removeFromTop(40).reduced(5, 2));
+        }
+
+        if (clearCacheBtn) {
+            sidebar.removeFromTop(10);
+            clearCacheBtn->setBounds(sidebar.removeFromTop(40).reduced(5, 2));
         }
 
         // Help buttons - only visible in Help tab
@@ -309,9 +321,36 @@ private:
 
     juce::TextButton registrationBtn, creditsBtn, helpBtn, legalBtn;
     std::unique_ptr<juce::TextButton> audioSettingsBtn;
+    std::unique_ptr<juce::TextButton> clearCacheBtn;
 
     // Help buttons
     juce::TextButton websiteBtn, tutorialsBtn, manualBtn, forumBtn, faqBtn;
+
+    void clearCache()
+    {
+        // Clear the cache directory
+        auto cacheDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                            .getChildFile("MIDI Xplorer").getChildFile("cache");
+        
+        if (cacheDir.exists())
+        {
+            cacheDir.deleteRecursively();
+        }
+        
+        // Also clear the analysis cache file
+        auto analysisCache = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+                                 .getChildFile("MIDI Xplorer").getChildFile("analysis_cache.json");
+        if (analysisCache.exists())
+        {
+            analysisCache.deleteFile();
+        }
+        
+        juce::AlertWindow::showMessageBoxAsync(
+            juce::AlertWindow::InfoIcon,
+            "Cache Cleared",
+            "Cache has been cleared successfully.\nRestart the app to rescan your libraries.",
+            "OK");
+    }
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SettingsDialogComponent)
 };

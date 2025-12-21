@@ -211,12 +211,16 @@ void ActivationDialog::attemptActivation()
         {
             statusLabel.setColour(juce::Label::textColourId, successColour);
 
-            // Close dialog after successful activation
-            juce::Timer::callAfterDelay(1500, [this]()
+            // Close dialog after successful activation - use SafePointer for safety
+            juce::Component::SafePointer<ActivationDialog> safeThis(this);
+            juce::Timer::callAfterDelay(1500, [safeThis]()
             {
-                if (auto* dw = findParentComponentOfClass<juce::DialogWindow>())
+                if (safeThis != nullptr)
                 {
-                    dw->exitModalState(1);
+                    if (auto* dw = safeThis->findParentComponentOfClass<juce::DialogWindow>())
+                    {
+                        dw->exitModalState(1);
+                    }
                 }
             });
         }

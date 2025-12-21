@@ -84,13 +84,18 @@ juce::File LicenseManager::getSettingsFile() const
 {
     auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
                           .getChildFile("MIDI Xplorer");
-    appDataDir.createDirectory();
+    if (!appDataDir.exists())
+    {
+        auto result = appDataDir.createDirectory();
+        DBG("Creating license directory: " << appDataDir.getFullPathName() << " result: " << (result.wasOk() ? "OK" : result.getErrorMessage()));
+    }
     return appDataDir.getChildFile("license.dat");
 }
 
 void LicenseManager::saveLicenseKey(const juce::String& key)
 {
     auto file = getSettingsFile();
+    DBG("Saving license key to: " << file.getFullPathName());
 
     // Simple obfuscation (not secure, but prevents casual viewing)
     juce::MemoryOutputStream stream;
@@ -105,8 +110,14 @@ void LicenseManager::saveLicenseKey(const juce::String& key)
         static_cast<char*>(block.getData())[i] ^= 0x5A;
     }
 
-    file.replaceWithData(block.getData(), block.getSize());
-    licenseInfo.licenseKey = key;
+    bool success = file.replaceWithData(block.getData(), block.getSize());
+    DBG("License key save result: " << (success ? "success" : "FAILED"));
+    
+    if (success)
+    {
+        licenseInfo.licenseKey = key;
+        licenseInfo.isValid = true;  // Mark as valid after successful save
+    }
 }
 
 juce::String LicenseManager::loadLicenseKey() const
@@ -389,13 +400,18 @@ juce::File LicenseManager::getTrialFile() const
 {
     auto appDataDir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
                           .getChildFile("MIDI Xplorer");
-    appDataDir.createDirectory();
+    if (!appDataDir.exists())
+    {
+        auto result = appDataDir.createDirectory();
+        DBG("Creating trial directory: " << appDataDir.getFullPathName() << " result: " << (result.wasOk() ? "OK" : result.getErrorMessage()));
+    }
     return appDataDir.getChildFile("trial.dat");
 }
 
 void LicenseManager::saveTrialStartDate(juce::Time date)
 {
     auto file = getTrialFile();
+    DBG("Saving trial start date to: " << file.getFullPathName());
 
     // Store as obfuscated timestamp
     juce::int64 timestamp = date.toMilliseconds();

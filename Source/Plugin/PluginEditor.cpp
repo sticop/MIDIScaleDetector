@@ -288,8 +288,8 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     // syncToHostToggle hidden but functionality preserved
     addChildComponent(syncToHostToggle);
 
-    // Velocity slider for volume control
-    velocityLabel.setText("Volume:", juce::dontSendNotification);
+    // Velocity slider for velocity control
+    velocityLabel.setText("Velocity:", juce::dontSendNotification);
     velocityLabel.setFont(juce::Font(12.0f));
     velocityLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
     velocityLabel.setJustificationType(juce::Justification::centredRight);
@@ -1830,6 +1830,10 @@ void MIDIXplorerEditor::filterFiles() {
     filteredFiles.clear();
 
     juce::String keyFilter = keyFilterCombo.getText();
+    // Strip the count suffix (e.g., "C Major (5)" -> "C Major")
+    if (keyFilter.containsChar('(') && keyFilter.endsWithChar(')')) {
+        keyFilter = keyFilter.upToFirstOccurrenceOf(" (", false, false);
+    }
     juce::String searchText = searchBox.getText().toLowerCase();
 
     for (const auto& file : allFiles) {
@@ -1895,19 +1899,27 @@ void MIDIXplorerEditor::filterFiles() {
 
 void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
     detectedKeys.clear();
+    
+    // Use maps to count files per key/scale
+    std::map<juce::String, int> keyFileCounts;
+    std::map<juce::String, int> scaleFileCounts;
     juce::StringArray allKeysAndRelatives;
     juce::StringArray allScales;
 
     for (const auto& file : allFiles) {
         // Add the relative key format (e.g., "C/Am")
-        if (file.relativeKey.isNotEmpty() && file.relativeKey != "---" &&
-            !allKeysAndRelatives.contains(file.relativeKey)) {
-            allKeysAndRelatives.add(file.relativeKey);
+        if (file.relativeKey.isNotEmpty() && file.relativeKey != "---") {
+            keyFileCounts[file.relativeKey]++;
+            if (!allKeysAndRelatives.contains(file.relativeKey)) {
+                allKeysAndRelatives.add(file.relativeKey);
+            }
         }
         // Add the full scale name (e.g., "C Japanese", "D Minor")
-        if (file.key.isNotEmpty() && file.key != "---" &&
-            !allScales.contains(file.key)) {
-            allScales.add(file.key);
+        if (file.key.isNotEmpty() && file.key != "---") {
+            scaleFileCounts[file.key]++;
+            if (!allScales.contains(file.key)) {
+                allScales.add(file.key);
+            }
         }
     }
 
@@ -1932,17 +1944,21 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
     keyFilterCombo.clear();
     keyFilterCombo.addItem("All Keys", 1);
 
-    // Add separator and relative keys section
+    // Add separator and relative keys section with counts
     int id = 2;
-    keyFilterCombo.addSeparator();
+    if (allKeysAndRelatives.size() > 0)
+        keyFilterCombo.addSeparator();
     for (const auto& key : allKeysAndRelatives) {
-        keyFilterCombo.addItem(key, id++);
+        int count = keyFileCounts[key];
+        keyFilterCombo.addItem(key + " (" + juce::String(count) + ")", id++);
     }
 
-    // Add separator and scales section
-    keyFilterCombo.addSeparator();
+    // Add separator and scales section with counts
+    if (allScales.size() > 0)
+        keyFilterCombo.addSeparator();
     for (const auto& scale : allScales) {
-        keyFilterCombo.addItem(scale, id++);
+        int count = scaleFileCounts[scale];
+        keyFilterCombo.addItem(scale + " (" + juce::String(count) + ")", id++);
     }
 
     keyFilterCombo.setSelectedId(1);
