@@ -1487,9 +1487,6 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     // Count notes per pitch class
     std::array<int, 12> noteHistogram = {0};
 
-    // Collect all note-on events with timestamps for chord detection
-    std::vector<std::pair<double, int>> noteEvents;  // timestamp, noteNumber
-
     for (int track = 0; track < midiFile.getNumTracks(); track++) {
         auto* sequence = midiFile.getTrack(track);
         if (sequence) {
@@ -1498,53 +1495,14 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
                 if (msg.isNoteOn() && msg.getVelocity() > 0) {
                     int pitchClass = msg.getNoteNumber() % 12;
                     noteHistogram[(size_t)pitchClass]++;
-                    noteEvents.push_back({msg.getTimeStamp(), msg.getNoteNumber()});
                 }
             }
         }
     }
-
-    // Chord detection: analyze simultaneous notes
-    // A chord is 3+ notes starting within a small time window (20ms)
-    const double chordTimeWindow = 0.020;  // 20ms window for chord detection
+    
+    // Initialize chord detection flags (will be set after timestamp conversion)
     info.containsChords = false;
     info.containsSingleNotes = false;
-
-    if (!noteEvents.empty()) {
-        // Sort by timestamp
-        std::sort(noteEvents.begin(), noteEvents.end(),
-            [](const auto& a, const auto& b) { return a.first < b.first; });
-
-        int chordCount = 0;
-        int singleNoteCount = 0;
-        size_t i = 0;
-
-        while (i < noteEvents.size()) {
-            // Count notes within the time window
-            double windowStart = noteEvents[i].first;
-            size_t j = i;
-            std::set<int> simultaneousNotes;  // Use set to avoid duplicate pitches
-
-            while (j < noteEvents.size() && noteEvents[j].first - windowStart <= chordTimeWindow) {
-                simultaneousNotes.insert(noteEvents[j].second);
-                j++;
-            }
-
-            if (simultaneousNotes.size() >= 3) {
-                chordCount++;
-            } else if (simultaneousNotes.size() == 1) {
-                singleNoteCount++;
-            }
-
-            // Move to next group
-            i = j;
-        }
-
-        // Consider it a chord file if it has at least 2 chord events
-        info.containsChords = (chordCount >= 2);
-        // Consider it a single-note file if it has mostly single notes
-        info.containsSingleNotes = (singleNoteCount > chordCount);
-    }
 
     // Comprehensive scale templates (intervals from root)
     struct ScaleTemplate {
@@ -1730,6 +1688,60 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
     double roundedBeats = bars * 4.0;
     info.duration = roundedBeats / beatsPerSecond;
     info.durationBeats = roundedBeats;
+    
+    // Chord detection: analyze simultaneous notes (timestamps are now in seconds)
+    // A chord is 3+ notes starting within a small time window (20ms)
+    const double chordTimeWindow = 0.020;  // 20ms window for chord detection
+    std::vector<std::pair<double, int>> noteEvents;  // timestamp, noteNumber
+
+    for (int track = 0; track < midiFile.getNumTracks(); track++) {
+        auto* sequence = midiFile.getTrack(track);
+        if (sequence) {
+            for (int i = 0; i < sequence->getNumEvents(); i++) {
+                auto& msg = sequence->getEventPointer(i)->message;
+                if (msg.isNoteOn() && msg.getVelocity() > 0) {
+                    noteEvents.push_back({msg.getTimeStamp(), msg.getNoteNumber()});
+                }
+            }
+        }
+    }
+
+    if (!noteEvents.empty()) {
+        // Sort by timestamp
+        std::sort(noteEvents.begin(), noteEvents.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        int chordCount = 0;
+        int singleNoteCount = 0;
+        size_t i = 0;
+
+        while (i < noteEvents.size()) {
+            // Count notes within the time window
+            double windowStart = noteEvents[i].first;
+            size_t j = i;
+            std::set<int> simultaneousNotes;  // Use set to avoid duplicate pitches
+
+            while (j < noteEvents.size() && noteEvents[j].first - windowStart <= chordTimeWindow) {
+                simultaneousNotes.insert(noteEvents[j].second);
+                j++;
+            }
+
+            if (simultaneousNotes.size() >= 3) {
+                chordCount++;
+            } else if (simultaneousNotes.size() == 1) {
+                singleNoteCount++;
+            }
+
+            // Move to next group
+            i = j;
+        }
+
+        // Consider it a chord file if it has at least 2 chord events
+        info.containsChords = (chordCount >= 2);
+        // Consider it a single-note file if it has mostly single notes
+        info.containsSingleNotes = (singleNoteCount > chordCount);
+    }
+
     // Extract instrument from first program change
     static const char* gmInstruments[] = {
         "Acoustic Grand Piano", "Bright Acoustic Piano", "Electric Grand Piano", "Honky-tonk Piano",

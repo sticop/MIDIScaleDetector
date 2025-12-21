@@ -600,7 +600,7 @@ private:
             options.escapeKeyTriggersCloseButton = true;
             options.useNativeTitleBar = true;
             options.resizable = false;
-            
+
             // Use a callback to update label after dialog closes
             auto* window = options.launchAsync();
             if (window) {
