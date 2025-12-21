@@ -13,6 +13,43 @@ namespace MIDIScaleDetector {
 }
 
 //==============================================================================
+// Custom LookAndFeel to match midixplorer.com
+//==============================================================================
+class MIDIXplorerLookAndFeel : public juce::LookAndFeel_V4
+{
+public:
+    MIDIXplorerLookAndFeel();
+
+    void drawButtonBackground (juce::Graphics& g, juce::Button& button, const juce::Colour& backgroundColour,
+                               bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+    
+    void drawComboBox (juce::Graphics& g, int width, int height, bool isButtonDown,
+                       int buttonX, int buttonY, int buttonW, int buttonH,
+                       juce::ComboBox& box) override;
+                       
+    void drawPopupMenuBackground (juce::Graphics& g, int width, int height) override;
+    
+    void drawScrollbar (juce::Graphics& g, juce::ScrollBar& scrollbar, int x, int y, int width, int height,
+                        bool isScrollbarVertical, int thumbStartPosition, int thumbSize,
+                        bool isMouseOver, bool isMouseDown) override;
+                        
+    juce::Font getLabelFont (juce::Label& label) override;
+    
+    // Website Colors
+    static const juce::Colour bgPrimary;    // #0a0a0f
+    static const juce::Colour bgSecondary;  // #12121a
+    static const juce::Colour bgTertiary;   // #1a1a25
+    static const juce::Colour bgCard;       // #16161f
+    static const juce::Colour textPrimary;  // #ffffff
+    static const juce::Colour textSecondary;// #a0a0b0
+    static const juce::Colour accentPrimary;// #7c3aed
+    static const juce::Colour accentSecondary;// #a855f7
+    static const juce::Colour colorSuccess; // #2ecc71
+    static const juce::Colour colorError;   // #ff4a4a
+    static const juce::Colour borderColor;  // rgba(255,255,255,0.08)
+};
+
+//==============================================================================
 // Settings Dialog Component - Scaler-style tabbed settings window
 //==============================================================================
 class SettingsDialogComponent : public juce::Component
@@ -38,10 +75,10 @@ public:
         legalBtn.setButtonText("Legal");
 
         auto setupBtn = [this](juce::TextButton& btn, Tab t) {
-            btn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a4a4a));
-            btn.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff5ba8a0));
-            btn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
-            btn.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
+            btn.setColour(juce::TextButton::buttonColourId, MIDIXplorerLookAndFeel::bgTertiary);
+            btn.setColour(juce::TextButton::buttonOnColourId, MIDIXplorerLookAndFeel::accentPrimary);
+            btn.setColour(juce::TextButton::textColourOffId, MIDIXplorerLookAndFeel::textPrimary);
+            btn.setColour(juce::TextButton::textColourOnId, MIDIXplorerLookAndFeel::textPrimary);
             btn.setClickingTogglesState(true);
             btn.setRadioGroupId(1);
             btn.onClick = [this, t]() { setCurrentTab(t); };
@@ -55,8 +92,8 @@ public:
         // Audio settings (only for standalone)
         if (audioDeviceManager != nullptr) {
             audioSettingsBtn = std::make_unique<juce::TextButton>("Audio Settings");
-            audioSettingsBtn->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a4a4a));
-            audioSettingsBtn->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+            audioSettingsBtn->setColour(juce::TextButton::buttonColourId, MIDIXplorerLookAndFeel::bgTertiary);
+            audioSettingsBtn->setColour(juce::TextButton::textColourOffId, MIDIXplorerLookAndFeel::textPrimary);
             audioSettingsBtn->onClick = [this]() { showAudioSettings(); };
             addAndMakeVisible(*audioSettingsBtn);
         }
@@ -75,8 +112,8 @@ public:
         faqBtn.setButtonText("FAQ");
 
         auto styleHelpBtn = [](juce::TextButton& btn) {
-            btn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff5ba8a0));
-            btn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+            btn.setColour(juce::TextButton::buttonColourId, MIDIXplorerLookAndFeel::accentPrimary);
+            btn.setColour(juce::TextButton::textColourOffId, MIDIXplorerLookAndFeel::textPrimary);
         };
 
         styleHelpBtn(websiteBtn);
@@ -96,10 +133,10 @@ public:
 
     void paint(juce::Graphics& g) override
     {
-        g.fillAll(juce::Colour(0xff2a2a2a));
+        g.fillAll(MIDIXplorerLookAndFeel::bgSecondary);
 
         // Sidebar
-        g.setColour(juce::Colour(0xff3a3a3a));
+        g.setColour(MIDIXplorerLookAndFeel::bgTertiary);
         g.fillRect(0, 0, sidebarWidth, getHeight());
 
         // Content area
@@ -255,7 +292,7 @@ public:
         // Create a component that combines volume control with device selector
         auto* content = new juce::Component();
         content->setSize(500, 520);
-        
+
         // Volume label
         auto* volLabel = new juce::Label();
         volLabel->setText("Piano Instrument Volume:", juce::dontSendNotification);
@@ -263,7 +300,7 @@ public:
         volLabel->setColour(juce::Label::textColourId, juce::Colours::white);
         volLabel->setBounds(10, 10, 200, 20);
         content->addAndMakeVisible(volLabel);
-        
+
         // Volume slider
         auto* volSlider = new juce::Slider();
         volSlider->setSliderStyle(juce::Slider::LinearHorizontal);
@@ -281,7 +318,7 @@ public:
             };
         }
         content->addAndMakeVisible(volSlider);
-        
+
         // Device selector
         auto* selector = new juce::AudioDeviceSelectorComponent(
             *audioDeviceManager, 0, 0, 0, 2, false, false, true, false);
@@ -338,10 +375,10 @@ public:
 
     // Audio device manager setter (called by standalone app)
     void setAudioDeviceManager(juce::AudioDeviceManager* adm) { audioDeviceManager = adm; }
-    
+
     // Volume control callback (called by standalone app)
-    void setVolumeCallback(std::function<void(float)> callback, float initialVol) { 
-        volumeCallback = callback; 
+    void setVolumeCallback(std::function<void(float)> callback, float initialVol) {
+        volumeCallback = callback;
         currentVolume = initialVol;
     }
 
@@ -607,7 +644,7 @@ private:
 
     // Audio device manager (set by standalone app, nullptr in plugin mode)
     juce::AudioDeviceManager* audioDeviceManager = nullptr;
-    
+
     // Volume callback (set by standalone app)
     std::function<void(float)> volumeCallback;
     float currentVolume = 1.0f;
@@ -666,6 +703,8 @@ private:
     double getHostBpm();
     double getHostBeatPosition();
     bool isHostPlaying();
+
+    MIDIXplorerLookAndFeel lookAndFeel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MIDIXplorerEditor)
 };

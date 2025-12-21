@@ -34,14 +34,14 @@ public:
         addAndMakeVisible(messageLabel);
 
         activateButton.setButtonText("Activate License");
-        activateButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a9eff));
+        activateButton.setColour(juce::TextButton::buttonColourId, MIDIXplorerLookAndFeel::accentPrimary);
         activateButton.onClick = [this]() {
             ActivationDialog::showActivationDialog(this, [](bool) {});
         };
         addAndMakeVisible(activateButton);
 
         purchaseButton.setButtonText("Purchase License");
-        purchaseButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2ecc71));
+        purchaseButton.setColour(juce::TextButton::buttonColourId, MIDIXplorerLookAndFeel::colorSuccess);
         purchaseButton.onClick = []() {
             juce::URL("https://midixplorer.com/purchase").launchInDefaultBrowser();
         };
@@ -51,16 +51,16 @@ public:
     void paint(juce::Graphics& g) override
     {
         // Dark semi-transparent overlay
-        g.fillAll(juce::Colour(0xe0101020));
+        g.fillAll(MIDIXplorerLookAndFeel::bgPrimary.withAlpha(0.9f));
 
         // Central panel
         auto bounds = getLocalBounds();
         auto panelBounds = bounds.reduced(bounds.getWidth() / 4, bounds.getHeight() / 4);
 
-        g.setColour(juce::Colour(0xff1a1a2e));
+        g.setColour(MIDIXplorerLookAndFeel::bgCard);
         g.fillRoundedRectangle(panelBounds.toFloat(), 15.0f);
 
-        g.setColour(juce::Colour(0xff4a9eff));
+        g.setColour(MIDIXplorerLookAndFeel::accentPrimary);
         g.drawRoundedRectangle(panelBounds.toFloat(), 15.0f, 2.0f);
     }
 
@@ -105,7 +105,7 @@ public:
         volumeLabel.setFont(juce::Font(juce::FontOptions(14.0f).withStyle("Bold")));
         volumeLabel.setColour(juce::Label::textColourId, juce::Colours::white);
         addAndMakeVisible(volumeLabel);
-        
+
         volumeSlider.setSliderStyle(juce::Slider::LinearHorizontal);
         volumeSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 50, 25);
         volumeSlider.setRange(0.0, 1.0, 0.01);
@@ -118,44 +118,44 @@ public:
                 onVolumeChange((float)volumeSlider.getValue());
         };
         addAndMakeVisible(volumeSlider);
-        
+
         // Audio device selector
         deviceSelector = std::make_unique<juce::AudioDeviceSelectorComponent>(
             deviceManager, 0, 0, 0, 2, false, false, true, false);
         addAndMakeVisible(*deviceSelector);
-        
+
         setSize(500, 520);
     }
-    
+
     void paint(juce::Graphics& g) override
     {
         g.fillAll(juce::Colour(0xff2a2a2a));
-        
+
         // Separator line
         g.setColour(juce::Colour(0xff4a4a4a));
         g.drawHorizontalLine(55, 10, getWidth() - 10);
     }
-    
+
     void resized() override
     {
         auto bounds = getLocalBounds().reduced(10);
-        
+
         // Volume section at top
         auto volumeArea = bounds.removeFromTop(45);
         volumeLabel.setBounds(volumeArea.removeFromTop(20));
         volumeSlider.setBounds(volumeArea);
-        
+
         bounds.removeFromTop(20); // Spacing after separator
-        
+
         // Device selector takes the rest
         if (deviceSelector)
             deviceSelector->setBounds(bounds);
     }
-    
+
 private:
     juce::AudioDeviceManager& deviceManager;
     std::function<void(float)> onVolumeChange;
-    
+
     juce::Label volumeLabel;
     juce::Slider volumeSlider;
     std::unique_ptr<juce::AudioDeviceSelectorComponent> deviceSelector;
@@ -668,7 +668,7 @@ private:
         void showAudioSettings()
         {
             float currentVolume = (float)masterVolumeSlider.getValue();
-            
+
             auto* settingsComponent = new AudioSettingsComponent(
                 audioDeviceManager,
                 [this](float vol) {

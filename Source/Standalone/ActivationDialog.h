@@ -59,11 +59,11 @@ private:
     std::function<void(bool)> completionCallback;
 
     // Colors
-    juce::Colour backgroundColour = juce::Colour(0xff2a2a2a);
+    juce::Colour backgroundColour = juce::Colour(0xff12121a);
     juce::Colour textColour = juce::Colour(0xffffffff);
-    juce::Colour accentColour = juce::Colour(0xff4a9eff);
+    juce::Colour accentColour = juce::Colour(0xff7c3aed);
     juce::Colour errorColour = juce::Colour(0xffff4a4a);
-    juce::Colour successColour = juce::Colour(0xff4aff4a);
+    juce::Colour successColour = juce::Colour(0xff2ecc71);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ActivationDialog)
 };

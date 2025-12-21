@@ -19,9 +19,133 @@ namespace {
     }
 }
 
+//==============================================================================
+// MIDIXplorerLookAndFeel Implementation
+//==============================================================================
+const juce::Colour MIDIXplorerLookAndFeel::bgPrimary = juce::Colour(0xff0a0a0f);
+const juce::Colour MIDIXplorerLookAndFeel::bgSecondary = juce::Colour(0xff12121a);
+const juce::Colour MIDIXplorerLookAndFeel::bgTertiary = juce::Colour(0xff1a1a25);
+const juce::Colour MIDIXplorerLookAndFeel::bgCard = juce::Colour(0xff16161f);
+const juce::Colour MIDIXplorerLookAndFeel::textPrimary = juce::Colour(0xffffffff);
+const juce::Colour MIDIXplorerLookAndFeel::textSecondary = juce::Colour(0xffa0a0b0);
+const juce::Colour MIDIXplorerLookAndFeel::accentPrimary = juce::Colour(0xff7c3aed);
+const juce::Colour MIDIXplorerLookAndFeel::accentSecondary = juce::Colour(0xffa855f7);
+const juce::Colour MIDIXplorerLookAndFeel::colorSuccess = juce::Colour(0xff2ecc71);
+const juce::Colour MIDIXplorerLookAndFeel::colorError = juce::Colour(0xffff4a4a);
+const juce::Colour MIDIXplorerLookAndFeel::borderColor = juce::Colour(0x14ffffff); // approx 0.08 alpha
+
+MIDIXplorerLookAndFeel::MIDIXplorerLookAndFeel()
+{
+    setColour(juce::ResizableWindow::backgroundColourId, bgPrimary);
+    setColour(juce::TextButton::buttonColourId, bgTertiary);
+    setColour(juce::TextButton::buttonOnColourId, accentPrimary);
+    setColour(juce::TextButton::textColourOffId, textPrimary);
+    setColour(juce::TextButton::textColourOnId, textPrimary);
+    
+    setColour(juce::ComboBox::backgroundColourId, bgTertiary);
+    setColour(juce::ComboBox::textColourId, textPrimary);
+    setColour(juce::ComboBox::outlineColourId, borderColor);
+    setColour(juce::ComboBox::arrowColourId, textSecondary);
+    
+    setColour(juce::ListBox::backgroundColourId, bgSecondary);
+    setColour(juce::ListBox::outlineColourId, borderColor);
+    
+    setColour(juce::Label::textColourId, textPrimary);
+    
+    setColour(juce::PopupMenu::backgroundColourId, bgCard);
+    setColour(juce::PopupMenu::textColourId, textPrimary);
+    setColour(juce::PopupMenu::highlightedBackgroundColourId, accentPrimary);
+    setColour(juce::PopupMenu::highlightedTextColourId, textPrimary);
+    
+    setColour(juce::ScrollBar::thumbColourId, juce::Colour(0xff3a3a3a));
+}
+
+void MIDIXplorerLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& button, const juce::Colour& backgroundColour,
+                                                   bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
+{
+    auto cornerSize = 6.0f;
+    auto bounds = button.getLocalBounds().toFloat().reduced (0.5f, 0.5f);
+
+    auto baseColour = backgroundColour;
+    if (shouldDrawButtonAsDown || shouldDrawButtonAsHighlighted)
+        baseColour = baseColour.contrasting (shouldDrawButtonAsDown ? 0.2f : 0.05f);
+
+    g.setColour (baseColour);
+    
+    if (button.isConnectedOnLeft() || button.isConnectedOnRight())
+    {
+        juce::Path path;
+        path.addRoundedRectangle (bounds.getX(), bounds.getY(), bounds.getWidth(), bounds.getHeight(),
+                                  cornerSize, cornerSize,
+                                  ! (button.isConnectedOnLeft() || button.isConnectedOnBottom()),
+                                  ! (button.isConnectedOnRight() || button.isConnectedOnBottom()),
+                                  ! (button.isConnectedOnLeft() || button.isConnectedOnTop()),
+                                  ! (button.isConnectedOnRight() || button.isConnectedOnTop()));
+
+        g.fillPath (path);
+        g.setColour (button.findColour (juce::ComboBox::outlineColourId));
+        g.strokePath (path, juce::PathStrokeType (1.0f));
+    }
+    else
+    {
+        g.fillRoundedRectangle (bounds, cornerSize);
+        g.setColour (button.findColour (juce::ComboBox::outlineColourId));
+        g.drawRoundedRectangle (bounds, cornerSize, 1.0f);
+    }
+}
+
+void MIDIXplorerLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, bool isButtonDown,
+                                           int buttonX, int buttonY, int buttonW, int buttonH,
+                                           juce::ComboBox& box)
+{
+    auto cornerSize = box.findParentComponentOfClass<juce::GroupComponent>() != nullptr ? 0.0f : 6.0f;
+    juce::Rectangle<int> boxBounds (0, 0, width, height);
+
+    g.setColour (box.findColour (juce::ComboBox::backgroundColourId));
+    g.fillRoundedRectangle (boxBounds.toFloat(), cornerSize);
+
+    g.setColour (box.findColour (juce::ComboBox::outlineColourId));
+    g.drawRoundedRectangle (boxBounds.toFloat().reduced (0.5f, 0.5f), cornerSize, 1.0f);
+
+    juce::Rectangle<int> arrowZone (width - 30, 0, 20, height);
+    juce::Path path;
+    path.startNewSubPath ((float) arrowZone.getX() + 3.0f, (float) arrowZone.getCentreY() - 2.0f);
+    path.lineTo ((float) arrowZone.getCentreX(), (float) arrowZone.getCentreY() + 3.0f);
+    path.lineTo ((float) arrowZone.getRight() - 3.0f, (float) arrowZone.getCentreY() - 2.0f);
+
+    g.setColour (box.findColour (juce::ComboBox::arrowColourId).withAlpha ((box.isEnabled() ? 0.9f : 0.2f)));
+    g.strokePath (path, juce::PathStrokeType (2.0f));
+}
+
+void MIDIXplorerLookAndFeel::drawPopupMenuBackground (juce::Graphics& g, int width, int height)
+{
+    g.fillAll (findColour (juce::PopupMenu::backgroundColourId));
+    g.setColour (borderColor); 
+    g.drawRect (0, 0, width, height);
+}
+
+void MIDIXplorerLookAndFeel::drawScrollbar (juce::Graphics& g, juce::ScrollBar& scrollbar, int x, int y, int width, int height,
+                                            bool isScrollbarVertical, int thumbStartPosition, int thumbSize,
+                                            bool isMouseOver, bool isMouseDown)
+{
+    g.fillAll (scrollbar.findColour (juce::ScrollBar::trackColourId));
+    g.setColour (scrollbar.findColour (juce::ScrollBar::thumbColourId));
+    
+    if (isScrollbarVertical)
+        g.fillRoundedRectangle((float)x + 2, (float)thumbStartPosition, (float)width - 4, (float)thumbSize, (float)width * 0.5f);
+    else
+        g.fillRoundedRectangle((float)thumbStartPosition, (float)y + 2, (float)thumbSize, (float)height - 4, (float)height * 0.5f);
+}
+
+juce::Font MIDIXplorerLookAndFeel::getLabelFont (juce::Label& label)
+{
+    return label.getFont();
+}
+
 MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     : AudioProcessorEditor(&p), licenseManager(LicenseManager::getInstance()) {
 
+    setLookAndFeel(&lookAndFeel);
     pluginProcessor = dynamic_cast<MIDIScaleDetector::MIDIScalePlugin*>(&p);
     setWantsKeyboardFocus(true);
 
@@ -36,7 +160,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
 
     libraryModel = std::make_unique<LibraryListModel>(*this);
     libraryListBox.setModel(libraryModel.get());
-    libraryListBox.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff2a2a2a));
+    libraryListBox.setColour(juce::ListBox::backgroundColourId, MIDIXplorerLookAndFeel::bgSecondary);
     libraryListBox.setRowHeight(28);
     addAndMakeVisible(libraryListBox);
 
@@ -256,9 +380,9 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     transposeComboBox.addItem("-24", 6);
     transposeComboBox.addItem("-36", 7);
     transposeComboBox.setSelectedId(4);  // Default to ± 0
-    transposeComboBox.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff3a3a3a));
-    transposeComboBox.setColour(juce::ComboBox::textColourId, juce::Colours::white);
-    transposeComboBox.setColour(juce::ComboBox::arrowColourId, juce::Colours::white);
+    transposeComboBox.setColour(juce::ComboBox::backgroundColourId, MIDIXplorerLookAndFeel::bgTertiary);
+    transposeComboBox.setColour(juce::ComboBox::textColourId, MIDIXplorerLookAndFeel::textPrimary);
+    transposeComboBox.setColour(juce::ComboBox::arrowColourId, MIDIXplorerLookAndFeel::textSecondary);
     transposeComboBox.setTooltip("Transpose");
     transposeComboBox.onChange = [this]() {
         int selectedId = transposeComboBox.getSelectedId();
@@ -563,7 +687,7 @@ int MIDIXplorerEditor::getLicenseStatusBarHeight() const {
 }
 
 void MIDIXplorerEditor::paint(juce::Graphics& g) {
-    g.fillAll(juce::Colour(0xff1a1a1a));
+    g.fillAll(MIDIXplorerLookAndFeel::bgPrimary);
 
     // Draw license status bar at top if needed
     int barHeight = getLicenseStatusBarHeight();
