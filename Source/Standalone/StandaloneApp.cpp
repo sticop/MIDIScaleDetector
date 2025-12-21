@@ -106,7 +106,7 @@ public:
         volumeLabel.setFont(juce::Font(juce::FontOptions(14.0f).withStyle("Bold")));
         volumeLabel.setColour(juce::Label::textColourId, juce::Colours::white);
         addAndMakeVisible(volumeLabel);
-        
+
         volumeSlider.setSliderStyle(juce::Slider::LinearHorizontal);
         volumeSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 50, 25);
         volumeSlider.setRange(0.0, 1.0, 0.01);
@@ -119,44 +119,44 @@ public:
                 onVolumeChange((float)volumeSlider.getValue());
         };
         addAndMakeVisible(volumeSlider);
-        
+
         // Audio device selector
         deviceSelector = std::make_unique<juce::AudioDeviceSelectorComponent>(
             deviceManager, 0, 0, 0, 2, false, false, true, false);
         addAndMakeVisible(*deviceSelector);
-        
+
         setSize(500, 520);
     }
-    
+
     void paint(juce::Graphics& g) override
     {
         g.fillAll(juce::Colour(0xff2a2a2a));
-        
+
         // Separator line
         g.setColour(juce::Colour(0xff4a4a4a));
         g.drawHorizontalLine(55, 10, getWidth() - 10);
     }
-    
+
     void resized() override
     {
         auto bounds = getLocalBounds().reduced(10);
-        
+
         // Volume section at top
         auto volumeArea = bounds.removeFromTop(45);
         volumeLabel.setBounds(volumeArea.removeFromTop(20));
         volumeSlider.setBounds(volumeArea);
-        
+
         bounds.removeFromTop(20); // Spacing after separator
-        
+
         // Device selector takes the rest
         if (deviceSelector)
             deviceSelector->setBounds(bounds);
     }
-    
+
 private:
     juce::AudioDeviceManager& deviceManager;
     std::function<void(float)> onVolumeChange;
-    
+
     juce::Label volumeLabel;
     juce::Slider volumeSlider;
     std::unique_ptr<juce::AudioDeviceSelectorComponent> deviceSelector;
@@ -422,23 +422,19 @@ private:
             // Create the full plugin editor UI
             pluginEditor = processor->createEditor();
 
-            // Pass audio device manager and volume callback to the editor for settings dialog
+            // Pass audio device manager to the editor for settings dialog
             if (auto* midiEditor = dynamic_cast<MIDIXplorerEditor*>(pluginEditor)) {
                 midiEditor->setAudioDeviceManager(&audioDeviceManager);
                 midiEditor->setVolumeCallback([this](float vol) {
-                    masterVolumeSlider.setValue(vol, juce::dontSendNotification);
                     audioCallback.setMasterVolume(vol);
-                }, (float)masterVolumeSlider.getValue());
+                }, 1.0f);
             }
 
             contentWrapper->addAndMakeVisible(pluginEditor);
 
-            // Create audio control bar
-            setupAudioControlBar();
-
             // Set up content wrapper size (PluginEditor handles its own license bar)
             int editorWidth = pluginEditor->getWidth();
-            int editorHeight = pluginEditor->getHeight() + audioControlBarHeight;
+            int editorHeight = pluginEditor->getHeight();
             contentWrapper->setSize(editorWidth, editorHeight);
 
             setContentOwned(contentWrapper.release(), true);
@@ -469,50 +465,7 @@ private:
 
         void setupAudioControlBar()
         {
-            // Audio settings button
-            audioSettingsButton.setButtonText("Audio Settings");
-            audioSettingsButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
-            audioSettingsButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
-            audioSettingsButton.onClick = [this]() { showAudioSettings(); };
-            contentWrapper->addAndMakeVisible(audioSettingsButton);
-
-            // Volume label
-            volumeLabel.setText("Volume:", juce::dontSendNotification);
-            volumeLabel.setColour(juce::Label::textColourId, juce::Colours::lightgrey);
-            volumeLabel.setFont(juce::Font(juce::FontOptions(13.0f)));
-            contentWrapper->addAndMakeVisible(volumeLabel);
-
-            // Master volume slider
-            masterVolumeSlider.setSliderStyle(juce::Slider::LinearHorizontal);
-            masterVolumeSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 45, 20);
-            masterVolumeSlider.setRange(0.0, 1.0, 0.01);
-            masterVolumeSlider.setValue(1.0);
-            masterVolumeSlider.setColour(juce::Slider::backgroundColourId, juce::Colour(0xff3a3a3a));
-            masterVolumeSlider.setColour(juce::Slider::trackColourId, juce::Colour(0xff5588cc));
-            masterVolumeSlider.setColour(juce::Slider::thumbColourId, juce::Colours::white);
-            masterVolumeSlider.onValueChange = [this]() {
-                audioCallback.setMasterVolume((float)masterVolumeSlider.getValue());
-            };
-            contentWrapper->addAndMakeVisible(masterVolumeSlider);
-
-            // Audio device info label
-            updateAudioDeviceLabel();
-            audioDeviceLabel.setColour(juce::Label::textColourId, juce::Colours::grey);
-            audioDeviceLabel.setFont(juce::Font(juce::FontOptions(11.0f)));
-            audioDeviceLabel.setJustificationType(juce::Justification::centredRight);
-            contentWrapper->addAndMakeVisible(audioDeviceLabel);
-        }
-
-        void updateAudioDeviceLabel()
-        {
-            if (auto* device = audioDeviceManager.getCurrentAudioDevice()) {
-                juce::String info = device->getName() + " | " +
-                                   juce::String((int)device->getCurrentSampleRate()) + " Hz | " +
-                                   juce::String(device->getCurrentBufferSizeSamples()) + " samples";
-                audioDeviceLabel.setText(info, juce::dontSendNotification);
-            } else {
-                audioDeviceLabel.setText("No audio device", juce::dontSendNotification);
-            }
+            // Audio control bar removed - settings accessible via menu
         }
 
         void resized() override
@@ -522,17 +475,6 @@ private:
             if (auto* content = getContentComponent())
             {
                 auto bounds = content->getLocalBounds();
-
-                // Audio control bar at bottom
-                auto audioBar = bounds.removeFromBottom(audioControlBarHeight);
-                audioBar = audioBar.reduced(8, 4);
-
-                audioSettingsButton.setBounds(audioBar.removeFromLeft(110));
-                audioBar.removeFromLeft(15);
-                volumeLabel.setBounds(audioBar.removeFromLeft(55));
-                masterVolumeSlider.setBounds(audioBar.removeFromLeft(140));
-                audioBar.removeFromLeft(15);
-                audioDeviceLabel.setBounds(audioBar);
 
                 if (pluginEditor)
                     pluginEditor->setBounds(bounds);
@@ -668,12 +610,11 @@ private:
 
         void showAudioSettings()
         {
-            float currentVolume = (float)masterVolumeSlider.getValue();
-            
+            float currentVolume = audioCallback.getMasterVolume();
+
             auto* settingsComponent = new AudioSettingsComponent(
                 audioDeviceManager,
                 [this](float vol) {
-                    masterVolumeSlider.setValue(vol, juce::sendNotification);
                     audioCallback.setMasterVolume(vol);
                 },
                 currentVolume);
@@ -686,14 +627,7 @@ private:
             options.useNativeTitleBar = true;
             options.resizable = false;
 
-            // Use a callback to update label after dialog closes
-            auto* window = options.launchAsync();
-            if (window) {
-                // Use a timer to periodically update the label while dialog is open
-                juce::Timer::callAfterDelay(500, [this]() {
-                    updateAudioDeviceLabel();
-                });
-            }
+            options.launchAsync();
         }
 
         void showAboutDialog()
@@ -883,12 +817,7 @@ private:
         juce::AudioProcessorEditor* pluginEditor = nullptr;
         std::unique_ptr<juce::Component> contentWrapper;
 
-        // Audio control bar components
-        static constexpr int audioControlBarHeight = 36;
-        juce::TextButton audioSettingsButton;
-        juce::Slider masterVolumeSlider;
-        juce::Label volumeLabel;
-        juce::Label audioDeviceLabel;
+        // Audio control bar removed - settings accessible via menu
 
         // Audio callback that combines processor output with piano synth
         class AudioCallback : public juce::AudioIODeviceCallback
