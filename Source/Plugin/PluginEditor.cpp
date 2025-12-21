@@ -1,6 +1,7 @@
 #include "PluginEditor.h"
 #include "MIDIScalePlugin.h"
 #include "BinaryData.h"
+#include "../Version.h"
 #include "../Standalone/ActivationDialog.h"
 #include <set>
 
@@ -3298,8 +3299,8 @@ void MIDIXplorerEditor::showAboutDialog() {
     auto info = license.getLicenseInfo();
 
     juce::String message;
-    message += "Version: 1.0.0\n";
-    message += "Build Date: " + juce::String(__DATE__) + "\n\n";
+    message += "Version: " + juce::String(MIDIXPLORER_VERSION_STRING) + "\n";
+    message += "Build Date: " + juce::String(MIDIXPLORER_BUILD_DATE) + "\n\n";
     message += "A powerful MIDI file browser and analyzer\n";
     message += "with scale detection and DAW integration.\n\n";
 

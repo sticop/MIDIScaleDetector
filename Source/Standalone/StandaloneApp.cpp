@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <juce_audio_formats/juce_audio_formats.h>
+#include "../Version.h"
 #include "../Plugin/MIDIScalePlugin.h"
 #include "../Plugin/PluginEditor.h"
 #include "PianoSynthesizer.h"
@@ -701,8 +702,8 @@ private:
             auto info = license.getLicenseInfo();
 
             juce::String message;
-            message += "Version: 1.0.0\n";
-            message += "Build Date: " + juce::String(__DATE__) + "\n\n";
+            message += "Version: " + juce::String(MIDIXPLORER_VERSION_STRING) + "\n";
+            message += "Build Date: " + juce::String(MIDIXPLORER_BUILD_DATE) + "\n\n";
             message += "A powerful MIDI file browser and analyzer\n";
             message += "with built-in piano synthesizer.\n\n";
 
@@ -739,11 +740,11 @@ private:
             juce::AlertWindow::showMessageBoxAsync(
                 juce::AlertWindow::InfoIcon,
                 "Check For Updates",
-                "Checking for updates...\n\nCurrent Version: 1.0.0",
+                "Checking for updates...\n\nCurrent Version: " + juce::String(MIDIXPLORER_VERSION_STRING),
                 "OK");
 
             // Launch update check in browser (or could implement proper version API)
-            juce::URL("https://midixplorer.com/updates?v=1.0.0").launchInDefaultBrowser();
+            juce::URL("https://midixplorer.com/updates?v=" + juce::String(MIDIXPLORER_VERSION_STRING)).launchInDefaultBrowser();
         }
 
         void showHelpDialog(const juce::String& topic)

@@ -1,4 +1,5 @@
 #include "LicenseManager.h"
+#include "../Version.h"
 #include <juce_cryptography/juce_cryptography.h>
 
 // Singleton instance
@@ -76,7 +77,7 @@ juce::String LicenseManager::getOSVersion() const
 
 juce::String LicenseManager::getAppVersion() const
 {
-    return "1.0.0";
+    return MIDIXPLORER_VERSION_STRING;
 }
 
 juce::File LicenseManager::getSettingsFile() const
