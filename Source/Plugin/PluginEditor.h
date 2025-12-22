@@ -403,6 +403,7 @@ public:
         double bpm = 120.0;     // Tempo in BPM
         juce::int64 fileSize = 0;  // File size in bytes
         juce::String instrument = "---";  // GM instrument name
+        juce::String mood = "---";  // Detected mood (Happy, Melancholic, Energetic, etc.)
         bool analyzed = false;
         bool isAnalyzing = false;  // Currently being analyzed
         bool favorite = false;  // Marked as favorite
@@ -593,6 +594,7 @@ private:
     juce::Slider transportSlider;
     juce::Slider velocitySlider;
     juce::Label velocityLabel;
+    bool velocityFaderTouched = false;  // Track if velocity fader was manually adjusted
     juce::Label timeDisplayLabel;  // Shows elapsed / total time
     MIDINoteViewer midiNoteViewer;
     bool midiViewerFullscreen = false;  // Fullscreen mode for MIDI viewer

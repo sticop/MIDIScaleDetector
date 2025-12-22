@@ -279,6 +279,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     velocitySlider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff2a2a2a));
     velocitySlider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xff444444));
     velocitySlider.onValueChange = [this]() {
+        velocityFaderTouched = true;  // Mark that user has manually adjusted velocity
         if (pluginProcessor) {
             pluginProcessor->setVelocityScale((float)(velocitySlider.getValue() / 100.0));
         }
@@ -401,7 +402,10 @@ void MIDIXplorerEditor::saveFileCache() {
             fileObj->setProperty("bpm", f.bpm);
             fileObj->setProperty("fileSize", (juce::int64)f.fileSize);
             fileObj->setProperty("instrument", f.instrument);
+            fileObj->setProperty("mood", f.mood);
             fileObj->setProperty("analyzed", f.analyzed);
+            fileObj->setProperty("containsChords", f.containsChords);
+            fileObj->setProperty("containsSingleNotes", f.containsSingleNotes);
             filesArray.add(juce::var(fileObj.get()));
         }
     }
@@ -436,7 +440,10 @@ void MIDIXplorerEditor::loadFileCache() {
                     info.bpm = (double)fileObj->getProperty("bpm");
                     info.fileSize = (juce::int64)fileObj->getProperty("fileSize");
                     info.instrument = fileObj->getProperty("instrument").toString();
+                    info.mood = fileObj->getProperty("mood").toString();
                     info.analyzed = (bool)fileObj->getProperty("analyzed");
+                    info.containsChords = (bool)fileObj->getProperty("containsChords");
+                    info.containsSingleNotes = (bool)fileObj->getProperty("containsSingleNotes");
 
                     // Only add if file still exists
                     if (juce::File(info.fullPath).existsAsFile()) {
@@ -701,7 +708,11 @@ void MIDIXplorerEditor::timerCallback() {
             auto file = currentDirIterator->getFile();
             auto ext = file.getFileExtension().toLowerCase();
             if (ext == ".mid" || ext == ".midi") {
-                // Check for duplicates
+                // Always count the file for this library's file count
+                libraries[currentScanLibraryIndex].fileCount++;
+                filesFound++;
+
+                // Check for duplicates - only add to allFiles if not already present
                 bool isDuplicate = false;
                 for (const auto& existingFile : allFiles) {
                     if (existingFile.fullPath == file.getFullPathName()) {
@@ -716,11 +727,9 @@ void MIDIXplorerEditor::timerCallback() {
                     info.libraryName = libraries[currentScanLibraryIndex].name;
                     info.key = "---";
                     allFiles.push_back(info);
-                    libraries[currentScanLibraryIndex].fileCount++;
 
                     // Queue for analysis
                     analysisQueue.push_back(allFiles.size() - 1);
-                    filesFound++;
                 }
             }
         }
@@ -951,29 +960,12 @@ void MIDIXplorerEditor::timerCallback() {
         timeDisplayLabel.setText(juce::String::formatted("%d:%02d / %d:%02d", elapsedMin, elapsedSec, totalMin, totalSec), juce::dontSendNotification);
     }
 
-    // Handle looping
+    // Handle looping - just wrap the display time for UI
+    // The actual loop reset (playbackNoteIndex, timing) is handled by the processor
     if (currentTime >= totalDuration) {
-        // Send note-offs for currently active notes
-        if (pluginProcessor) {
-            pluginProcessor->sendActiveNoteOffs();
-        }
-        // Calculate how much we overshot and preserve it for smooth loop
-        double overshoot = std::fmod(currentTime, totalDuration);
-        playbackNoteIndex = 0;
-
-        if (actuallySync) {
-            // When synced, recalculate start beat based on current host position
-            // This ensures we stay locked to the host even after multiple loops
-            double beatsForOvershoot = (overshoot * midiFileBpm) / 60.0;
-            playbackStartBeat = hostBeat - beatsForOvershoot;
-        } else {
-            playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - overshoot;
-        }
-
-        // Update currentTime to the wrapped value for note playback
-        currentTime = overshoot;
-
-        // Note index tracking is now handled by the processor
+        // Don't modify playback state here - processor handles it
+        // Just wrap currentTime for UI display purposes
+        currentTime = std::fmod(currentTime, totalDuration);
     }
 
     // Note: Actual note playback is handled by the processor's updatePlayback()
@@ -1054,6 +1046,21 @@ void MIDIXplorerEditor::scheduleFileChange() {
 void MIDIXplorerEditor::loadSelectedFile() {
     isQuantized = false;  // Reset quantize when loading new file
     quantizeCombo.setSelectedId(100, juce::dontSendNotification);  // Reset to "Off"
+
+    // Reset transpose when loading new file
+    transposeAmount = 0;
+    transposeComboBox.setSelectedId(4, juce::dontSendNotification);  // Reset to "± 0"
+    if (pluginProcessor) {
+        pluginProcessor->setTransposeAmount(0);
+    }
+
+    // Reset velocity to use original MIDI file velocity (only apply scale if user touches fader)
+    velocityFaderTouched = false;
+    velocitySlider.setValue(100.0, juce::dontSendNotification);  // Reset slider visually
+    if (pluginProcessor) {
+        pluginProcessor->setVelocityScale(1.0f);  // Use original velocity (1.0 = no change)
+    }
+
     if (selectedFileIndex < 0 || selectedFileIndex >= (int)filteredFiles.size()) return;
 
     auto& info = filteredFiles[(size_t)selectedFileIndex];
@@ -1678,10 +1685,17 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         }
     }
 
+    std::cerr << "[ANALYSIS DEBUG] File: " << info.fileName << " noteEvents.size()=" << noteEvents.size() << std::endl;
+    for (const auto& ev : noteEvents) {
+        std::cerr << "  timestamp=" << ev.first << " noteNumber=" << ev.second << std::endl;
+    }
+
     if (!noteEvents.empty()) {
         // Sort by timestamp
         std::sort(noteEvents.begin(), noteEvents.end(),
             [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        std::cerr << "[CHORD DEBUG] File: " << info.fileName << " has " << noteEvents.size() << " note events" << std::endl;
 
         int chordCount = 0;
         int singleNoteCount = 0;
@@ -1708,10 +1722,20 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
             i = j;
         }
 
+        std::cerr << "[CHORD DEBUG] chordCount=" << chordCount << " singleNoteCount=" << singleNoteCount << std::endl;
+
         // Consider it a chord file if it has at least 1 chord event
         info.containsChords = (chordCount >= 1);
         // Consider it a single-note file if it has any single notes (melodic content)
         info.containsSingleNotes = (singleNoteCount >= 1);
+
+        std::cerr << "[CHORD DEBUG] containsChords=" << info.containsChords << " containsSingleNotes=" << info.containsSingleNotes << std::endl;
+
+        // Debug output
+        std::cerr << "[ChordDetect] " << info.fileName << ": events=" << noteEvents.size()
+                  << " chords=" << chordCount << " singles=" << singleNoteCount
+                  << " containsChords=" << info.containsChords
+                  << " containsSingleNotes=" << info.containsSingleNotes << std::endl;
     }
 
     // Extract instrument from first program change
@@ -1767,6 +1791,32 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         }
         if (info.instrument != "---") break;
     }
+
+    // Detect mood based on key/scale (major = happy, minor = melancholic)
+    juce::String detectedMood = "Neutral";
+    juce::String keyString = info.key;
+
+    // Extract just the scale type from key string like "C Major (Maj 1st)"
+    bool isMajor = keyString.contains("Major") || keyString.contains("Lydian") || keyString.contains("Mixolydian");
+    bool isMinor = keyString.contains("Minor") || keyString.contains("Phrygian") || keyString.contains("Locrian") ||
+                   keyString.contains("Harmonic") || keyString.contains("Melodic");
+    bool isDorian = keyString.contains("Dorian");
+    bool isBlues = keyString.contains("Blues");
+
+    // Simple mood classification based on scale type only
+    if (isMajor) {
+        detectedMood = "Happy";
+    } else if (isMinor) {
+        detectedMood = "Melancholic";
+    } else if (isDorian) {
+        detectedMood = "Soulful";
+    } else if (isBlues) {
+        detectedMood = "Bluesy";
+    } else {
+        detectedMood = "Mysterious";
+    }
+
+    info.mood = detectedMood;
 
     info.analyzed = true;
 }
@@ -1841,10 +1891,16 @@ void MIDIXplorerEditor::filterFiles() {
         int contentTypeFilter = contentTypeFilterCombo.getSelectedId();
         if (contentTypeFilter == 2) {
             // Chords Only - file must contain chords
-            if (!file.containsChords) continue;
+            if (!file.containsChords) {
+                std::cerr << "[FILTER DEBUG] Skipping (not chord): " << file.fileName << std::endl;
+                continue;
+            }
         } else if (contentTypeFilter == 3) {
             // Notes Only - file must contain single notes (melody) and NOT be primarily chords
-            if (!file.containsSingleNotes || file.containsChords) continue;
+            if (!file.containsSingleNotes || file.containsChords) {
+                std::cerr << "[FILTER DEBUG] Skipping (not note): " << file.fileName << " containsChords=" << file.containsChords << " containsSingleNotes=" << file.containsSingleNotes << std::endl;
+                continue;
+            }
         }
 
         // Check search filter (matches filename, key, relative key, or instrument)
@@ -1859,6 +1915,7 @@ void MIDIXplorerEditor::filterFiles() {
         // Skip files with 0 duration (empty or invalid MIDI files)
         if (file.analyzed && file.duration <= 0.0) continue;
 
+        std::cerr << "[FILTER DEBUG] Included: " << file.fileName << " chords=" << file.containsChords << " notes=" << file.containsSingleNotes << std::endl;
         filteredFiles.push_back(file);
     }
 
@@ -1939,12 +1996,15 @@ void MIDIXplorerEditor::updateContentTypeFilter() {
     int chordFileCount = 0;
     int noteFileCount = 0;
 
+    std::cerr << "[FILTER DEBUG] updateContentTypeFilter: allFiles.size()=" << allFiles.size() << std::endl;
     for (const auto& file : allFiles) {
         if (file.analyzed) {
+            std::cerr << "  File: " << file.fileName << " analyzed=" << file.analyzed << " containsChords=" << file.containsChords << " containsSingleNotes=" << file.containsSingleNotes << std::endl;
             if (file.containsChords) chordFileCount++;
             if (file.containsSingleNotes && !file.containsChords) noteFileCount++;
         }
     }
+    std::cerr << "[FILTER DEBUG] Chord files: " << chordFileCount << ", Note files: " << noteFileCount << std::endl;
 
     // Update combo box items with counts
     int currentId = contentTypeFilterCombo.getSelectedId();
@@ -2854,11 +2914,32 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     // File name
     g.setColour(juce::Colours::white);
     g.setFont(13.0f);
-    g.drawText(file.fileName, 175, 0, w - 480, h, juce::Justification::centredLeft);
+    g.drawText(file.fileName, 175, 0, w - 530, h, juce::Justification::centredLeft);
+
+    // Mood badge
+    if (file.mood != "---") {
+        // Color code moods
+        juce::Colour moodColour = juce::Colour(0xff888888);  // Default grey
+        if (file.mood == "Happy") {
+            moodColour = juce::Colour(0xffffcc00);  // Bright yellow for happy
+        } else if (file.mood == "Melancholic") {
+            moodColour = juce::Colour(0xff6699ff);  // Blue for melancholic
+        } else if (file.mood == "Soulful") {
+            moodColour = juce::Colour(0xffcc88ff);  // Purple for soulful
+        } else if (file.mood == "Bluesy") {
+            moodColour = juce::Colour(0xff44aacc);  // Teal/blue for bluesy
+        } else if (file.mood == "Mysterious") {
+            moodColour = juce::Colour(0xff88ccff);  // Light blue for mysterious
+        }
+
+        g.setColour(moodColour);
+        g.setFont(11.0f);
+        g.drawText(file.mood, w - 440, 0, 80, h, juce::Justification::centredLeft);
+    }
 
     // Instrument name
     g.setColour(juce::Colour(0xffaaaaff));
-    g.drawText(file.instrument, w - 380, 0, 130, h, juce::Justification::centredLeft);
+    g.drawText(file.instrument, w - 350, 0, 100, h, juce::Justification::centredLeft);
 
     // File size
     g.setColour(juce::Colour(0xff888888));

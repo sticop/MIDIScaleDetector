@@ -102,65 +102,64 @@ public:
     AudioSettingsComponent(juce::AudioDeviceManager& adm, std::function<void(float)> volumeCallback, float initialVolume)
         : deviceManager(adm), onVolumeChange(volumeCallback)
     {
-        // Piano Volume section
-        volumeLabel.setText("Piano Instrument Volume:", juce::dontSendNotification);
-        volumeLabel.setFont(juce::Font(juce::FontOptions(14.0f).withStyle("Bold")));
-        volumeLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+        setSize(520, 540);
+        setLookAndFeel(&customLookAndFeel);
+        volumeLabel.setText("Piano Instrument Volume", juce::dontSendNotification);
+        volumeLabel.setFont(juce::Font(juce::FontOptions(16.0f).withStyle("Bold")));
+        volumeLabel.setColour(juce::Label::textColourId, juce::Colour(0xffe0e0e0));
         addAndMakeVisible(volumeLabel);
-
-        volumeSlider.setSliderStyle(juce::Slider::LinearHorizontal);
-        volumeSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 50, 25);
+        volumeSlider.setSliderStyle(juce::Slider::LinearBar);
+        volumeSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 60, 28);
         volumeSlider.setRange(0.0, 1.0, 0.01);
         volumeSlider.setValue(initialVolume);
-        volumeSlider.setColour(juce::Slider::backgroundColourId, juce::Colour(0xff3a3a3a));
-        volumeSlider.setColour(juce::Slider::trackColourId, juce::Colour(0xff5ba8a0));
-        volumeSlider.setColour(juce::Slider::thumbColourId, juce::Colours::white);
-        volumeSlider.onValueChange = [this]() {
-            if (onVolumeChange)
-                onVolumeChange((float)volumeSlider.getValue());
-        };
+        volumeSlider.setColour(juce::Slider::backgroundColourId, juce::Colour(0xff232a2e));
+        volumeSlider.setColour(juce::Slider::trackColourId, juce::Colour(0xff4a9eff));
+        volumeSlider.setColour(juce::Slider::thumbColourId, juce::Colour(0xff2ecc71));
+        volumeSlider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xff4a9eff));
+        volumeSlider.onValueChange = [this]() { if (onVolumeChange) onVolumeChange((float)volumeSlider.getValue()); };
         addAndMakeVisible(volumeSlider);
-
-        // Audio device selector
-        deviceSelector = std::make_unique<juce::AudioDeviceSelectorComponent>(
-            deviceManager, 0, 0, 0, 2, false, false, true, false);
+        deviceSelector = std::make_unique<juce::AudioDeviceSelectorComponent>(deviceManager, 0, 0, 0, 2, false, false, true, false);
         addAndMakeVisible(*deviceSelector);
-
-        setSize(500, 520);
     }
 
     void paint(juce::Graphics& g) override
     {
-        g.fillAll(juce::Colour(0xff2a2a2a));
-
-        // Separator line
-        g.setColour(juce::Colour(0xff4a4a4a));
-        g.drawHorizontalLine(55, 10, getWidth() - 10);
+        auto bounds = getLocalBounds().reduced(8);
+        g.setColour(juce::Colour(0xff232a2e));
+        g.fillRoundedRectangle(bounds.toFloat(), 18.0f);
+        g.setColour(juce::Colour(0xff4a9eff));
+        g.drawRoundedRectangle(bounds.toFloat(), 18.0f, 2.0f);
+        g.setColour(juce::Colour(0xffe0e0e0));
+        g.setFont(juce::Font(18.0f, juce::Font::bold));
+        g.drawText("Audio Settings", bounds.removeFromTop(32), juce::Justification::centredLeft, false);
     }
 
     void resized() override
     {
-        auto bounds = getLocalBounds().reduced(10);
-
-        // Volume section at top
-        auto volumeArea = bounds.removeFromTop(45);
-        volumeLabel.setBounds(volumeArea.removeFromTop(20));
-        volumeSlider.setBounds(volumeArea);
-
-        bounds.removeFromTop(20); // Spacing after separator
-
-        // Device selector takes the rest
+        auto bounds = getLocalBounds().reduced(18);
+        bounds.removeFromTop(36);
+        auto volumeArea = bounds.removeFromTop(60);
+        volumeLabel.setBounds(volumeArea.removeFromTop(28));
+        volumeSlider.setBounds(volumeArea.reduced(0, 6));
+        bounds.removeFromTop(18);
         if (deviceSelector)
-            deviceSelector->setBounds(bounds);
+            deviceSelector->setBounds(bounds.reduced(0, 8));
     }
 
 private:
     juce::AudioDeviceManager& deviceManager;
     std::function<void(float)> onVolumeChange;
-
     juce::Label volumeLabel;
     juce::Slider volumeSlider;
     std::unique_ptr<juce::AudioDeviceSelectorComponent> deviceSelector;
+    struct CustomLookAndFeel : public juce::LookAndFeel_V4 {
+        CustomLookAndFeel() {
+            setColour(juce::Slider::backgroundColourId, juce::Colour(0xff232a2e));
+            setColour(juce::Slider::trackColourId, juce::Colour(0xff4a9eff));
+            setColour(juce::Slider::thumbColourId, juce::Colour(0xff2ecc71));
+            setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xff4a9eff));
+        }
+    } customLookAndFeel;
 };
 
 /**
@@ -411,6 +410,27 @@ private:
             // Initialize audio with piano synth
             pianoSynth.prepareToPlay(44100.0, 512);
 
+            // Load the SGM Piano SoundFont
+            // First try the app bundle's Resources folder (for distribution)
+            juce::File appBundle = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
+            juce::File soundFontFile = appBundle.getChildFile("Contents/Resources/SGM_Piano.sf2");
+
+            DBG("Looking for SoundFont at bundle: " + soundFontFile.getFullPathName());
+
+            if (!soundFontFile.existsAsFile()) {
+                // Fall back to desktop location (for development)
+                soundFontFile = juce::File("/Users/hamimadghirni/Desktop/SGM_Piano_HD/SGM_V2.01_Piano_(Lite_HD).sf2");
+                DBG("Trying fallback path: " + soundFontFile.getFullPathName());
+            }
+
+            if (soundFontFile.existsAsFile()) {
+                DBG("SoundFont file found, loading...");
+                bool loaded = pianoSynth.loadSoundFont(soundFontFile.getFullPathName());
+                DBG("SoundFont load result: " + juce::String(loaded ? "SUCCESS" : "FAILED"));
+            } else {
+                DBG("SoundFont file not found at: " + soundFontFile.getFullPathName());
+            }
+
             // Set pointers in audio callback AFTER creating processor and pianoSynth
             audioCallback.setProcessor(processor.get());
             audioCallback.setPianoSynth(&pianoSynth);
@@ -506,10 +526,10 @@ private:
                                   const LicenseManager::LicenseInfo& /*info*/) override
         {
             // Update cached license status for audio thread (avoid per-callback checks)
-            bool isExpired = (status != LicenseManager::LicenseStatus::Valid && 
+            bool isExpired = (status != LicenseManager::LicenseStatus::Valid &&
                               status != LicenseManager::LicenseStatus::Trial);
             audioCallback.setLicenseExpired(isExpired);
-            
+
             // PluginEditor handles all license status display
         }
 

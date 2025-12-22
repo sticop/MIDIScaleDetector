@@ -2,259 +2,211 @@
 
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
 #include <cmath>
+#include <iostream>
+
+// TinySoundFont implementation
+#define TSF_IMPLEMENTATION
+#include "tsf.h"
 
 /**
- * High-quality piano synthesizer using additive synthesis with realistic envelope and harmonics
- */
-class PianoVoice : public juce::SynthesiserVoice
-{
-public:
-    PianoVoice() = default;
-
-    bool canPlaySound(juce::SynthesiserSound*) override
-    {
-        // Accept any sound - we'll forward declare PianoSound check isn't needed
-        // since we only add PianoSound to the synth
-        return true;
-    }
-
-    void startNote(int midiNoteNumber, float velocity, juce::SynthesiserSound*, int) override
-    {
-        noteNumber = midiNoteNumber;
-        level = velocity * 0.8f;
-
-        // Calculate frequency from MIDI note
-        frequency = 440.0 * std::pow(2.0, (midiNoteNumber - 69) / 12.0);
-
-        // Reset phases for all harmonics
-        for (int i = 0; i < NUM_HARMONICS; i++) {
-            phases[i] = 0.0;
-        }
-
-        // Set envelope parameters based on note (lower notes have longer decay)
-        double noteRatio = (128.0 - midiNoteNumber) / 128.0;
-        attackTime = 0.002;  // 2ms attack
-        decayTime = 0.5 + noteRatio * 2.0;  // 0.5s to 2.5s decay
-        sustainLevel = 0.3f - (float)noteRatio * 0.2f;  // Lower sustain for low notes
-        releaseTime = 0.3 + noteRatio * 0.5;  // 0.3s to 0.8s release
-
-        envelopePhase = EnvelopePhase::Attack;
-        envelopeLevel = 0.0f;
-        envelopeTime = 0.0;
-
-        // Harmonic amplitudes for piano-like timbre
-        // Lower notes have more harmonics, higher notes have fewer
-        double brightnessRatio = midiNoteNumber / 127.0;
-        harmonicAmplitudes[0] = 1.0f;  // Fundamental
-        harmonicAmplitudes[1] = 0.6f * (1.0f - (float)brightnessRatio * 0.3f);  // 2nd
-        harmonicAmplitudes[2] = 0.4f * (1.0f - (float)brightnessRatio * 0.4f);  // 3rd
-        harmonicAmplitudes[3] = 0.25f * (1.0f - (float)brightnessRatio * 0.5f); // 4th
-        harmonicAmplitudes[4] = 0.15f * (1.0f - (float)brightnessRatio * 0.6f); // 5th
-        harmonicAmplitudes[5] = 0.1f * (1.0f - (float)brightnessRatio * 0.7f);  // 6th
-        harmonicAmplitudes[6] = 0.05f * (1.0f - (float)brightnessRatio * 0.8f); // 7th
-        harmonicAmplitudes[7] = 0.02f * (1.0f - (float)brightnessRatio * 0.9f); // 8th
-
-        // Normalize
-        float total = 0.0f;
-        for (int i = 0; i < NUM_HARMONICS; i++) {
-            if (harmonicAmplitudes[i] < 0) harmonicAmplitudes[i] = 0;
-            total += harmonicAmplitudes[i];
-        }
-        if (total > 0) {
-            for (int i = 0; i < NUM_HARMONICS; i++) {
-                harmonicAmplitudes[i] /= total;
-            }
-        }
-    }
-
-    void stopNote(float, bool allowTailOff) override
-    {
-        if (allowTailOff) {
-            if (envelopePhase != EnvelopePhase::Off) {
-                envelopePhase = EnvelopePhase::Release;
-                envelopeTime = 0.0;
-            }
-        } else {
-            envelopePhase = EnvelopePhase::Off;
-            envelopeLevel = 0.0f;
-            clearCurrentNote();
-        }
-    }
-
-    void pitchWheelMoved(int) override {}
-    void controllerMoved(int, int) override {}
-
-    void renderNextBlock(juce::AudioBuffer<float>& outputBuffer, int startSample, int numSamples) override
-    {
-        if (envelopePhase == EnvelopePhase::Off)
-            return;
-
-        double sampleRate = getSampleRate();
-        double timeIncrement = 1.0 / sampleRate;
-
-        for (int sample = 0; sample < numSamples; ++sample) {
-            // Calculate envelope
-            updateEnvelope(timeIncrement);
-
-            if (envelopePhase == EnvelopePhase::Off) {
-                clearCurrentNote();
-                break;
-            }
-
-            // Generate sample using additive synthesis with harmonics
-            float sampleValue = 0.0f;
-
-            for (int h = 0; h < NUM_HARMONICS; h++) {
-                int harmonicNumber = h + 1;
-                double harmonicFreq = frequency * harmonicNumber;
-
-                // Skip harmonics above Nyquist
-                if (harmonicFreq > sampleRate * 0.45) continue;
-
-                // Slight detuning for richness (like real piano strings)
-                double detune = 1.0 + (harmonicNumber - 1) * 0.0001 * (1.0 + std::sin(phases[h] * 0.1));
-
-                sampleValue += harmonicAmplitudes[h] * (float)std::sin(phases[h]);
-
-                // Update phase
-                phases[h] += 2.0 * juce::MathConstants<double>::pi * harmonicFreq * detune / sampleRate;
-                if (phases[h] > 2.0 * juce::MathConstants<double>::pi) {
-                    phases[h] -= 2.0 * juce::MathConstants<double>::pi;
-                }
-            }
-
-            // Apply envelope and velocity
-            sampleValue *= envelopeLevel * level;
-
-            // Soft clipping for warmth
-            sampleValue = std::tanh(sampleValue * 1.5f) / 1.5f;
-
-            // Output to all channels
-            for (int channel = 0; channel < outputBuffer.getNumChannels(); ++channel) {
-                outputBuffer.addSample(channel, startSample + sample, sampleValue);
-            }
-        }
-    }
-
-private:
-    static constexpr int NUM_HARMONICS = 8;
-
-    enum class EnvelopePhase { Attack, Decay, Sustain, Release, Off };
-
-    int noteNumber = 0;
-    double frequency = 440.0;
-    float level = 0.0f;
-
-    double phases[NUM_HARMONICS] = {};
-    float harmonicAmplitudes[NUM_HARMONICS] = {};
-
-    EnvelopePhase envelopePhase = EnvelopePhase::Off;
-    float envelopeLevel = 0.0f;
-    double envelopeTime = 0.0;
-
-    double attackTime = 0.002;
-    double decayTime = 1.0;
-    float sustainLevel = 0.3f;
-    double releaseTime = 0.3;
-
-    void updateEnvelope(double timeIncrement)
-    {
-        envelopeTime += timeIncrement;
-
-        switch (envelopePhase) {
-            case EnvelopePhase::Attack:
-                envelopeLevel = (float)(envelopeTime / attackTime);
-                if (envelopeTime >= attackTime) {
-                    envelopeLevel = 1.0f;
-                    envelopePhase = EnvelopePhase::Decay;
-                    envelopeTime = 0.0;
-                }
-                break;
-
-            case EnvelopePhase::Decay:
-                envelopeLevel = 1.0f - (1.0f - sustainLevel) * (float)(envelopeTime / decayTime);
-                if (envelopeTime >= decayTime) {
-                    envelopeLevel = sustainLevel;
-                    envelopePhase = EnvelopePhase::Sustain;
-                }
-                break;
-
-            case EnvelopePhase::Sustain:
-                // Gradual decay in sustain phase (like real piano)
-                envelopeLevel = sustainLevel * (float)std::exp(-envelopeTime * 0.5);
-                if (envelopeLevel < 0.001f) {
-                    envelopePhase = EnvelopePhase::Off;
-                    envelopeLevel = 0.0f;
-                }
-                break;
-
-            case EnvelopePhase::Release:
-                envelopeLevel *= (float)std::exp(-timeIncrement / releaseTime * 5.0);
-                if (envelopeLevel < 0.001f) {
-                    envelopePhase = EnvelopePhase::Off;
-                    envelopeLevel = 0.0f;
-                }
-                break;
-
-            case EnvelopePhase::Off:
-                break;
-        }
-    }
-};
-
-class PianoSound : public juce::SynthesiserSound
-{
-public:
-    bool appliesToNote(int) override { return true; }
-    bool appliesToChannel(int) override { return true; }
-};
-
-/**
- * Piano Synthesizer - wraps JUCE Synthesiser with piano voices
+ * SoundFont-based Piano Synthesizer using TinySoundFont library
+ * Uses the SGM Piano HD SoundFont for realistic piano sound
  */
 class PianoSynthesizer
 {
 public:
     PianoSynthesizer()
     {
-        // Add piano sound
-        synth.addSound(new PianoSound());
+        // Configure reverb for concert hall feel
+        juce::Reverb::Parameters reverbParams;
+        reverbParams.roomSize = 0.55f;     // Medium room
+        reverbParams.damping = 0.4f;       // Warm damping
+        reverbParams.wetLevel = 0.18f;     // Subtle reverb
+        reverbParams.dryLevel = 0.82f;     // Keep most dry signal
+        reverbParams.width = 1.0f;         // Full stereo width
+        reverbParams.freezeMode = 0.0f;    // No freeze
+        reverb.setParameters(reverbParams);
+    }
 
-        // Add voices for polyphony (16 voice polyphony)
-        for (int i = 0; i < 16; ++i) {
-            synth.addVoice(new PianoVoice());
+    ~PianoSynthesizer()
+    {
+        if (soundFont != nullptr) {
+            tsf_close(soundFont);
+            soundFont = nullptr;
         }
     }
 
-    void prepareToPlay(double sampleRate, int)
+    bool loadSoundFont(const juce::String& path)
     {
-        synth.setCurrentPlaybackSampleRate(sampleRate);
+        // Close existing soundfont if loaded
+        if (soundFont != nullptr) {
+            tsf_close(soundFont);
+            soundFont = nullptr;
+        }
+
+        std::cerr << "[PianoSynth] Attempting to load SoundFont: " << path << std::endl;
+        soundFont = tsf_load_filename(path.toRawUTF8());
+
+        if (soundFont != nullptr) {
+            tsf_set_output(soundFont, TSF_STEREO_INTERLEAVED, static_cast<int>(currentSampleRate), 0.0f);
+            soundFontLoaded = true;
+            std::cerr << "[PianoSynth] SoundFont loaded successfully!" << std::endl;
+            // Log preset count
+            int presetCount = tsf_get_presetcount(soundFont);
+            std::cerr << "[PianoSynth] SoundFont has " << presetCount << " presets" << std::endl;
+            if (presetCount > 0) {
+                const char* presetName = tsf_get_presetname(soundFont, 0);
+                std::cerr << "[PianoSynth] Preset 0 name: " << (presetName ? presetName : "(null)") << std::endl;
+            }
+            return true;
+        }
+
+        std::cerr << "[PianoSynth] FAILED to load SoundFont!" << std::endl;
+        soundFontLoaded = false;
+        return false;
+    }
+
+    bool isSoundFontLoaded() const { return soundFontLoaded; }
+
+    void prepareToPlay(double sampleRate, int samplesPerBlock)
+    {
+        std::cerr << "[PianoSynth] prepareToPlay called with sampleRate=" << sampleRate << " bufferSize=" << samplesPerBlock << std::endl;
+        currentSampleRate = sampleRate;
+
+        if (soundFont != nullptr) {
+            std::cerr << "[PianoSynth] Setting TSF output to sampleRate=" << static_cast<int>(sampleRate) << std::endl;
+            tsf_set_output(soundFont, TSF_STEREO_INTERLEAVED, static_cast<int>(sampleRate), 0.0f);
+        } else {
+            std::cerr << "[PianoSynth] WARNING: SoundFont not loaded yet in prepareToPlay!" << std::endl;
+        }
+
+        // Prepare reverb
+        juce::dsp::ProcessSpec spec;
+        spec.sampleRate = sampleRate;
+        spec.maximumBlockSize = static_cast<juce::uint32>(samplesPerBlock);
+        spec.numChannels = 2;
+        reverb.prepare(spec);
+        reverb.reset();
+
+        // Allocate render buffer
+        renderBuffer.resize(static_cast<size_t>(samplesPerBlock) * 2);  // Stereo interleaved
     }
 
     void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
     {
-        synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
+        if (soundFont == nullptr) {
+            // Fallback: silence if no soundfont
+            static int noSfCounter = 0;
+            if (noSfCounter++ % 1000 == 0) {
+                std::cerr << "[PianoSynth] No SoundFont loaded! (warning #" << noSfCounter << ")" << std::endl;
+            }
+            buffer.clear();
+            return;
+        }
 
-        // Apply master gain to ensure audible output
-        buffer.applyGain(2.0f);
+        int numSamples = buffer.getNumSamples();
+
+        // Debug: show how many MIDI messages received
+        static int callCount = 0;
+        callCount++;
+        if (!midiMessages.isEmpty()) {
+            std::cerr << "[PianoSynth] processBlock call #" << callCount << " with " << midiMessages.getNumEvents() << " MIDI messages" << std::endl;
+        }
+
+        // Process MIDI messages
+        for (const auto metadata : midiMessages) {
+            auto msg = metadata.getMessage();
+
+            if (msg.isNoteOn()) {
+                std::cerr << "[PianoSynth] NoteOn: note=" << msg.getNoteNumber() << " vel=" << (int)msg.getVelocity() << std::endl;
+                // Use preset 0 (first piano preset in the SF2)
+                tsf_note_on(soundFont, 0, msg.getNoteNumber(), msg.getVelocity() / 127.0f);
+            }
+            else if (msg.isNoteOff()) {
+                std::cerr << "[PianoSynth] NoteOff: note=" << msg.getNoteNumber() << std::endl;
+                tsf_note_off(soundFont, 0, msg.getNoteNumber());
+            }
+            else if (msg.isAllNotesOff() || msg.isAllSoundOff()) {
+                tsf_note_off_all(soundFont);
+            }
+            else if (msg.isController()) {
+                // Handle sustain pedal
+                if (msg.getControllerNumber() == 64) {
+                    // Sustain pedal - TSF doesn't have direct support, but we can handle it
+                }
+            }
+        }
+
+        // Render audio from soundfont
+        if (renderBuffer.size() < static_cast<size_t>(numSamples) * 2) {
+            renderBuffer.resize(static_cast<size_t>(numSamples) * 2);
+        }
+
+        tsf_render_float(soundFont, renderBuffer.data(), numSamples, 0);
+
+        // Check for audio output (debug)
+        static int audioCheckCounter = 0;
+        if (audioCheckCounter++ % 500 == 0) {
+            float maxSample = 0.0f;
+            for (int i = 0; i < numSamples * 2; ++i) {
+                float absVal = std::abs(renderBuffer[static_cast<size_t>(i)]);
+                if (absVal > maxSample) maxSample = absVal;
+            }
+            if (maxSample > 0.001f) {
+                std::cerr << "[PianoSynth] Audio output level: " << maxSample << std::endl;
+            }
+        }
+
+        // Convert from interleaved stereo to JUCE buffer
+        float* leftChannel = buffer.getWritePointer(0);
+        float* rightChannel = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
+
+        for (int i = 0; i < numSamples; ++i) {
+            leftChannel[i] = renderBuffer[static_cast<size_t>(i) * 2];
+            if (rightChannel != nullptr) {
+                rightChannel[i] = renderBuffer[static_cast<size_t>(i) * 2 + 1];
+            }
+        }
+
+        // Apply reverb for spaciousness
+        juce::dsp::AudioBlock<float> block(buffer);
+        juce::dsp::ProcessContextReplacing<float> context(block);
+        reverb.process(context);
+
+        // Apply master gain
+        buffer.applyGain(1.5f);
     }
 
     void allNotesOff()
     {
-        synth.allNotesOff(0, true);
+        if (soundFont != nullptr) {
+            tsf_note_off_all(soundFont);
+        }
     }
 
     void noteOn(int channel, int noteNumber, float velocity)
     {
-        synth.noteOn(channel, noteNumber, velocity);
+        (void)channel;
+        if (soundFont != nullptr) {
+            tsf_note_on(soundFont, 0, noteNumber, velocity);
+        }
     }
 
     void noteOff(int channel, int noteNumber)
     {
-        synth.noteOff(channel, noteNumber, 0.0f, true);
+        (void)channel;
+        if (soundFont != nullptr) {
+            tsf_note_off(soundFont, 0, noteNumber);
+        }
     }
 
 private:
-    juce::Synthesiser synth;
+    tsf* soundFont = nullptr;
+    bool soundFontLoaded = false;
+    juce::dsp::Reverb reverb;
+    double currentSampleRate = 44100.0;
+    std::vector<float> renderBuffer;
 };
+

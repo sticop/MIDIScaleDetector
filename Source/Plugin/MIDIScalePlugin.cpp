@@ -351,32 +351,23 @@ void MIDIScalePlugin::updatePlayback() {
 
     // Check if we've reached the end - do a clean reset
     if (currentTime >= totalDuration) {
-        // Send note-offs for currently active notes
-        sendActiveNoteOffs();
+        // DON'T send note-offs here - the MIDI file already has natural note-offs at its end
+        // Calling sendActiveNoteOffs() here causes pendingNoteOffs to be processed AFTER
+        // the new notes start playing, cutting them off and causing sound interruption
 
         // Reset note index to start from scratch
         playbackState.playbackNoteIndex.store(0);
 
-        // Reset timing to start a fresh loop
+        // Reset timing to start a fresh loop - ensure currentTime becomes exactly 0
         if (synced) {
-            // Align to the next loop start based on total duration in beats
-            double beatsPerLoop = (totalDuration * midiFileBpm) / 60.0;
-            double beatsElapsedTotal = hostBeat - playbackState.playbackStartBeat.load();
-            double loopsCompleted = std::floor(beatsElapsedTotal / beatsPerLoop);
-            playbackState.playbackStartBeat.store(playbackState.playbackStartBeat.load() + loopsCompleted * beatsPerLoop);
-
-            // Recalculate current time
-            double beatsElapsed = hostBeat - playbackState.playbackStartBeat.load();
-            currentTime = (beatsElapsed * 60.0) / midiFileBpm;
+            // Align playback start to current host beat so currentTime = 0
+            playbackState.playbackStartBeat.store(hostBeat);
+            currentTime = 0.0;
         } else {
-            double loopsCompleted = std::floor(currentTime / totalDuration);
-            playbackState.playbackStartTime.store(playbackState.playbackStartTime.load() + loopsCompleted * totalDuration);
-            currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackState.playbackStartTime.load();
+            // Reset playback start time to now so currentTime = 0
+            playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0);
+            currentTime = 0.0;
         }
-
-        // Clamp to valid range
-        if (currentTime < 0) currentTime = 0;
-        if (currentTime >= totalDuration) currentTime = 0;  // Safety
     }
 
     // Update position for UI
@@ -440,11 +431,9 @@ void MIDIScalePlugin::updatePlayback() {
 
 void MIDIScalePlugin::sendActiveNoteOffs() {
     // Set flag for processBlock to send note-offs immediately
+    // Don't clear activeNotes here - let sendActiveNoteOffsImmediate do it
+    // so it can properly send note-offs for each active note
     playbackState.pendingNoteOffs.store(true);
-
-    // Also clear active notes tracking
-    std::lock_guard<std::mutex> noteLock(activeNotesMutex);
-    activeNotes.clear();
 }
 
 void MIDIScalePlugin::sendActiveNoteOffsImmediate(juce::MidiBuffer& midiMessages) {
@@ -456,11 +445,8 @@ void MIDIScalePlugin::sendActiveNoteOffsImmediate(juce::MidiBuffer& midiMessages
     }
     activeNotes.clear();
 
-    // Also send All-Notes-Off (CC 123) and All-Sound-Off (CC 120) on all channels
-    for (int channel = 1; channel <= 16; ++channel) {
-        midiMessages.addEvent(juce::MidiMessage::allNotesOff(channel), 0);
-        midiMessages.addEvent(juce::MidiMessage::allSoundOff(channel), 0);
-    }
+    // No need to send allNotesOff - the individual note-offs are sufficient
+    // and won't cause audio interruption
 }
 
 
