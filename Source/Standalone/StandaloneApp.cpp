@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <juce_audio_formats/juce_audio_formats.h>
+#include <atomic>
 #include "../Version.h"
 #include "../Plugin/MIDIScalePlugin.h"
 #include "../Plugin/PluginEditor.h"
@@ -450,8 +451,11 @@ private:
 
             setVisible(true);
 
-            // Register for license updates
-            LicenseManager::getInstance().addListener(this);
+            // Register for license updates and initialize cached status
+            auto& license = LicenseManager::getInstance();
+            bool isExpired = !license.isLicenseValid() && !license.isInTrialPeriod();
+            audioCallback.setLicenseExpired(isExpired);
+            license.addListener(this);
         }
 
         ~MainWindow() override
@@ -498,11 +502,15 @@ private:
             // No longer used - PluginEditor handles license status bar
         }
 
-        void licenseStatusChanged(LicenseManager::LicenseStatus /*status*/,
+        void licenseStatusChanged(LicenseManager::LicenseStatus status,
                                   const LicenseManager::LicenseInfo& /*info*/) override
         {
+            // Update cached license status for audio thread (avoid per-callback checks)
+            bool isExpired = (status != LicenseManager::LicenseStatus::Valid && 
+                              status != LicenseManager::LicenseStatus::Trial);
+            audioCallback.setLicenseExpired(isExpired);
+            
             // PluginEditor handles all license status display
-            // This callback is still registered to ensure license updates are processed
         }
 
         void closeButtonPressed() override
@@ -839,6 +847,11 @@ private:
                 return masterVolume;
             }
 
+            // Called from UI thread when license status changes
+            void setLicenseExpired(bool expired) {
+                licenseExpired.store(expired, std::memory_order_relaxed);
+            }
+
             void audioDeviceIOCallbackWithContext(const float* const* inputChannelData,
                                                  int numInputChannels,
                                                  float* const* outputChannelData,
@@ -852,12 +865,8 @@ private:
                 juce::AudioBuffer<float> buffer(outputChannelData, numOutputChannels, numSamples);
                 juce::MidiBuffer midiMessages;
 
-                // Check license status - mute audio if expired
-                bool isLicenseValid = LicenseManager::getInstance().isLicenseValid();
-                bool isTrialActive = LicenseManager::getInstance().isInTrialPeriod();
-                bool licenseExpired = !isLicenseValid && !isTrialActive;
-
-                if (licenseExpired) {
+                // Use cached license status (updated by UI thread) - no singleton calls on audio thread
+                if (licenseExpired.load(std::memory_order_relaxed)) {
                     buffer.clear();
                     if (pianoSynth) {
                         pianoSynth->allNotesOff();
@@ -912,6 +921,7 @@ private:
             PianoSynthesizer* pianoSynth;
             float masterVolume = 1.0f;
             bool wasPlaying = false;
+            std::atomic<bool> licenseExpired{false};  // Cached license status for audio thread
         } audioCallback;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainWindow)
