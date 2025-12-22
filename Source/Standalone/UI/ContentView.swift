@@ -959,16 +959,143 @@ struct ScanDialog: View {
 
 // MARK: - Settings Views
 struct SettingsView: View {
+    @State private var selection: SettingsSection = .general
+
     var body: some View {
-        TabView {
-            GeneralSettings()
-                .tabItem { Label("General", systemImage: "gear") }
-            PlaybackSettings()
-                .tabItem { Label("Playback", systemImage: "play.circle") }
-            PluginSettings()
-                .tabItem { Label("Plugin", systemImage: "puzzlepiece") }
+        HStack(spacing: 0) {
+            List(selection: $selection) {
+                ForEach(SettingsSection.allCases) { section in
+                    Label(section.title, systemImage: section.icon)
+                        .tag(section)
+                }
+            }
+            .listStyle(SidebarListStyle())
+            .frame(minWidth: 180, maxWidth: 200)
+
+            Divider()
+
+            SettingsDetailView(section: selection)
         }
-        .frame(width: 500, height: 400)
+        .frame(width: 640, height: 440)
+    }
+}
+
+enum SettingsSection: String, CaseIterable, Identifiable {
+    case general
+    case playback
+    case plugin
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general:
+            return "General"
+        case .playback:
+            return "Playback"
+        case .plugin:
+            return "Plugin"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .general:
+            return "Storage and database options"
+        case .playback:
+            return "Preview and MIDI output behavior"
+        case .plugin:
+            return "Plugin locations and shortcuts"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .general:
+            return "gearshape"
+        case .playback:
+            return "play.circle"
+        case .plugin:
+            return "puzzlepiece"
+        }
+    }
+}
+
+struct SettingsDetailView: View {
+    let section: SettingsSection
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            SettingsHeaderView(
+                title: section.title,
+                subtitle: section.subtitle,
+                icon: section.icon
+            )
+
+            switch section {
+            case .general:
+                GeneralSettings()
+            case .playback:
+                PlaybackSettings()
+            case .plugin:
+                PluginSettings()
+            }
+
+            Spacer()
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+}
+
+struct SettingsHeaderView: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.15))
+                Image(systemName: icon)
+                    .foregroundColor(.accentColor)
+            }
+            .frame(width: 36, height: 36)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.title2.weight(.semibold))
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+}
+
+struct SettingsCard<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            content
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+        )
     }
 }
 
@@ -976,20 +1103,45 @@ struct GeneralSettings: View {
     @AppStorage("databaseLocation") var databaseLocation = ""
 
     var body: some View {
-        Form {
-            Section("Database") {
-                LabeledContent("Location:") {
-                    Text(databaseLocation.isEmpty ? "Default (Application Support)" : databaseLocation)
+        let defaultPath = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first!.appendingPathComponent("MIDIXplorer")
+
+        let resolvedPath = databaseLocation.isEmpty ? defaultPath.path : databaseLocation
+
+        return VStack(alignment: .leading, spacing: 16) {
+            SettingsCard {
+                Text("Database")
+                    .font(.headline)
+
+                Text("MIDI analysis and metadata are stored locally on this Mac.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Location")
+                        .font(.caption)
                         .foregroundColor(.secondary)
+                    Text(resolvedPath)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-                Button("Open Database Location") {
-                    let path = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-                        .appendingPathComponent("MIDIXplorer")
-                    NSWorkspace.shared.open(path)
+
+                HStack {
+                    Button("Reveal in Finder") {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: resolvedPath))
+                    }
+                    Button("Copy Path") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(resolvedPath, forType: .string)
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
         }
-        .padding()
     }
 }
 
@@ -997,56 +1149,66 @@ struct PlaybackSettings: View {
     @EnvironmentObject var appState: AppState
     
     var body: some View {
-        Form {
-            Toggle("Auto-preview on selection", isOn: $appState.previewOnSelect)
-            Toggle("Sync preview tempo with project", isOn: $appState.syncWithDAW)
-            
-            Section("MIDI Output") {
-                Text("MIDI is sent via virtual port: 'MIDI Xplorer'")
+        VStack(alignment: .leading, spacing: 16) {
+            SettingsCard {
+                Text("Preview")
+                    .font(.headline)
+
+                Toggle("Auto-preview on selection", isOn: $appState.previewOnSelect)
+                Toggle("Sync preview tempo with project", isOn: $appState.syncWithDAW)
+            }
+
+            SettingsCard {
+                Text("MIDI Output")
+                    .font(.headline)
+
+                Text("MIDI is sent via virtual port: \"MIDI Xplorer\".")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Text("Route this to your DAW's MIDI input to preview with your instruments")
+                Text("Route this to your DAW's MIDI input to preview with your instruments.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
         }
-        .padding()
     }
 }
 
 struct PluginSettings: View {
     var body: some View {
-        Form {
-            Section("VST3/AU Plugin") {
-                Text("Plugin installation location:")
+        VStack(alignment: .leading, spacing: 16) {
+            SettingsCard {
+                Text("Installation Paths")
                     .font(.headline)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("VST3:")
+
+                VStack(alignment: .leading, spacing: 6) {
+                    LabeledContent("VST3") {
                         Text("~/Library/Audio/Plug-Ins/VST3/")
-                            .font(.caption)
+                            .font(.system(.caption, design: .monospaced))
                             .foregroundColor(.secondary)
                     }
-                    HStack {
-                        Text("AU:")
+                    LabeledContent("AU") {
                         Text("~/Library/Audio/Plug-Ins/Components/")
-                            .font(.caption)
+                            .font(.system(.caption, design: .monospaced))
                             .foregroundColor(.secondary)
                     }
                 }
 
                 HStack {
                     Button("Reveal VST3") {
-                        NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Audio/Plug-Ins/VST3"))
+                        NSWorkspace.shared.open(
+                            FileManager.default.homeDirectoryForCurrentUser
+                                .appendingPathComponent("Library/Audio/Plug-Ins/VST3")
+                        )
                     }
                     Button("Reveal AU") {
-                        NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Audio/Plug-Ins/Components"))
+                        NSWorkspace.shared.open(
+                            FileManager.default.homeDirectoryForCurrentUser
+                                .appendingPathComponent("Library/Audio/Plug-Ins/Components")
+                        )
                     }
                 }
             }
         }
-        .padding()
     }
 }
 
