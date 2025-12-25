@@ -355,6 +355,72 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SettingsDialogComponent)
 };
 
+//==============================================================================
+// Drag to DAW Button - allows dragging MIDI files to external applications
+//==============================================================================
+class DragToDAWButton : public juce::Component, public juce::SettableTooltipClient {
+public:
+    DragToDAWButton() {
+        setMouseCursor(juce::MouseCursor::DraggingHandCursor);
+    }
+
+    void paint(juce::Graphics& g) override {
+        auto bounds = getLocalBounds().toFloat();
+
+        // Background
+        g.setColour(isHovering ? juce::Colour(0xff4a6a4a) : juce::Colour(0xff3a5a3a));
+        g.fillRoundedRectangle(bounds, 4.0f);
+
+        // Border
+        g.setColour(juce::Colour(0xff5a8a5a));
+        g.drawRoundedRectangle(bounds.reduced(0.5f), 4.0f, 1.0f);
+
+        // Text
+        g.setColour(juce::Colours::lightgreen);
+        g.setFont(12.0f);
+        g.drawText("Drag to DAW", bounds, juce::Justification::centred);
+    }
+
+    void mouseEnter(const juce::MouseEvent&) override {
+        isHovering = true;
+        repaint();
+    }
+
+    void mouseExit(const juce::MouseEvent&) override {
+        isHovering = false;
+        repaint();
+    }
+
+    void mouseDrag(const juce::MouseEvent& e) override {
+        if (!isDragging && e.getDistanceFromDragStart() > 4 && currentFilePath.isNotEmpty()) {
+            isDragging = true;
+            juce::File midiFile(currentFilePath);
+            if (midiFile.existsAsFile()) {
+                // Perform external drag to OS/DAW
+                juce::DragAndDropContainer* container = juce::DragAndDropContainer::findParentDragContainerFor(this);
+                if (container != nullptr) {
+                    juce::StringArray files;
+                    files.add(currentFilePath);
+                    container->performExternalDragDropOfFiles(files, false);
+                }
+            }
+        }
+    }
+
+    void mouseUp(const juce::MouseEvent&) override {
+        isDragging = false;
+    }
+
+    void setCurrentFile(const juce::String& filePath) {
+        currentFilePath = filePath;
+    }
+
+private:
+    bool isHovering = false;
+    bool isDragging = false;
+    juce::String currentFilePath;
+};
+
 class MIDIXplorerEditor : public juce::AudioProcessorEditor,
                           private juce::Timer,
                           public juce::DragAndDropContainer,
@@ -533,6 +599,7 @@ private:
         bool isFullscreen() const { return fullscreenMode; }
         void setFullscreen(bool fs) { fullscreenMode = fs; }
         std::function<void()> onFullscreenToggle;  // Callback when fullscreen button clicked
+        std::function<void(double)> onPlayheadJump;  // Callback when user clicks to jump playhead (position 0-1)
 
     public:
         MIDINoteViewer() { setMouseCursor(juce::MouseCursor::CrosshairCursor); }
@@ -584,6 +651,7 @@ private:
 
     juce::TextButton playPauseButton;
     juce::TextButton addToDAWButton;  // Add to DAW at playhead
+    DragToDAWButton dragToDAWButton;  // Drag to external DAW/Finder
     juce::TextButton zoomInButton;
     juce::TextButton zoomOutButton;
     juce::TextButton settingsButton;  // Gear icon for settings menu

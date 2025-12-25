@@ -311,6 +311,41 @@ void MIDIScalePlugin::resetPlayback() {
     playbackState.playbackStartBeat.store(transportState.ppqPosition.load());
 }
 
+void MIDIScalePlugin::seekToPosition(double position) {
+    // Send note-offs for any currently playing notes
+    sendActiveNoteOffs();
+    
+    // Calculate the new time position
+    double duration = playbackState.fileDuration.load();
+    double newTime = position * duration;
+    double bpm = playbackState.fileBpm.load();
+    if (bpm <= 0) bpm = 120.0;
+    
+    // Reset the note index to find notes from the new position
+    playbackState.playbackNoteIndex.store(0);
+    
+    // Adjust start time/beat so that currentTime calculation lands at newTime
+    playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 - newTime);
+    double beatsOffset = (newTime * bpm) / 60.0;
+    playbackState.playbackStartBeat.store(transportState.ppqPosition.load() - beatsOffset);
+    
+    // Update position for UI
+    playbackState.playbackPosition.store(position);
+    
+    // Skip notes before the new position
+    std::lock_guard<std::mutex> lock(sequenceMutex);
+    int noteIndex = 0;
+    while (noteIndex < playbackSequence.getNumEvents()) {
+        auto* event = playbackSequence.getEventPointer(noteIndex);
+        if (event->message.getTimeStamp() < newTime) {
+            noteIndex++;
+        } else {
+            break;
+        }
+    }
+    playbackState.playbackNoteIndex.store(noteIndex);
+}
+
 void MIDIScalePlugin::updatePlayback() {
     if (!playbackState.isPlaying.load() || !playbackState.fileLoaded.load()) {
         return;
@@ -351,9 +386,15 @@ void MIDIScalePlugin::updatePlayback() {
 
     // Check if we've reached the end - do a clean reset
     if (currentTime >= totalDuration) {
-        // DON'T send note-offs here - the MIDI file already has natural note-offs at its end
-        // Calling sendActiveNoteOffs() here causes pendingNoteOffs to be processed AFTER
-        // the new notes start playing, cutting them off and causing sound interruption
+        // Send note-offs for any still-active notes BEFORE resetting
+        // This prevents notes that span the loop point from getting stuck
+        {
+            std::lock_guard<std::mutex> noteLock(activeNotesMutex);
+            for (const auto& an : activeNotes) {
+                addMidiMessage(juce::MidiMessage::noteOff(an.channel, an.noteNumber));
+            }
+            activeNotes.clear();
+        }
 
         // Reset note index to start from scratch
         playbackState.playbackNoteIndex.store(0);

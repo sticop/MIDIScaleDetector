@@ -127,6 +127,7 @@ public:
     double getPlaybackPosition() const { return playbackState.playbackPosition; }
     void loadPlaybackSequence(const juce::MidiMessageSequence& seq, double duration, double bpm, const juce::String& path);
     void resetPlayback();
+    void seekToPosition(double position);  // Seek playback to a position (0-1)
     void updatePlayback();  // Called from processBlock
     double getFileDuration() const { return playbackState.fileDuration; }
     double getFileBpm() const { return playbackState.fileBpm; }
@@ -137,6 +138,7 @@ public:
     void setTransposeAmount(int amount) { playbackState.transposeAmount = juce::jlimit(-24, 24, amount); }
     int getTransposeAmount() const { return playbackState.transposeAmount; }
     juce::String getCurrentFilePath() const { return playbackState.currentFilePath; }
+    const juce::MidiMessageSequence& getPlaybackSequence() const { return playbackSequence; }
 
     // Queue MIDI for insertion at DAW playhead
     void queueMidiForInsertion(const juce::MidiFile& midiFile);

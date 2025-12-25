@@ -15,9 +15,9 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 // Project Settings Bar
                 ProjectSettingsBar()
-                
+
                 Divider()
-                
+
                 // Toolbar
                 ToolbarView()
 
@@ -32,7 +32,7 @@ struct ContentView: View {
                     FileListView(isFileListFocused: $isFileListFocused)
                         .focused($isFileListFocused)
                 }
-                
+
                 // Transport Controls
                 TransportBar()
             }
@@ -72,7 +72,7 @@ struct ContentView: View {
             return .handled
         }
     }
-    
+
     func handleSidebarSelection(_ item: SidebarItem) {
         switch item {
         case .library:
@@ -94,7 +94,7 @@ struct ContentView: View {
 struct SidebarView: View {
     @EnvironmentObject var appState: AppState
     @Binding var selectedSidebar: SidebarItem
-    
+
     var body: some View {
         List(selection: $selectedSidebar) {
             Section("Library") {
@@ -103,7 +103,7 @@ struct SidebarView: View {
                 Label("Favorites", systemImage: "star.fill")
                     .tag(SidebarItem.favorites)
             }
-            
+
             Section("Watched Folders") {
                 ForEach(appState.savedFolders, id: \.self) { folder in
                     let folderExists = FileManager.default.fileExists(atPath: folder)
@@ -183,28 +183,28 @@ enum SidebarItem: Hashable {
 // MARK: - Project Settings Bar
 struct ProjectSettingsBar: View {
     @EnvironmentObject var appState: AppState
-    
+
     var body: some View {
         HStack(spacing: 16) {
             // Project Key/Scale
             HStack(spacing: 8) {
                 Text("Project:")
                     .foregroundColor(.secondary)
-                
+
                 Picker("Key", selection: $appState.projectKey) {
                     ForEach(["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"], id: \.self) { key in
                         Text(key).tag(key)
                     }
                 }
                 .frame(width: 70)
-                
+
                 Picker("Scale", selection: $appState.projectScale) {
                     ForEach(["Major", "Minor"], id: \.self) { scale in
                         Text(scale).tag(scale)
                     }
                 }
                 .frame(width: 80)
-                
+
                 Button("Match Filter") {
                     appState.filterKey = appState.projectKey
                     appState.filterScale = appState.projectScale
@@ -212,31 +212,31 @@ struct ProjectSettingsBar: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             }
-            
+
             Divider().frame(height: 20)
-            
+
             // Project Tempo
             HStack(spacing: 8) {
                 Text("Tempo:")
                     .foregroundColor(.secondary)
-                
+
                 TextField("BPM", value: $appState.projectTempo, format: .number)
                     .frame(width: 60)
                     .textFieldStyle(.roundedBorder)
-                
+
                 Text("BPM")
                     .foregroundColor(.secondary)
             }
-            
+
             Divider().frame(height: 20)
-            
+
             // Sync Options
             Toggle("Sync Preview Tempo", isOn: $appState.syncWithDAW)
                 .toggleStyle(.checkbox)
-            
+
             Toggle("Auto-Preview", isOn: $appState.previewOnSelect)
                 .toggleStyle(.checkbox)
-            
+
             Spacer()
         }
         .padding(.horizontal)
@@ -267,32 +267,32 @@ struct PlaceholderDetailView: View {
 struct EmptyLibraryView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingScanDialog = false
-    
+
     var body: some View {
         VStack(spacing: 24) {
             Image(systemName: "folder.badge.plus")
                 .font(.system(size: 64))
                 .foregroundColor(.accentColor)
-            
+
             Text("No MIDI Files Found")
                 .font(.title)
                 .fontWeight(.semibold)
-            
+
             Text("Scan a folder to discover and analyze your MIDI files")
                 .foregroundColor(.secondary)
-            
+
             Button(action: { showingScanDialog = true }) {
                 Label("Add Folder to Scan", systemImage: "plus.circle.fill")
                     .font(.headline)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("Common locations:")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 HStack {
                     QuickFolderButton(name: "Music", path: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Music"))
                     QuickFolderButton(name: "Downloads", path: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads"))
@@ -311,7 +311,7 @@ struct QuickFolderButton: View {
     @EnvironmentObject var appState: AppState
     let name: String
     let path: URL
-    
+
     var body: some View {
         Button(action: {
             appState.startScan(paths: [path])
@@ -335,7 +335,7 @@ struct ToolbarView: View {
                     .foregroundColor(.secondary)
                 TextField("Search MIDI files...", text: $appState.searchText)
                     .textFieldStyle(PlainTextFieldStyle())
-                
+
                 if !appState.searchText.isEmpty {
                     Button(action: { appState.searchText = "" }) {
                         Image(systemName: "xmark.circle.fill")
@@ -350,12 +350,12 @@ struct ToolbarView: View {
             .frame(width: 300)
 
             Spacer()
-            
+
             // File count
             Text("\(appState.filteredFiles().count) files")
                 .font(.caption)
                 .foregroundColor(.secondary)
-            
+
             Spacer()
 
             // Filter buttons
@@ -384,7 +384,7 @@ struct ToolbarView: View {
                     }
                 }
             }
-            
+
             // Rescan button
             if !appState.savedFolders.isEmpty {
                 Button(action: { appState.rescanAllFolders() }) {
@@ -408,7 +408,7 @@ struct ToolbarView: View {
 // MARK: - Transport Bar
 struct TransportBar: View {
     @EnvironmentObject var appState: AppState
-    
+
     var body: some View {
         HStack(spacing: 16) {
             // Play/Stop
@@ -424,7 +424,7 @@ struct TransportBar: View {
             }
             .buttonStyle(.plain)
             .disabled(appState.selectedFile == nil)
-            
+
             // Now playing info
             if let file = appState.selectedFile {
                 VStack(alignment: .leading, spacing: 2) {
@@ -447,9 +447,9 @@ struct TransportBar: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
+
             Spacer()
-            
+
             // Navigation hint
             HStack(spacing: 4) {
                 Image(systemName: "arrow.up")
@@ -496,7 +496,7 @@ struct FileListView: View {
                 .buttonStyle(.plain)
             }
             .width(30)
-            
+
             TableColumn("File Name") { file in
                 // Draggable file name
                 Text(file.fileName)
@@ -540,7 +540,7 @@ struct FileListView: View {
                 Text(String(format: "%.0f", file.tempo))
             }
             .width(50)
-            
+
             TableColumn("Time") { file in
                 Text(file.timeSignature)
             }
@@ -586,7 +586,7 @@ struct FileListView: View {
         let secs = Int(seconds) % 60
         return String(format: "%d:%02d", mins, secs)
     }
-    
+
     func keyColor(_ key: String) -> Color {
         let keyColors: [String: Color] = [
             "C": .blue, "C#": .purple, "D": .green, "D#": .teal,
@@ -600,14 +600,14 @@ struct FileListView: View {
 // MARK: - Confidence Bar
 struct ConfidenceBar: View {
     let value: Double
-    
+
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Rectangle()
                     .fill(Color.gray.opacity(0.2))
                     .cornerRadius(2)
-                
+
                 Rectangle()
                     .fill(confidenceColor)
                     .frame(width: geo.size.width * value)
@@ -616,7 +616,7 @@ struct ConfidenceBar: View {
         }
         .frame(height: 6)
     }
-    
+
     var confidenceColor: Color {
         if value >= 0.8 { return .green }
         if value >= 0.6 { return .yellow }
@@ -639,14 +639,14 @@ struct DetailView: View {
                             Text(file.fileName)
                                 .font(.title)
                                 .fontWeight(.bold)
-                            
+
                             Text("Drag to DAW to import")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
-                        
+
                         Spacer()
-                        
+
                         // Draggable icon
                         Image(systemName: "arrow.up.forward.app")
                             .font(.title)
@@ -684,7 +684,7 @@ struct DetailView: View {
                     .padding()
                     .background(Color.accentColor.opacity(0.1))
                     .cornerRadius(12)
-                    
+
                     VStack(spacing: 8) {
                         CircularProgressView(value: file.confidence)
                             .frame(width: 80, height: 80)
@@ -731,16 +731,16 @@ struct DetailView: View {
                         Label("Preview", systemImage: "play.fill")
                     }
                     .buttonStyle(.borderedProminent)
-                    
+
                     Button("Show in Finder") {
                         NSWorkspace.shared.selectFile(file.filePath, inFileViewerRootedAtPath: "")
                     }
-                    
+
                     Button("Copy Path") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(file.filePath, forType: .string)
                     }
-                    
+
                     Spacer()
                 }
 
@@ -750,24 +750,24 @@ struct DetailView: View {
         }
         .frame(minWidth: 300)
     }
-    
+
     func formatDuration(_ seconds: Double) -> String {
         let mins = Int(seconds) / 60
         let secs = Int(seconds) % 60
         return String(format: "%d:%02d", mins, secs)
     }
-    
+
     func getScaleNotes(root: String, scale: String) -> [String] {
         let notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
         guard let rootIndex = notes.firstIndex(of: root) else { return [] }
-        
+
         let intervals: [Int]
         switch scale {
         case "Major": intervals = [0, 2, 4, 5, 7, 9, 11]
         case "Minor": intervals = [0, 2, 3, 5, 7, 8, 10]
         default: intervals = [0, 2, 4, 5, 7, 9, 11]
         }
-        
+
         return intervals.map { notes[(rootIndex + $0) % 12] }
     }
 }
@@ -775,22 +775,22 @@ struct DetailView: View {
 // MARK: - Circular Progress View
 struct CircularProgressView: View {
     let value: Double
-    
+
     var body: some View {
         ZStack {
             Circle()
                 .stroke(Color.gray.opacity(0.2), lineWidth: 8)
-            
+
             Circle()
                 .trim(from: 0, to: value)
                 .stroke(progressColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-            
+
             Text("\(Int(value * 100))%")
                 .font(.headline)
         }
     }
-    
+
     var progressColor: Color {
         if value >= 0.8 { return .green }
         if value >= 0.6 { return .yellow }
@@ -825,7 +825,7 @@ struct ScanningView: View {
                     .font(.headline)
             }
             .frame(width: 400)
-            
+
             Text(appState.scanStatus)
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -920,21 +920,21 @@ struct ScanDialog: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    
+
                     Spacer()
-                    
+
                     Toggle("Scan subfolders", isOn: $scanRecursively)
                 }
             }
 
             Divider()
-            
+
             if !appState.savedFolders.isEmpty {
                 VStack(alignment: .leading) {
                     Text("Previously scanned folders:")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    
+
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack {
                             ForEach(appState.savedFolders, id: \.self) { folder in
@@ -1165,7 +1165,7 @@ struct GeneralSettings: View {
 
 struct PlaybackSettings: View {
     @EnvironmentObject var appState: AppState
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             SettingsCard {
@@ -1240,28 +1240,28 @@ struct MenuCommands: Commands {
                 NotificationCenter.default.post(name: .showScanDialog, object: nil)
             }
             .keyboardShortcut("n", modifiers: .command)
-            
+
             Button("Rescan All Folders") {
                 appState.rescanAllFolders()
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
             .disabled(appState.savedFolders.isEmpty)
         }
-        
+
         CommandGroup(after: .pasteboard) {
             Divider()
             Button("Previous File") {
                 appState.selectPrevious()
             }
             .keyboardShortcut(.upArrow, modifiers: [])
-            
+
             Button("Next File") {
                 appState.selectNext()
             }
             .keyboardShortcut(.downArrow, modifiers: [])
-            
+
             Divider()
-            
+
             Button("Play/Stop Preview") {
                 if appState.midiPlayer.isPlaying {
                     appState.stopPreview()

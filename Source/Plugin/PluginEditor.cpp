@@ -220,6 +220,10 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     // addToDAWButton hidden - drag button is preferred
     addChildComponent(addToDAWButton);
 
+    // Drag to DAW button - visible beside play button
+    dragToDAWButton.setTooltip("Drag this to your DAW or Finder to export the MIDI file");
+    addAndMakeVisible(dragToDAWButton);
+
     // Zoom is now handled by mouse wheel in the MIDI viewer
 
     // Transpose dropdown with more granular values
@@ -325,6 +329,32 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
         midiNoteViewer.setFullscreen(midiViewerFullscreen);
         resized();
         repaint();
+    };
+
+    // Setup playhead jump callback for MIDI viewer
+    midiNoteViewer.onPlayheadJump = [this](double position) {
+        if (!fileLoaded || !pluginProcessor) return;
+        
+        // Stop any currently playing notes
+        pluginProcessor->sendActiveNoteOffs();
+        
+        // Calculate the new playback time
+        double newTime = position * midiFileDuration;
+        
+        // Reset playback to the new position
+        playbackNoteIndex = 0;
+        playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - newTime;
+        playbackStartBeat = getHostBeatPosition() - (newTime * midiFileBpm / 60.0);
+        
+        // Update processor playback position
+        pluginProcessor->seekToPosition(position);
+        
+        // Make sure we're playing
+        if (!isPlaying) {
+            isPlaying = true;
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
+            pluginProcessor->setPlaybackPlaying(true);
+        }
     };
 
     // License management UI
@@ -686,14 +716,13 @@ void MIDIXplorerEditor::resized() {
     keyFilterCombo.setBounds(topBar.removeFromLeft(105).reduced(2));
     contentTypeFilterCombo.setBounds(topBar.removeFromLeft(100).reduced(2));
     sortCombo.setBounds(topBar.removeFromLeft(110).reduced(2));
-    // Volume slider on the right
-    velocitySlider.setBounds(topBar.removeFromRight(80).reduced(2));
-    velocityLabel.setBounds(topBar.removeFromRight(55));
     // syncToHostToggle hidden
 
     // Bottom transport bar
     auto transport = area.removeFromBottom(40).reduced(8, 4);
     playPauseButton.setBounds(transport.removeFromLeft(40));
+    transport.removeFromLeft(4);  // Small gap
+    dragToDAWButton.setBounds(transport.removeFromLeft(85));  // Drag to DAW button
     // addToDAWButton hidden
 
     // Transpose controls on the right: [-] [dropdown] [+]
@@ -702,6 +731,10 @@ void MIDIXplorerEditor::resized() {
     transposeDownButton.setBounds(transport.removeFromRight(28).reduced(0, 2));
     transport.removeFromRight(8);
     quantizeCombo.setBounds(transport.removeFromRight(145));
+    transport.removeFromRight(4);
+    // Velocity slider beside quantize
+    velocitySlider.setBounds(transport.removeFromRight(80).reduced(0, 2));
+    velocityLabel.setBounds(transport.removeFromRight(50));
     transport.removeFromRight(8);
 
     // MIDI Note Viewer - full width
@@ -1030,6 +1063,9 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
     fileListBox->scrollToEnsureRowIsOnscreen(row);
     selectedFileIndex = row;
 
+    // Update drag button with current file
+    dragToDAWButton.setCurrentFile(filteredFiles[(size_t)row].fullPath);
+
     // Add to recently played
     addToRecentlyPlayed(filteredFiles[(size_t)row].fullPath);
 
@@ -1163,7 +1199,7 @@ void MIDIXplorerEditor::loadSelectedFile() {
         // Load sequence into processor so playback continues when editor is closed
         pluginProcessor->loadPlaybackSequence(playbackSequence, midiFileDuration, midiFileBpm, info.fullPath);
         pluginProcessor->resetPlayback();
-        
+
         // Only auto-start playback if host is playing and sync is enabled
         // Otherwise, file loads paused and user must explicitly press play
         bool shouldAutoPlay = syncToHostToggle.getToggleState() && isHostPlaying();
@@ -1440,6 +1476,9 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
             if (pluginProcessor) {
                 midiFileDuration = pluginProcessor->getFileDuration();
                 midiFileBpm = pluginProcessor->getFileBpm();
+                // Also update the MIDI viewer with the current sequence
+                auto& seq = pluginProcessor->getPlaybackSequence();
+                midiNoteViewer.setSequence(&seq, midiFileDuration);
             }
         }
     }
@@ -2198,12 +2237,12 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
         g.setColour(juce::Colours::grey);
         g.setFont(juce::Font(juce::FontOptions(14.0f)));
         g.drawText("Select a MIDI file to view notes", bounds, juce::Justification::centred);
-        
+
         // Still draw a minimal piano keyboard on the left for visual consistency
         auto pianoArea = bounds.withWidth(PIANO_WIDTH);
         g.setColour(juce::Colour(0xff2a2a2a));
         g.fillRect(pianoArea);
-        
+
         // Draw octave lines
         for (int octave = 0; octave < 10; octave++) {
             float y = bounds.getHeight() - (octave * 12 * (bounds.getHeight() / 128.0f));
@@ -2571,6 +2610,13 @@ juce::String MIDIXplorerEditor::MIDINoteViewer::detectChordName(const std::vecto
 }
 
 void MIDIXplorerEditor::MIDINoteViewer::mouseMove(const juce::MouseEvent& e) {
+    // Check if hovering over fullscreen button - use hand cursor
+    if (fullscreenBtnBounds.contains(e.getPosition())) {
+        setMouseCursor(juce::MouseCursor::PointingHandCursor);
+    } else {
+        setMouseCursor(juce::MouseCursor::CrosshairCursor);
+    }
+
     if (sequence == nullptr || sequence->getNumEvents() == 0) {
         hoveredNote = -1;
         return;
@@ -2697,11 +2743,25 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseDown(const juce::MouseEvent& e) {
         // Right-click: reset zoom completely
         resetZoom();
     } else if (e.mods.isLeftButtonDown()) {
-        // Left-click: start selection for zoom
-        isDraggingSelection = true;
-        selectionStart = e.getPosition();
-        selectionEnd = e.getPosition();
-        repaint();
+        // Left-click: jump playhead to clicked position
+        int clickX = e.getPosition().x;
+        
+        // Account for piano keyboard area on the left
+        if (clickX > PIANO_WIDTH && totalDuration > 0) {
+            float noteAreaWidth = (float)(getWidth() - PIANO_WIDTH);
+            float pixelsPerSecond = noteAreaWidth * zoomLevel / (float)totalDuration;
+            float scrollPixels = scrollOffset * pixelsPerSecond;
+            
+            // Calculate time position from click
+            float clickedTime = (clickX - PIANO_WIDTH + scrollPixels) / pixelsPerSecond;
+            double position = clickedTime / totalDuration;
+            position = juce::jlimit(0.0, 1.0, position);
+            
+            // Call the callback to jump playhead
+            if (onPlayheadJump) {
+                onPlayheadJump(position);
+            }
+        }
     }
 }
 
@@ -2788,7 +2848,16 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
         icon = juce::String::fromUTF8("\u2605");  // Star icon
     } else if (row == 2) {
         name = "Recently Played";
-        fileCount = (int)owner.recentlyPlayed.size();
+        // Count only recently played files that actually exist in allFiles
+        fileCount = 0;
+        for (const auto& recentPath : owner.recentlyPlayed) {
+            for (const auto& f : owner.allFiles) {
+                if (f.fullPath == recentPath) {
+                    fileCount++;
+                    break;
+                }
+            }
+        }
         icon = juce::String::fromUTF8("\u23F1");  // Stopwatch icon
     } else {
         int libIndex = row - 3;
@@ -2994,31 +3063,6 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     g.setColour(juce::Colours::white);
     g.setFont(13.0f);
     g.drawText(file.fileName, 175, 0, w - 530, h, juce::Justification::centredLeft);
-
-    // Mood badge
-    if (file.mood != "---") {
-        // Color code moods
-        juce::Colour moodColour = juce::Colour(0xff888888);  // Default grey
-        if (file.mood == "Happy") {
-            moodColour = juce::Colour(0xffffcc00);  // Bright yellow for happy
-        } else if (file.mood == "Melancholic") {
-            moodColour = juce::Colour(0xff6699ff);  // Blue for melancholic
-        } else if (file.mood == "Soulful") {
-            moodColour = juce::Colour(0xffcc88ff);  // Purple for soulful
-        } else if (file.mood == "Bluesy") {
-            moodColour = juce::Colour(0xff44aacc);  // Teal/blue for bluesy
-        } else if (file.mood == "Mysterious") {
-            moodColour = juce::Colour(0xff88ccff);  // Light blue for mysterious
-        }
-
-        g.setColour(moodColour);
-        g.setFont(11.0f);
-        g.drawText(file.mood, w - 440, 0, 80, h, juce::Justification::centredLeft);
-    }
-
-    // Instrument name
-    g.setColour(juce::Colour(0xffaaaaff));
-    g.drawText(file.instrument, w - 350, 0, 100, h, juce::Justification::centredLeft);
 
     // File size
     g.setColour(juce::Colour(0xff888888));
