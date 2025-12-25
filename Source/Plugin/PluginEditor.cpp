@@ -222,34 +222,50 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
 
     // Zoom is now handled by mouse wheel in the MIDI viewer
 
-    // Transpose dropdown
-    transposeComboBox.addItem("+36", 1);
-    transposeComboBox.addItem("+24", 2);
-    transposeComboBox.addItem("+12", 3);
-    transposeComboBox.addItem(juce::CharPointer_UTF8("\xc2\xb1 0"), 4);  // ± 0
-    transposeComboBox.addItem("-12", 5);
-    transposeComboBox.addItem("-24", 6);
-    transposeComboBox.addItem("-36", 7);
-    transposeComboBox.setSelectedId(4);  // Default to ± 0
+    // Transpose dropdown with more granular values
+    for (int i = 36; i >= -36; --i) {
+        juce::String label = (i > 0) ? ("+" + juce::String(i)) : (i == 0 ? juce::CharPointer_UTF8("\xc2\xb1 0") : juce::String(i));
+        transposeComboBox.addItem(label, i + 37);  // IDs from 1 to 73
+    }
+    transposeComboBox.setSelectedId(37);  // Default to ± 0 (id = 0 + 37)
     transposeComboBox.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff3a3a3a));
     transposeComboBox.setColour(juce::ComboBox::textColourId, juce::Colours::white);
     transposeComboBox.setColour(juce::ComboBox::arrowColourId, juce::Colours::white);
-    transposeComboBox.setTooltip("Transpose");
+    transposeComboBox.setTooltip("Transpose in semitones");
     transposeComboBox.onChange = [this]() {
         int selectedId = transposeComboBox.getSelectedId();
-        switch (selectedId) {
-            case 1: transposeAmount = 36; break;
-            case 2: transposeAmount = 24; break;
-            case 3: transposeAmount = 12; break;
-            case 4: transposeAmount = 0; break;
-            case 5: transposeAmount = -12; break;
-            case 6: transposeAmount = -24; break;
-            case 7: transposeAmount = -36; break;
-            default: transposeAmount = 0; break;
-        }
+        transposeAmount = selectedId - 37;  // Convert back: id 1 = +36, id 37 = 0, id 73 = -36
         applyTransposeToPlayback();
     };
     addAndMakeVisible(transposeComboBox);
+
+    // Transpose up button (+1 semitone)
+    transposeUpButton.setButtonText("+");
+    transposeUpButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
+    transposeUpButton.setColour(juce::TextButton::textColourOffId, juce::Colours::lightgreen);
+    transposeUpButton.setTooltip("+1 semitone");
+    transposeUpButton.onClick = [this]() {
+        if (transposeAmount < 36) {
+            transposeAmount++;
+            transposeComboBox.setSelectedId(transposeAmount + 37, juce::dontSendNotification);
+            applyTransposeToPlayback();
+        }
+    };
+    addAndMakeVisible(transposeUpButton);
+
+    // Transpose down button (-1 semitone)
+    transposeDownButton.setButtonText("-");
+    transposeDownButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
+    transposeDownButton.setColour(juce::TextButton::textColourOffId, juce::Colours::orange);
+    transposeDownButton.setTooltip("-1 semitone");
+    transposeDownButton.onClick = [this]() {
+        if (transposeAmount > -36) {
+            transposeAmount--;
+            transposeComboBox.setSelectedId(transposeAmount + 37, juce::dontSendNotification);
+            applyTransposeToPlayback();
+        }
+    };
+    addAndMakeVisible(transposeDownButton);
 
     syncToHostToggle.setToggleState(true, juce::dontSendNotification);
     syncToHostToggle.setColour(juce::ToggleButton::textColourId, juce::Colours::white);
@@ -680,9 +696,11 @@ void MIDIXplorerEditor::resized() {
     playPauseButton.setBounds(transport.removeFromLeft(40));
     // addToDAWButton hidden
 
-    // Quantize and Transpose dropdowns on the right
-    transposeComboBox.setBounds(transport.removeFromRight(100));
-    transport.removeFromRight(4);
+    // Transpose controls on the right: [-] [dropdown] [+]
+    transposeUpButton.setBounds(transport.removeFromRight(28).reduced(0, 2));
+    transposeComboBox.setBounds(transport.removeFromRight(65));
+    transposeDownButton.setBounds(transport.removeFromRight(28).reduced(0, 2));
+    transport.removeFromRight(8);
     quantizeCombo.setBounds(transport.removeFromRight(145));
     transport.removeFromRight(8);
 
@@ -987,9 +1005,17 @@ bool MIDIXplorerEditor::keyPressed(const juce::KeyPress& key) {
         return true;
     } else if (key == juce::KeyPress::returnKey) {
         if (currentRow >= 0 && currentRow < (int)filteredFiles.size()) {
-            isPlaying = true;
-            playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
+            // Load the file first
             selectAndPreview(currentRow);
+            // Then start playback if license valid
+            if (!isLicenseExpiredOrTrialExpired()) {
+                isPlaying = true;
+                playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
+                if (pluginProcessor) {
+                    pluginProcessor->setPlaybackPlaying(true);
+                    pluginProcessor->resetPlayback();
+                }
+            }
             return true;
         }
     }
@@ -1007,17 +1033,8 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
     // Add to recently played
     addToRecentlyPlayed(filteredFiles[(size_t)row].fullPath);
 
-    // Don't auto-start playback if license is expired
-    if (!isLicenseExpiredOrTrialExpired()) {
-        // Resume playback when selecting a file
-        isPlaying = true;
-        playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
-
-        // Set processor playback state
-        if (pluginProcessor) {
-            pluginProcessor->setPlaybackPlaying(true);
-        }
-    }
+    // Don't auto-start playback - file should start paused
+    // User must explicitly press play or use Enter key to start playback
 
     // Send note-offs for any currently playing notes before switching files
     if (pluginProcessor) {
@@ -1049,7 +1066,7 @@ void MIDIXplorerEditor::loadSelectedFile() {
 
     // Reset transpose when loading new file
     transposeAmount = 0;
-    transposeComboBox.setSelectedId(4, juce::dontSendNotification);  // Reset to "± 0"
+    transposeComboBox.setSelectedId(37, juce::dontSendNotification);  // Reset to "± 0" (0 + 37)
     if (pluginProcessor) {
         pluginProcessor->setTransposeAmount(0);
     }
@@ -1146,8 +1163,18 @@ void MIDIXplorerEditor::loadSelectedFile() {
         // Load sequence into processor so playback continues when editor is closed
         pluginProcessor->loadPlaybackSequence(playbackSequence, midiFileDuration, midiFileBpm, info.fullPath);
         pluginProcessor->resetPlayback();
-        // Start playback in processor (will use free-run if DAW is stopped)
-        pluginProcessor->setPlaybackPlaying(true);
+        
+        // Only auto-start playback if host is playing and sync is enabled
+        // Otherwise, file loads paused and user must explicitly press play
+        bool shouldAutoPlay = syncToHostToggle.getToggleState() && isHostPlaying();
+        if (shouldAutoPlay) {
+            isPlaying = true;
+            playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
+            pluginProcessor->setPlaybackPlaying(true);
+        } else {
+            // Keep current playing state (don't force start)
+            pluginProcessor->setPlaybackPlaying(isPlaying);
+        }
     }
 
     // If host is already playing, sync our timing to current position
@@ -1792,26 +1819,60 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
         if (info.instrument != "---") break;
     }
 
-    // Detect mood based on key/scale (major = happy, minor = melancholic)
+    // Detect mood based on key/scale, tempo, and velocity
     juce::String detectedMood = "Neutral";
     juce::String keyString = info.key;
 
-    // Extract just the scale type from key string like "C Major (Maj 1st)"
+    // Extract scale characteristics
     bool isMajor = keyString.contains("Major") || keyString.contains("Lydian") || keyString.contains("Mixolydian");
     bool isMinor = keyString.contains("Minor") || keyString.contains("Phrygian") || keyString.contains("Locrian") ||
                    keyString.contains("Harmonic") || keyString.contains("Melodic");
     bool isDorian = keyString.contains("Dorian");
     bool isBlues = keyString.contains("Blues");
+    bool isPentatonic = keyString.contains("Pentatonic");
+    bool isLydian = keyString.contains("Lydian");
+    bool isPhrygian = keyString.contains("Phrygian");
 
-    // Simple mood classification based on scale type only
+    // Enhanced mood classification based on scale, tempo, and other factors
+    double tempo = info.bpm;
+    bool isSlow = tempo < 80;
+    bool isMedium = tempo >= 80 && tempo < 120;
+    bool isFast = tempo >= 120;
+
     if (isMajor) {
-        detectedMood = "Happy";
+        if (isFast) {
+            detectedMood = "Joyful";
+        } else if (isSlow) {
+            detectedMood = "Peaceful";
+        } else {
+            detectedMood = "Happy";
+        }
     } else if (isMinor) {
-        detectedMood = "Melancholic";
+        if (isFast) {
+            detectedMood = "Intense";
+        } else if (isSlow) {
+            detectedMood = "Melancholic";
+        } else {
+            detectedMood = "Emotional";
+        }
     } else if (isDorian) {
-        detectedMood = "Soulful";
+        if (isFast) {
+            detectedMood = "Funky";
+        } else {
+            detectedMood = "Soulful";
+        }
     } else if (isBlues) {
-        detectedMood = "Bluesy";
+        if (isSlow) {
+            detectedMood = "Sorrowful";
+        } else {
+            detectedMood = "Bluesy";
+        }
+    } else if (isLydian) {
+        detectedMood = "Dreamy";
+    } else if (isPhrygian) {
+        detectedMood = "Exotic";
+    } else if (isPentatonic) {
+        detectedMood = "Ethereal";
     } else {
         detectedMood = "Mysterious";
     }
@@ -2133,7 +2194,23 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
     g.drawRect(bounds);
 
     if (sequence == nullptr || sequence->getNumEvents() == 0) {
-        return;  // Just show empty view, no message
+        // Show placeholder message when no file is loaded
+        g.setColour(juce::Colours::grey);
+        g.setFont(juce::Font(juce::FontOptions(14.0f)));
+        g.drawText("Select a MIDI file to view notes", bounds, juce::Justification::centred);
+        
+        // Still draw a minimal piano keyboard on the left for visual consistency
+        auto pianoArea = bounds.withWidth(PIANO_WIDTH);
+        g.setColour(juce::Colour(0xff2a2a2a));
+        g.fillRect(pianoArea);
+        
+        // Draw octave lines
+        for (int octave = 0; octave < 10; octave++) {
+            float y = bounds.getHeight() - (octave * 12 * (bounds.getHeight() / 128.0f));
+            g.setColour(juce::Colour(0xff444444));
+            g.drawHorizontalLine((int)y, 0.0f, (float)PIANO_WIDTH);
+        }
+        return;
     }
 
     int noteRange = highestNote - lowestNote + 1;
@@ -2222,15 +2299,17 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
                 if (w < 2.0f) continue;
             }
 
-            // Note color based on velocity, highlight if hovered
+            // Note color based on velocity: green (low) to red (high)
             int velocity = msg.getVelocity();
-            float brightness = 0.5f + (velocity / 254.0f) * 0.5f;
+            // Map velocity (0-127) to hue: 0.33 (green/120°) to 0.0 (red/0°)
+            float hue = 0.33f * (1.0f - (velocity / 127.0f));
+            float brightness = 0.6f + (velocity / 254.0f) * 0.4f;
 
             if (noteNum == hoveredNote) {
                 // Highlighted note
-                g.setColour(juce::Colours::orange);
+                g.setColour(juce::Colours::white);
             } else {
-                g.setColour(juce::Colour::fromHSV(0.55f, 0.7f, brightness, 1.0f));
+                g.setColour(juce::Colour::fromHSV(hue, 0.85f, brightness, 1.0f));
             }
             g.fillRoundedRectangle(x, y + 1, w, noteHeight - 2, 2.0f);
         }

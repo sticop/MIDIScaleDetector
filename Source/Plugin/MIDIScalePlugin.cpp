@@ -445,8 +445,11 @@ void MIDIScalePlugin::sendActiveNoteOffsImmediate(juce::MidiBuffer& midiMessages
     }
     activeNotes.clear();
 
-    // No need to send allNotesOff - the individual note-offs are sufficient
-    // and won't cause audio interruption
+    // Also send CC#123 (All Notes Off) on all channels as a safety fallback
+    // This matches the standalone app behavior and ensures no stuck notes
+    for (int ch = 1; ch <= 16; ++ch) {
+        midiMessages.addEvent(juce::MidiMessage::controllerEvent(ch, 123, 0), 0);
+    }
 }
 
 

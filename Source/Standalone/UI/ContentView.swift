@@ -106,13 +106,31 @@ struct SidebarView: View {
             
             Section("Watched Folders") {
                 ForEach(appState.savedFolders, id: \.self) { folder in
+                    let folderExists = FileManager.default.fileExists(atPath: folder)
                     HStack {
-                        Image(systemName: "folder")
+                        Image(systemName: folderExists ? "folder" : "folder.badge.questionmark")
+                            .foregroundColor(folderExists ? .primary : .orange)
                         Text(URL(fileURLWithPath: folder).lastPathComponent)
+                            .foregroundColor(folderExists ? .primary : .secondary)
+                        if !folderExists {
+                            Text("Offline")
+                                .font(.caption2)
+                                .foregroundColor(.orange)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.2))
+                                .cornerRadius(4)
+                        }
                     }
                     .contextMenu {
                         Button("Reveal in Finder") {
                             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder)
+                        }
+                        .disabled(!folderExists)
+                        if !folderExists {
+                            Button("Remove from Library", role: .destructive) {
+                                appState.removeSavedFolder(folder)
+                            }
                         }
                     }
                 }

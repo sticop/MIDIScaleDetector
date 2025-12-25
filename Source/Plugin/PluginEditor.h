@@ -193,11 +193,11 @@ public:
         g.setFont(juce::Font(juce::FontOptions(13.0f)));
         g.setColour(juce::Colours::lightgrey);
         g.drawFittedText(
-            "VST\xc2\xae is a trademark of Steinberg Media Technologies GmbH, "
+            juce::CharPointer_UTF8("VST\xc2\xae is a trademark of Steinberg Media Technologies GmbH, "
             "registered in Europe and other countries.\n\n"
             "Audio Units is a trademark of Apple Inc.\n\n"
             "MIDI is a trademark of the MIDI Manufacturers Association.\n\n"
-            "All other trademarks are the property of their respective owners.",
+            "All other trademarks are the property of their respective owners."),
             area, juce::Justification::topLeft, 10);
     }
 
@@ -588,6 +588,8 @@ private:
     juce::TextButton zoomOutButton;
     juce::TextButton settingsButton;  // Gear icon for settings menu
     juce::ComboBox transposeComboBox;    // Transpose dropdown
+    juce::TextButton transposeUpButton;  // +1 semitone
+    juce::TextButton transposeDownButton;  // -1 semitone
     int transposeAmount = 0;              // Current transpose in semitones
     bool isPlaying = true;
     juce::ToggleButton syncToHostToggle{"DAW Sync"};
