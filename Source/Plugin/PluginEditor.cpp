@@ -71,13 +71,6 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     keyFilterCombo.onChange = [this]() { filterFiles(); };
     addAndMakeVisible(keyFilterCombo);
 
-    // Content type filter dropdown (chords vs notes)
-    contentTypeFilterCombo.addItem("Chords Only", 2);
-    contentTypeFilterCombo.addItem("Notes Only", 3);
-    contentTypeFilterCombo.setSelectedId(2);
-    contentTypeFilterCombo.onChange = [this]() { filterFiles(); };
-    addAndMakeVisible(contentTypeFilterCombo);
-
     // Tag filter dropdown (extracted from filenames)
     tagFilterCombo.addItem("All Tags", 1);
     tagFilterCombo.setSelectedId(1);
@@ -739,7 +732,6 @@ void MIDIXplorerEditor::resized() {
         searchBox.setVisible(false);
         fileCountLabel.setVisible(false);
         keyFilterCombo.setVisible(false);
-        contentTypeFilterCombo.setVisible(false);
         tagFilterCombo.setVisible(false);
         sortCombo.setVisible(false);
         velocitySlider.setVisible(false);
@@ -762,7 +754,6 @@ void MIDIXplorerEditor::resized() {
     searchBox.setVisible(true);
     fileCountLabel.setVisible(true);
     keyFilterCombo.setVisible(true);
-    contentTypeFilterCombo.setVisible(true);
     tagFilterCombo.setVisible(true);
     sortCombo.setVisible(true);
     velocitySlider.setVisible(true);
@@ -795,7 +786,6 @@ void MIDIXplorerEditor::resized() {
     topBar = topBar.reduced(8, 2);
     fileCountLabel.setBounds(topBar.removeFromLeft(70));
     keyFilterCombo.setBounds(topBar.removeFromLeft(105).reduced(2));
-    contentTypeFilterCombo.setBounds(topBar.removeFromLeft(100).reduced(2));
     tagFilterCombo.setBounds(topBar.removeFromLeft(100).reduced(2));
     sortCombo.setBounds(topBar.removeFromLeft(110).reduced(2));
     // syncToHostToggle hidden
@@ -1067,26 +1057,17 @@ void MIDIXplorerEditor::timerCallback() {
         return;
     }
 
-    double currentTime;
-    // Only actually sync when host is playing - otherwise use free-run mode
-    bool actuallySync = synced && hostPlaying;
-
-    if (actuallySync) {
-        // Calculate position based on host beat position relative to when we started
-        double beatsElapsed = hostBeat - playbackStartBeat;
-        // Convert beats to MIDI file time (seconds at MIDI file's tempo)
-        currentTime = (beatsElapsed * 60.0) / midiFileBpm;
-    } else {
-        // Freerun mode: use real time directly (MIDI file plays at its original tempo)
-        currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackStartTime;
-    }
-
     // Use pre-calculated file duration
     double totalDuration = midiFileDuration;
     if (totalDuration <= 0) totalDuration = 1.0;
 
-    // Update transport slider
-    double position = std::fmod(currentTime, totalDuration) / totalDuration;
+    // Get playback position from processor for accurate sync with actual MIDI output
+    double position = 0.0;
+    double currentTime = 0.0;
+    if (pluginProcessor) {
+        position = pluginProcessor->getPlaybackPosition();
+        currentTime = position * totalDuration;
+    }
     if (position >= 0 && position <= 1) {
         transportSlider.setValue(position, juce::dontSendNotification);
         midiNoteViewer.setPlaybackPosition(position);
@@ -2134,22 +2115,6 @@ void MIDIXplorerEditor::filterFiles() {
             if (!matches) continue;
         }
 
-        // Check content type filter (chords vs notes)
-        int contentTypeFilter = contentTypeFilterCombo.getSelectedId();
-        if (contentTypeFilter == 2) {
-            // Chords Only - file must contain chords
-            if (!file.containsChords) {
-                std::cerr << "[FILTER DEBUG] Skipping (not chord): " << file.fileName << std::endl;
-                continue;
-            }
-        } else if (contentTypeFilter == 3) {
-            // Notes Only - file must contain single notes (melody) and NOT be primarily chords
-            if (!file.containsSingleNotes || file.containsChords) {
-                std::cerr << "[FILTER DEBUG] Skipping (not note): " << file.fileName << " containsChords=" << file.containsChords << " containsSingleNotes=" << file.containsSingleNotes << std::endl;
-                continue;
-            }
-        }
-
         // Check tag filter
         if (tagFilterCombo.getSelectedId() > 1) {
             juce::String selectedTag = tagFilterCombo.getText();
@@ -2233,11 +2198,21 @@ void MIDIXplorerEditor::restoreSelectionFromCurrentFile() {
     }
 
     if (processorPath.isNotEmpty() && pluginProcessor) {
+        // Sync editor state from processor
         fileLoaded = true;
         midiFileDuration = pluginProcessor->getFileDuration();
         midiFileBpm = pluginProcessor->getFileBpm();
         auto& seq = pluginProcessor->getPlaybackSequence();
         midiNoteViewer.setSequence(&seq, midiFileDuration);
+        
+        // Also load the sequence into the editor's local copy for proper state sync
+        playbackSequence = seq;
+        playbackSequence.sort();
+        playbackSequence.updateMatchedPairs();
+        
+        // Sync playback timing
+        playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
+        playbackStartBeat = getHostBeatPosition();
     }
 }
 
@@ -2309,28 +2284,7 @@ void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
 }
 
 void MIDIXplorerEditor::updateContentTypeFilter() {
-    // Count files with chords and single notes
-    int chordFileCount = 0;
-    int noteFileCount = 0;
-
-    std::cerr << "[FILTER DEBUG] updateContentTypeFilter: allFiles.size()=" << allFiles.size() << std::endl;
-    for (const auto& file : allFiles) {
-        if (file.analyzed) {
-            std::cerr << "  File: " << file.fileName << " analyzed=" << file.analyzed << " containsChords=" << file.containsChords << " containsSingleNotes=" << file.containsSingleNotes << std::endl;
-            if (file.containsChords) chordFileCount++;
-            if (file.containsSingleNotes && !file.containsChords) noteFileCount++;
-        }
-    }
-    std::cerr << "[FILTER DEBUG] Chord files: " << chordFileCount << ", Note files: " << noteFileCount << std::endl;
-
-    // Update combo box items with counts
-    int currentId = contentTypeFilterCombo.getSelectedId();
-    contentTypeFilterCombo.clear();
-    contentTypeFilterCombo.addItem("Chords (" + juce::String(chordFileCount) + ")", 2);
-    contentTypeFilterCombo.addItem("Notes (" + juce::String(noteFileCount) + ")", 3);
-    // Restore selection, default to Chords if previously on All Types
-    if (currentId < 2) currentId = 2;
-    contentTypeFilterCombo.setSelectedId(currentId, juce::dontSendNotification);
+    // Content type filter removed - function kept for compatibility
 }
 
 juce::StringArray MIDIXplorerEditor::extractTagsFromFilename(const juce::String& filename) {

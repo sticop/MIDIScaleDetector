@@ -15,6 +15,7 @@ juce_add_plugin(MIDIXplorerPlugin
     PLUGIN_CODE Msdp
     FORMATS VST3 AU
     PRODUCT_NAME "MIDI Xplorer"
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/../../Resources/logomidi.png"
 
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT TRUE

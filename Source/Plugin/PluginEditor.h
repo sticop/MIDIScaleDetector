@@ -647,7 +647,6 @@ private:
 
     juce::Label fileCountLabel;
     juce::ComboBox keyFilterCombo;
-    juce::ComboBox contentTypeFilterCombo;  // Filter by chords/notes
     juce::ComboBox tagFilterCombo;  // Filter by filename-extracted tags
     juce::ComboBox sortCombo;
     int lastSortOption = 0;  // Track last selected sort to toggle direction
