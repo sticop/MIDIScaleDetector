@@ -2532,8 +2532,11 @@ juce::String MIDIXplorerEditor::extractKeyFromFilename(const juce::String& filen
                             foundScale = next.startsWithIgnoreCase("min") ? "Minor" : "Major";
                         }
                     }
+                    
+                    // ALSO check if this is the LAST token (note at end of filename like "28 Bass G#")
+                    bool isLastToken = (i == tokens.size() - 1);
 
-                    if (hasContext || hasAccidental) {
+                    if (hasContext || hasAccidental || isLastToken) {
                         foundNote = juce::String(token.substring(0, 1)).toUpperCase();
                         if (hasAccidental) {
                             foundNote += token[1];
