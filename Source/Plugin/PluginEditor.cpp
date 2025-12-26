@@ -2080,9 +2080,19 @@ void MIDIXplorerEditor::filterFiles() {
     juce::String searchText = searchBox.getText().toLowerCase();
 
     for (const auto& file : allFiles) {
+        // Check if file's library is enabled (skip disabled libraries)
+        bool libraryEnabled = true;
+        for (const auto& lib : libraries) {
+            if (lib.name == file.libraryName) {
+                libraryEnabled = lib.enabled;
+                break;
+            }
+        }
+        if (!libraryEnabled) continue;
+
         // Filter by selected library
         if (selectedLibraryIndex == 0) {
-            // "All" - show all files (no library filter)
+            // "All" - show all files from enabled libraries (already filtered above)
         } else if (selectedLibraryIndex == 1) {
             // "Favorites" - only show favorites
             if (!file.favorite) continue;
@@ -3582,9 +3592,15 @@ void MIDIXplorerEditor::LibraryListModel::listBoxItemClicked(int row, const juce
             } else if (result == 2) {
                 owner.refreshLibrary((size_t)libIndex);
             } else if (result == 3) {
+                // Toggle enabled state without rescanning
                 owner.libraries[(size_t)libIndex].enabled = !owner.libraries[(size_t)libIndex].enabled;
                 owner.saveLibraries();
-                owner.scanLibraries();
+                // Just update filters and UI - no need to rescan
+                owner.libraryListBox.updateContent();
+                owner.filterFiles();
+                owner.updateKeyFilterFromDetectedScales();
+                owner.updateContentTypeFilter();
+                owner.updateTagFilter();
             } else if (result == 4) {
                 // Remove all cached files from this library
                 juce::String libName = owner.libraries[(size_t)libIndex].name;
