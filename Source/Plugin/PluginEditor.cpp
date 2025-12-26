@@ -2585,10 +2585,10 @@ void MIDIXplorerEditor::updateTagFilter() {
         {"Winds & Vocals", {"Flute", "Brass", "Choir", "Vocal"}},
         {"FX & Risers", {"FX", "Riser"}},
         {"Content Type", {"Melody", "Chords"}},
-        {"Genre", {"Trance", "Psy", "Psytrance", "House", "Deep House", "Techno", "Dubstep", 
-                   "DnB", "EDM", "Electronica", "Ambient", "Chillout", "Lo-Fi", "Trap", 
+        {"Genre", {"Trance", "Psy", "Psytrance", "House", "Deep House", "Techno", "Dubstep",
+                   "DnB", "EDM", "Electronica", "Ambient", "Chillout", "Lo-Fi", "Trap",
                    "Hip Hop", "Rock", "Pop", "Jazz", "Classical", "Flamenco", "Ballad", "Acid", "Melodic"}},
-        {"Source", {"Zenhiser", "ADSR", "TPS", "Loopmasters", "Splice", "Vengeance", "NI", 
+        {"Source", {"Zenhiser", "ADSR", "TPS", "Loopmasters", "Splice", "Vengeance", "NI",
                     "Cymatics", "KSHMR", "Black Octopus", "Production Master", "Ghosthack"}},
         {"Other", {"Indexed"}}
     };
