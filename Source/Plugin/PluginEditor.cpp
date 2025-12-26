@@ -334,21 +334,10 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     // Setup playhead jump callback for MIDI viewer
     midiNoteViewer.onPlayheadJump = [this](double position) {
         if (!fileLoaded || !pluginProcessor) return;
-        
-        // Stop any currently playing notes
-        pluginProcessor->sendActiveNoteOffs();
-        
-        // Calculate the new playback time
-        double newTime = position * midiFileDuration;
-        
-        // Reset playback to the new position
-        playbackNoteIndex = 0;
-        playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - newTime;
-        playbackStartBeat = getHostBeatPosition() - (newTime * midiFileBpm / 60.0);
-        
-        // Update processor playback position
+
+        // Update processor playback position (handles beat sync internally)
         pluginProcessor->seekToPosition(position);
-        
+
         // Make sure we're playing
         if (!isPlaying) {
             isPlaying = true;
@@ -2745,18 +2734,18 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseDown(const juce::MouseEvent& e) {
     } else if (e.mods.isLeftButtonDown()) {
         // Left-click: jump playhead to clicked position
         int clickX = e.getPosition().x;
-        
+
         // Account for piano keyboard area on the left
         if (clickX > PIANO_WIDTH && totalDuration > 0) {
             float noteAreaWidth = (float)(getWidth() - PIANO_WIDTH);
             float pixelsPerSecond = noteAreaWidth * zoomLevel / (float)totalDuration;
             float scrollPixels = scrollOffset * pixelsPerSecond;
-            
+
             // Calculate time position from click
             float clickedTime = (clickX - PIANO_WIDTH + scrollPixels) / pixelsPerSecond;
             double position = clickedTime / totalDuration;
             position = juce::jlimit(0.0, 1.0, position);
-            
+
             // Call the callback to jump playhead
             if (onPlayheadJump) {
                 onPlayheadJump(position);

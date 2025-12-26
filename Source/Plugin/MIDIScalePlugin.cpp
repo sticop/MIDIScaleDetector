@@ -308,30 +308,53 @@ void MIDIScalePlugin::resetPlayback() {
     playbackState.playbackNoteIndex.store(0);
     playbackState.playbackPosition.store(0.0);
     playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0);
-    playbackState.playbackStartBeat.store(transportState.ppqPosition.load());
+    
+    // When syncing to host, quantize to the next beat boundary
+    double currentBeat = transportState.ppqPosition.load();
+    if (playbackState.syncToHost.load() && transportState.isPlaying.load()) {
+        // Quantize to next whole beat (ceil to next integer beat)
+        double nextBeat = std::ceil(currentBeat);
+        playbackState.playbackStartBeat.store(nextBeat);
+    } else {
+        playbackState.playbackStartBeat.store(currentBeat);
+    }
 }
 
 void MIDIScalePlugin::seekToPosition(double position) {
     // Send note-offs for any currently playing notes
     sendActiveNoteOffs();
-    
+
     // Calculate the new time position
     double duration = playbackState.fileDuration.load();
     double newTime = position * duration;
     double bpm = playbackState.fileBpm.load();
     if (bpm <= 0) bpm = 120.0;
-    
+
     // Reset the note index to find notes from the new position
     playbackState.playbackNoteIndex.store(0);
-    
-    // Adjust start time/beat so that currentTime calculation lands at newTime
-    playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 - newTime);
+
+    // Calculate beats offset for the new position
     double beatsOffset = (newTime * bpm) / 60.0;
-    playbackState.playbackStartBeat.store(transportState.ppqPosition.load() - beatsOffset);
     
+    // When syncing to host, quantize to the next beat boundary
+    double currentBeat = transportState.ppqPosition.load();
+    if (playbackState.syncToHost.load() && transportState.isPlaying.load()) {
+        // Quantize to next whole beat (ceil to next integer beat)
+        double nextBeat = std::ceil(currentBeat);
+        // Adjust so that at nextBeat, we'll be at the correct file position
+        playbackState.playbackStartBeat.store(nextBeat - beatsOffset);
+        // Also adjust the time-based start
+        double timeToNextBeat = (nextBeat - currentBeat) * 60.0 / transportState.bpm.load();
+        playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 + timeToNextBeat - newTime);
+    } else {
+        // Immediate seek for non-synced mode
+        playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 - newTime);
+        playbackState.playbackStartBeat.store(currentBeat - beatsOffset);
+    }
+
     // Update position for UI
     playbackState.playbackPosition.store(position);
-    
+
     // Skip notes before the new position
     std::lock_guard<std::mutex> lock(sequenceMutex);
     int noteIndex = 0;
