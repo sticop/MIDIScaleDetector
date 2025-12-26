@@ -449,27 +449,26 @@ void MIDIXplorerEditor::saveFileCache() {
     juce::Array<juce::var> filesArray;
 
     for (const auto& f : allFiles) {
-        if (f.analyzed) {  // Only cache analyzed files
-            juce::DynamicObject::Ptr fileObj = new juce::DynamicObject();
-            fileObj->setProperty("fullPath", f.fullPath);
-            fileObj->setProperty("fileName", f.fileName);
-            fileObj->setProperty("libraryName", f.libraryName);
-            fileObj->setProperty("key", f.key);
-            fileObj->setProperty("relativeKey", f.relativeKey);
-            fileObj->setProperty("duration", f.duration);
-            fileObj->setProperty("durationBeats", f.durationBeats);
-            fileObj->setProperty("bpm", f.bpm);
-            fileObj->setProperty("fileSize", (juce::int64)f.fileSize);
-            fileObj->setProperty("instrument", f.instrument);
-            fileObj->setProperty("mood", f.mood);
-            fileObj->setProperty("analyzed", f.analyzed);
-            fileObj->setProperty("containsChords", f.containsChords);
-            fileObj->setProperty("containsSingleNotes", f.containsSingleNotes);
-            filesArray.add(juce::var(fileObj.get()));
-        }
+        // Save all files, not just analyzed ones - to preserve progress
+        juce::DynamicObject::Ptr fileObj = new juce::DynamicObject();
+        fileObj->setProperty("fullPath", f.fullPath);
+        fileObj->setProperty("fileName", f.fileName);
+        fileObj->setProperty("libraryName", f.libraryName);
+        fileObj->setProperty("key", f.key);
+        fileObj->setProperty("relativeKey", f.relativeKey);
+        fileObj->setProperty("duration", f.duration);
+        fileObj->setProperty("durationBeats", f.durationBeats);
+        fileObj->setProperty("bpm", f.bpm);
+        fileObj->setProperty("fileSize", (juce::int64)f.fileSize);
+        fileObj->setProperty("instrument", f.instrument);
+        fileObj->setProperty("mood", f.mood);
+        fileObj->setProperty("analyzed", f.analyzed);
+        fileObj->setProperty("containsChords", f.containsChords);
+        fileObj->setProperty("containsSingleNotes", f.containsSingleNotes);
+        filesArray.add(juce::var(fileObj.get()));
     }
     root->setProperty("files", filesArray);
-    root->setProperty("cacheVersion", 1);
+    root->setProperty("cacheVersion", 2);
 
     juce::var jsonVar(root.get());
     auto jsonStr = juce::JSON::toString(jsonVar);
@@ -507,6 +506,11 @@ void MIDIXplorerEditor::loadFileCache() {
                     // Only add if file still exists
                     if (juce::File(info.fullPath).existsAsFile()) {
                         allFiles.push_back(info);
+                        
+                        // Queue unanalyzed files for analysis to continue progress
+                        if (!info.analyzed) {
+                            analysisQueue.push_back(allFiles.size() - 1);
+                        }
                     }
                 }
             }
@@ -849,6 +853,7 @@ void MIDIXplorerEditor::timerCallback() {
                 analyzeFile(idx);
                 allFiles[idx].isAnalyzing = false;
                 filesAnalyzed++;
+                analysisSaveCounter++;
             }
         }
         // Update UI if we analyzed files
@@ -859,9 +864,10 @@ void MIDIXplorerEditor::timerCallback() {
             libraryListBox.repaint();
         }
 
-        // Save cache when analysis completes and no more scanning
-        if (analysisQueue.empty() && !isScanningFiles) {
+        // Save cache periodically during analysis (every 50 files) or when complete
+        if (analysisSaveCounter >= 50 || (analysisQueue.empty() && !isScanningFiles)) {
             saveFileCache();
+            analysisSaveCounter = 0;
         }
     }
 
@@ -2999,13 +3005,16 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
             }
         }
 
+        int totalInLib = 0;
+        int analyzedInLib = 0;
         for (const auto& f : owner.allFiles) {
             if (f.libraryName != lib.name) continue;
-            if (f.isAnalyzing) processingCount++;
-            if (!f.analyzed) pendingCount++;
+            totalInLib++;
+            if (f.analyzed) analyzedInLib++;
         }
-        pendingCount = std::max(0, pendingCount - processingCount);
-        showProcessingCounts = true;
+        processingCount = analyzedInLib;
+        pendingCount = totalInLib;
+        showProcessingCounts = (totalInLib > 0 && analyzedInLib < totalInLib);
     }
 
     bool isSelected = (row == owner.selectedLibraryIndex);
@@ -3030,10 +3039,11 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
 
     // File count, spinner, or processing/pending
     if (showProcessingCounts) {
-        juce::String progressText = juce::String(processingCount) + "/" + juce::String(pendingCount);
-        g.setColour(processingCount > 0 ? juce::Colour(0xff00cc88) : juce::Colours::grey);
+        // Show as "analyzed / total"
+        juce::String progressText = juce::String(processingCount) + " / " + juce::String(pendingCount);
+        g.setColour(juce::Colour(0xff00cc88));
         g.setFont(11.0f);
-        g.drawText(progressText, w - 70, 0, 65, h, juce::Justification::centredRight);
+        g.drawText(progressText, w - 80, 0, 75, h, juce::Justification::centredRight);
     } else if (isLibraryScanning) {
         // Draw animated spinner
         float centerX = w - 25.0f;

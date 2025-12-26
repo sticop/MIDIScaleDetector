@@ -704,6 +704,7 @@ private:
     // Background analysis queue for large libraries
     std::vector<size_t> analysisQueue;
     size_t analysisIndex = 0;
+    int analysisSaveCounter = 0;  // Counter for periodic cache saving
     static constexpr int FILES_PER_TICK = 5;  // Analyze 5 files per timer tick
     int spinnerFrame = 0;  // Animation frame for loading spinners
 

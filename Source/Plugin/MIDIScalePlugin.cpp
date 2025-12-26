@@ -312,15 +312,10 @@ void MIDIScalePlugin::resetPlayback() {
     playbackState.playbackPosition.store(0.0);
     playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0);
 
-    // When syncing to host, quantize to the next beat boundary
+    // When syncing to host, quantize start to current beat position
+    // This ensures the MIDI file starts at beat 0 = host current beat
     double currentBeat = transportState.ppqPosition.load();
-    if (playbackState.syncToHost.load() && transportState.isPlaying.load()) {
-        // Quantize to next whole beat (ceil to next integer beat)
-        double nextBeat = std::ceil(currentBeat);
-        playbackState.playbackStartBeat.store(nextBeat);
-    } else {
-        playbackState.playbackStartBeat.store(currentBeat);
-    }
+    playbackState.playbackStartBeat.store(currentBeat);
 }
 
 void MIDIScalePlugin::seekToPosition(double position) {
@@ -333,27 +328,16 @@ void MIDIScalePlugin::seekToPosition(double position) {
     double bpm = playbackState.fileBpm.load();
     if (bpm <= 0) bpm = 120.0;
 
-    // Reset the note index to find notes from the new position
-    playbackState.playbackNoteIndex.store(0);
-
-    // Calculate beats offset for the new position
+    // Calculate beats offset for the new position in the MIDI file
     double beatsOffset = (newTime * bpm) / 60.0;
 
-    // When syncing to host, quantize to the next beat boundary
+    // Get current host position
     double currentBeat = transportState.ppqPosition.load();
-    if (playbackState.syncToHost.load() && transportState.isPlaying.load()) {
-        // Quantize to next whole beat (ceil to next integer beat)
-        double nextBeat = std::ceil(currentBeat);
-        // Adjust so that at nextBeat, we'll be at the correct file position
-        playbackState.playbackStartBeat.store(nextBeat - beatsOffset);
-        // Also adjust the time-based start
-        double timeToNextBeat = (nextBeat - currentBeat) * 60.0 / transportState.bpm.load();
-        playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 + timeToNextBeat - newTime);
-    } else {
-        // Immediate seek for non-synced mode
-        playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 - newTime);
-        playbackState.playbackStartBeat.store(currentBeat - beatsOffset);
-    }
+    
+    // Immediate seek - set start beat so that at current host position, we're at newTime
+    // This allows the playhead to move immediately while staying in sync with host
+    playbackState.playbackStartBeat.store(currentBeat - beatsOffset);
+    playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 - newTime);
 
     // Update position for UI
     playbackState.playbackPosition.store(position);
@@ -432,12 +416,15 @@ void MIDIScalePlugin::updatePlayback() {
         if (synced) {
             // Align playback start to current host beat so currentTime = 0
             playbackState.playbackStartBeat.store(hostBeat);
-            currentTime = 0.0;
         } else {
             // Reset playback start time to now so currentTime = 0
             playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0);
-            currentTime = 0.0;
         }
+        
+        // Don't play notes in this cycle - let the next processBlock handle it
+        // This prevents notes at time 0 from playing immediately after reset
+        playbackState.playbackPosition.store(0.0);
+        return;
     }
 
     // Update position for UI
