@@ -492,7 +492,7 @@ void MIDIXplorerEditor::saveFileCache() {
         filesArray.add(juce::var(fileObj.get()));
     }
     root->setProperty("files", filesArray);
-    root->setProperty("cacheVersion", 3);  // Bump version for tags support
+    root->setProperty("cacheVersion", 4);  // Bump version to force tag re-extraction
 
     juce::var jsonVar(root.get());
     auto jsonStr = juce::JSON::toString(jsonVar);
@@ -535,17 +535,8 @@ void MIDIXplorerEditor::loadFileCache() {
                         }
                     }
 
-                    // Load tags from cache or extract from filename
-                    auto tagsVar = fileObj->getProperty("tags");
-                    if (auto* tagsArray = tagsVar.getArray()) {
-                        for (const auto& tagVar : *tagsArray) {
-                            info.tags.add(tagVar.toString());
-                        }
-                    }
-                    // If no tags in cache, extract from filename
-                    if (info.tags.isEmpty()) {
-                        info.tags = extractTagsFromFilename(info.fileName);
-                    }
+                    // Always extract tags from filename to ensure consistency with current extraction logic
+                    info.tags = extractTagsFromFilename(info.fileName);
 
                     // Only add if file still exists
                     if (juce::File(info.fullPath).existsAsFile()) {
