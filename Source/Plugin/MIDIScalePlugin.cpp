@@ -491,9 +491,24 @@ void MIDIScalePlugin::updatePlayback() {
 }
 
 void MIDIScalePlugin::sendActiveNoteOffs() {
-    // Set flag for processBlock to send note-offs immediately
-    // Don't clear activeNotes here - let sendActiveNoteOffsImmediate do it
-    // so it can properly send note-offs for each active note
+    // Send note-offs through the queue AND set the flag for processBlock
+    // This dual approach ensures note-offs are sent whether processBlock runs immediately or later
+
+    // First, queue note-offs for all active notes
+    {
+        std::lock_guard<std::mutex> noteLock(activeNotesMutex);
+        for (const auto& an : activeNotes) {
+            addMidiMessage(juce::MidiMessage::noteOff(an.channel, an.noteNumber));
+        }
+        activeNotes.clear();
+    }
+
+    // Also queue CC#123 (All Notes Off) on all channels as safety fallback
+    for (int ch = 1; ch <= 16; ++ch) {
+        addMidiMessage(juce::MidiMessage::controllerEvent(ch, 123, 0));
+    }
+
+    // Set the flag as well for immediate processing in processBlock
     playbackState.pendingNoteOffs.store(true);
 }
 

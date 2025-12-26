@@ -378,6 +378,29 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
         // Update processor playback position (handles beat sync internally)
         pluginProcessor->seekToPosition(position);
 
+        // Update local playback variables to match the new position
+        double newTime = position * midiFileDuration;
+        playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - newTime;
+
+        // If synced to host, also update beat-based start
+        if (syncToHostToggle.getToggleState()) {
+            double bpm = midiFileBpm > 0 ? midiFileBpm : 120.0;
+            double beatsOffset = (newTime * bpm) / 60.0;
+            double hostBeat = pluginProcessor->getHostBeat();
+            playbackStartBeat = hostBeat - beatsOffset;
+        }
+
+        // Update note index to skip past notes before this position
+        playbackNoteIndex = 0;
+        while (playbackNoteIndex < playbackSequence.getNumEvents()) {
+            auto* event = playbackSequence.getEventPointer(playbackNoteIndex);
+            if (event->message.getTimeStamp() < newTime) {
+                playbackNoteIndex++;
+            } else {
+                break;
+            }
+        }
+
         // Make sure we're playing
         if (!isPlaying) {
             isPlaying = true;

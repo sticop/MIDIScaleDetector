@@ -140,6 +140,8 @@ public:
     int getTransposeAmount() const { return playbackState.transposeAmount; }
     juce::String getCurrentFilePath() const { return playbackState.currentFilePath; }
     const juce::MidiMessageSequence& getPlaybackSequence() const { return playbackSequence; }
+    double getHostBeat() const { return transportState.ppqPosition.load(); }
+    bool isHostPlaying() const { return transportState.isPlaying.load(); }
 
     // Queue MIDI for insertion at DAW playhead
     void queueMidiForInsertion(const juce::MidiFile& midiFile);
