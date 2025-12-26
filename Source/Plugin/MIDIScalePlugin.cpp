@@ -281,12 +281,13 @@ std::vector<int> MIDIScalePlugin::arpeggiateNote(int midiNote) {
     return notes;
 }
 
-void MIDIScalePlugin::loadPlaybackSequence(const juce::MidiMessageSequence& seq, double duration, double bpm, const juce::String& path) {
+void MIDIScalePlugin::loadPlaybackSequence(const juce::MidiMessageSequence& seq, double duration, double bpm, const juce::String& path, bool preservePosition) {
     std::lock_guard<std::mutex> lock(sequenceMutex);
 
     // Copy the sequence as-is - no truncation
     playbackSequence = seq;
     playbackSequence.sort();
+    playbackSequence.updateMatchedPairs();
 
     playbackState.fileDuration.store(duration);
     playbackState.fileBpm.store(bpm);
@@ -295,12 +296,14 @@ void MIDIScalePlugin::loadPlaybackSequence(const juce::MidiMessageSequence& seq,
     playbackState.playbackNoteIndex.store(0);
     playbackState.playbackPosition.store(0.0);
 
-    // If host is already playing when file is loaded, start playback immediately
-    bool hostIsPlaying = transportState.isPlaying.load();
-    bool shouldSync = playbackState.syncToHost.load();
-    if (hostIsPlaying && shouldSync) {
-        playbackState.isPlaying.store(true);
-        resetPlayback();
+    if (!preservePosition) {
+        // If host is already playing when file is loaded, start playback immediately
+        bool hostIsPlaying = transportState.isPlaying.load();
+        bool shouldSync = playbackState.syncToHost.load();
+        if (hostIsPlaying && shouldSync) {
+            playbackState.isPlaying.store(true);
+            resetPlayback();
+        }
     }
 }
 
@@ -308,7 +311,7 @@ void MIDIScalePlugin::resetPlayback() {
     playbackState.playbackNoteIndex.store(0);
     playbackState.playbackPosition.store(0.0);
     playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0);
-    
+
     // When syncing to host, quantize to the next beat boundary
     double currentBeat = transportState.ppqPosition.load();
     if (playbackState.syncToHost.load() && transportState.isPlaying.load()) {
@@ -335,7 +338,7 @@ void MIDIScalePlugin::seekToPosition(double position) {
 
     // Calculate beats offset for the new position
     double beatsOffset = (newTime * bpm) / 60.0;
-    
+
     // When syncing to host, quantize to the next beat boundary
     double currentBeat = transportState.ppqPosition.load();
     if (playbackState.syncToHost.load() && transportState.isPlaying.load()) {
@@ -450,8 +453,9 @@ void MIDIScalePlugin::updatePlayback() {
         if (eventTime <= currentTime) {
             auto msg = event->message;
             if (msg.isNoteOn()) {
+                int originalNote = msg.getNoteNumber();
                 // Apply transpose
-                int transposedNote = juce::jlimit(0, 127, msg.getNoteNumber() + playbackState.transposeAmount.load());
+                int transposedNote = juce::jlimit(0, 127, originalNote + playbackState.transposeAmount.load());
                 // Apply velocity scaling
                 int velocity = msg.getVelocity();
                 velocity = juce::jlimit(1, 127, (int)(velocity * velScale));
@@ -459,31 +463,34 @@ void MIDIScalePlugin::updatePlayback() {
                 msg.setTimeStamp(eventTime);
                 addMidiMessage(msg);
 
-                // Track this note so we can send proper note-off
-                if (event->noteOffObject != nullptr) {
-                    std::lock_guard<std::mutex> noteLock(activeNotesMutex);
-                    ActiveNote an;
-                    an.channel = msg.getChannel();
-                    an.noteNumber = transposedNote;
-                    an.noteOffTime = event->noteOffObject->message.getTimeStamp();
-                    activeNotes.push_back(an);
-                }
+                // Track this note so we can send proper note-off on stop/seek/loop
+                std::lock_guard<std::mutex> noteLock(activeNotesMutex);
+                ActiveNote an;
+                an.channel = msg.getChannel();
+                an.originalNoteNumber = originalNote;
+                an.noteNumber = transposedNote;
+                an.noteOffTime = event->noteOffObject != nullptr
+                    ? event->noteOffObject->message.getTimeStamp()
+                    : eventTime;
+                activeNotes.push_back(an);
             } else if (msg.isNoteOff()) {
-                // Apply transpose to note-off too
-                int transposedNoteOff = juce::jlimit(0, 127, msg.getNoteNumber() + playbackState.transposeAmount.load());
-                msg = juce::MidiMessage::noteOff(msg.getChannel(), transposedNoteOff);
-                addMidiMessage(msg);
+                int originalNote = msg.getNoteNumber();
+                int transposedNoteOff = juce::jlimit(0, 127, originalNote + playbackState.transposeAmount.load());
 
-                // Remove from active notes
+                // Remove the matching active note (use original note to find correct transposed note)
                 {
                     std::lock_guard<std::mutex> noteLock(activeNotesMutex);
-                    activeNotes.erase(
-                        std::remove_if(activeNotes.begin(), activeNotes.end(),
-                            [&](const ActiveNote& an) {
-                                return an.channel == msg.getChannel() && an.noteNumber == transposedNoteOff;
-                            }),
-                        activeNotes.end());
+                    for (auto it = activeNotes.begin(); it != activeNotes.end(); ++it) {
+                        if (it->channel == msg.getChannel() && it->originalNoteNumber == originalNote) {
+                            transposedNoteOff = it->noteNumber;
+                            activeNotes.erase(it);
+                            break;
+                        }
+                    }
                 }
+
+                msg = juce::MidiMessage::noteOff(msg.getChannel(), transposedNoteOff);
+                addMidiMessage(msg);
             }
             noteIndex++;
         } else {

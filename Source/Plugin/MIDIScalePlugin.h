@@ -100,6 +100,7 @@ public:
     // This ensures notes get their proper note-offs even across loops
     struct ActiveNote {
         int channel;
+        int originalNoteNumber;
         int noteNumber;
         double noteOffTime;  // When this note should end (in MIDI file time)
     };
@@ -125,7 +126,7 @@ public:
     bool isPlaybackPlaying() const { return playbackState.isPlaying; }
     void setPlaybackPosition(double pos) { playbackState.playbackPosition = pos; }
     double getPlaybackPosition() const { return playbackState.playbackPosition; }
-    void loadPlaybackSequence(const juce::MidiMessageSequence& seq, double duration, double bpm, const juce::String& path);
+    void loadPlaybackSequence(const juce::MidiMessageSequence& seq, double duration, double bpm, const juce::String& path, bool preservePosition = false);
     void resetPlayback();
     void seekToPosition(double position);  // Seek playback to a position (0-1)
     void updatePlayback();  // Called from processBlock

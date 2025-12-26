@@ -4,6 +4,7 @@
 #include "../Version.h"
 #include "../Standalone/ActivationDialog.h"
 #include <set>
+#include <unordered_map>
 
 namespace {
     int getKeyOrder(const juce::String& key) {
@@ -2221,27 +2222,11 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xff3a3a3a));
     g.drawRect(bounds);
 
-    if (sequence == nullptr || sequence->getNumEvents() == 0) {
-        // Show placeholder message when no file is loaded
-        g.setColour(juce::Colours::grey);
-        g.setFont(juce::Font(juce::FontOptions(14.0f)));
-        g.drawText("Select a MIDI file to view notes", bounds, juce::Justification::centred);
+    const bool hasSequence = (sequence != nullptr && sequence->getNumEvents() > 0);
 
-        // Still draw a minimal piano keyboard on the left for visual consistency
-        auto pianoArea = bounds.withWidth(PIANO_WIDTH);
-        g.setColour(juce::Colour(0xff2a2a2a));
-        g.fillRect(pianoArea);
-
-        // Draw octave lines
-        for (int octave = 0; octave < 10; octave++) {
-            float y = bounds.getHeight() - (octave * 12 * (bounds.getHeight() / 128.0f));
-            g.setColour(juce::Colour(0xff444444));
-            g.drawHorizontalLine((int)y, 0.0f, (float)PIANO_WIDTH);
-        }
-        return;
-    }
-
-    int noteRange = highestNote - lowestNote + 1;
+    int displayLowest = hasSequence ? lowestNote : 0;
+    int displayHighest = hasSequence ? highestNote : 127;
+    int noteRange = displayHighest - displayLowest + 1;
     if (noteRange <= 0) noteRange = 1;
 
     float noteHeight = (float)bounds.getHeight() / (float)noteRange;
@@ -2254,8 +2239,8 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
     float scrollPixels = scrollOffset * pixelsPerSecond;
 
     // Draw piano keyboard on left
-    for (int note = lowestNote; note <= highestNote; note++) {
-        float y = bounds.getHeight() - (note - lowestNote + 1) * noteHeight;
+    for (int note = displayLowest; note <= displayHighest; note++) {
+        float y = bounds.getHeight() - (note - displayLowest + 1) * noteHeight;
         int noteInOctave = note % 12;
         bool isBlackKey = (noteInOctave == 1 || noteInOctave == 3 || noteInOctave == 6 || noteInOctave == 8 || noteInOctave == 10);
 
@@ -2283,8 +2268,8 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
     }
 
     // Draw piano key background hints in note area
-    for (int note = lowestNote; note <= highestNote; note++) {
-        float y = noteArea.getHeight() - (note - lowestNote + 1) * noteHeight;
+    for (int note = displayLowest; note <= displayHighest; note++) {
+        float y = noteArea.getHeight() - (note - displayLowest + 1) * noteHeight;
         int noteInOctave = note % 12;
         bool isBlackKey = (noteInOctave == 1 || noteInOctave == 3 || noteInOctave == 6 || noteInOctave == 8 || noteInOctave == 10);
         if (isBlackKey) {
@@ -2293,53 +2278,62 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
         }
     }
 
+    if (!hasSequence) {
+        // Placeholder message when no file is loaded
+        g.setColour(juce::Colours::grey);
+        g.setFont(juce::Font(juce::FontOptions(14.0f)));
+        g.drawText("No MIDI file selected", bounds, juce::Justification::centred);
+    }
+
     // Draw notes
-    for (int i = 0; i < sequence->getNumEvents(); i++) {
-        auto* event = sequence->getEventPointer(i);
-        auto& msg = event->message;
+    if (hasSequence) {
+        for (int i = 0; i < sequence->getNumEvents(); i++) {
+            auto* event = sequence->getEventPointer(i);
+            auto& msg = event->message;
 
-        if (msg.isNoteOn()) {
-            int noteNum = msg.getNoteNumber();
-            double startTime = msg.getTimeStamp();
-            double endTime = startTime + 0.1; // Default duration
+            if (msg.isNoteOn()) {
+                int noteNum = msg.getNoteNumber();
+                double startTime = msg.getTimeStamp();
+                double endTime = startTime + 0.1; // Default duration
 
-            // Find matching note-off
-            for (int j = i + 1; j < sequence->getNumEvents(); j++) {
-                auto* offEvent = sequence->getEventPointer(j);
-                if (offEvent->message.isNoteOff() && offEvent->message.getNoteNumber() == noteNum) {
-                    endTime = offEvent->message.getTimeStamp();
-                    break;
+                // Find matching note-off
+                for (int j = i + 1; j < sequence->getNumEvents(); j++) {
+                    auto* offEvent = sequence->getEventPointer(j);
+                    if (offEvent->message.isNoteOff() && offEvent->message.getNoteNumber() == noteNum) {
+                        endTime = offEvent->message.getTimeStamp();
+                        break;
+                    }
                 }
+
+                float x = noteArea.getX() + (float)(startTime * pixelsPerSecond) - scrollPixels;
+                float w = (float)((endTime - startTime) * pixelsPerSecond);
+                if (w < 2.0f) w = 2.0f;
+                float y = noteArea.getHeight() - (noteNum - displayLowest + 1) * noteHeight;
+
+                // Skip notes outside visible area
+                if (x + w < noteArea.getX() || x > noteArea.getRight()) continue;
+
+                // Clip notes that extend into piano area
+                if (x < noteArea.getX()) {
+                    w -= (noteArea.getX() - x);
+                    x = noteArea.getX();
+                    if (w < 2.0f) continue;
+                }
+
+                // Note color based on velocity: green (low) to red (high)
+                int velocity = msg.getVelocity();
+                float velocityNorm = juce::jlimit(0.0f, 1.0f, (float)velocity / 127.0f);
+                juce::Colour noteColour = juce::Colour(0xff22cc55)
+                                              .interpolatedWith(juce::Colour(0xffcc3333), velocityNorm);
+
+                if (noteNum == hoveredNote) {
+                    // Highlighted note
+                    g.setColour(juce::Colours::white);
+                } else {
+                    g.setColour(noteColour);
+                }
+                g.fillRoundedRectangle(x, y + 1, w, noteHeight - 2, 2.0f);
             }
-
-            float x = noteArea.getX() + (float)(startTime * pixelsPerSecond) - scrollPixels;
-            float w = (float)((endTime - startTime) * pixelsPerSecond);
-            if (w < 2.0f) w = 2.0f;
-            float y = noteArea.getHeight() - (noteNum - lowestNote + 1) * noteHeight;
-
-            // Skip notes outside visible area
-            if (x + w < noteArea.getX() || x > noteArea.getRight()) continue;
-
-            // Clip notes that extend into piano area
-            if (x < noteArea.getX()) {
-                w -= (noteArea.getX() - x);
-                x = noteArea.getX();
-                if (w < 2.0f) continue;
-            }
-
-            // Note color based on velocity: green (low) to red (high)
-            int velocity = msg.getVelocity();
-            // Map velocity (0-127) to hue: 0.33 (green/120°) to 0.0 (red/0°)
-            float hue = 0.33f * (1.0f - (velocity / 127.0f));
-            float brightness = 0.6f + (velocity / 254.0f) * 0.4f;
-
-            if (noteNum == hoveredNote) {
-                // Highlighted note
-                g.setColour(juce::Colours::white);
-            } else {
-                g.setColour(juce::Colour::fromHSV(hue, 0.85f, brightness, 1.0f));
-            }
-            g.fillRoundedRectangle(x, y + 1, w, noteHeight - 2, 2.0f);
         }
     }
 
@@ -2351,7 +2345,7 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
     }
 
     // Draw currently playing notes/chord display at top
-    if (!playingNotes.empty()) {
+    if (hasSequence && !playingNotes.empty()) {
         juce::String chordText = detectChordName(playingNotes);
         g.setColour(juce::Colour(0xcc000000));
         g.fillRoundedRectangle((float)noteArea.getX() + 5, 5.0f, (float)g.getCurrentFont().getStringWidth(chordText) + 16, 22.0f, 4.0f);
@@ -2448,7 +2442,7 @@ void MIDIXplorerEditor::MIDINoteViewer::setSequence(const juce::MidiMessageSeque
     // Calculate note range
     lowestNote = 127;
     highestNote = 0;
-    if (seq != nullptr) {
+    if (seq != nullptr && seq->getNumEvents() > 0) {
         for (int i = 0; i < seq->getNumEvents(); i++) {
             auto& msg = seq->getEventPointer(i)->message;
             if (msg.isNoteOn()) {
@@ -2457,6 +2451,9 @@ void MIDIXplorerEditor::MIDINoteViewer::setSequence(const juce::MidiMessageSeque
                 if (note > highestNote) highestNote = note;
             }
         }
+    } else {
+        lowestNote = 0;
+        highestNote = 127;
     }
     // Add some padding
     if (lowestNote > 0) lowestNote--;
@@ -3248,6 +3245,51 @@ void MIDIXplorerEditor::quantizeMidi() {
         if (!track) continue;
 
         juce::MidiMessageSequence newTrack;
+        std::unordered_map<const juce::MidiMessageSequence::MidiEventHolder*, double> forcedNoteOffTimes;
+
+        auto quantizeTime = [&](double originalTime) {
+            if (gridTicks <= 0.0) return originalTime;
+
+            if (isMixed) {
+                // For mixed modes, snap to nearest grid (primary or secondary)
+                double nearestPrimary = std::round(originalTime / gridTicks) * gridTicks;
+                double nearestSecondary = std::round(originalTime / secondaryGridTicks) * secondaryGridTicks;
+
+                double diffPrimary = std::abs(originalTime - nearestPrimary);
+                double diffSecondary = std::abs(originalTime - nearestSecondary);
+
+                return (diffPrimary <= diffSecondary) ? nearestPrimary : nearestSecondary;
+            }
+
+            if (isSwing) {
+                // For swing, quantize to swing grid
+                double pairLength = gridTicks * 2.0;  // Two notes form a swing pair
+                double pairIndex = std::floor(originalTime / pairLength);
+                double posInPair = originalTime - (pairIndex * pairLength);
+
+                // First beat of pair is longer (swingRatio)
+                double firstBeatEnd = pairLength * swingRatio;
+
+                if (posInPair < firstBeatEnd) {
+                    // Snap to first beat (start of pair)
+                    double distToStart = posInPair;
+                    double distToSecond = firstBeatEnd - posInPair;
+                    return (distToStart <= distToSecond)
+                        ? pairIndex * pairLength
+                        : pairIndex * pairLength + firstBeatEnd;
+                }
+
+                // Snap to second beat or next pair start
+                double distToSecond = posInPair - firstBeatEnd;
+                double distToNext = pairLength - posInPair;
+                return (distToSecond <= distToNext)
+                    ? pairIndex * pairLength + firstBeatEnd
+                    : (pairIndex + 1) * pairLength;
+            }
+
+            // Standard quantization - snap to nearest grid
+            return std::round(originalTime / gridTicks) * gridTicks;
+        };
 
         for (int i = 0; i < track->getNumEvents(); i++) {
             auto* event = track->getEventPointer(i);
@@ -3255,50 +3297,29 @@ void MIDIXplorerEditor::quantizeMidi() {
 
             juce::MidiMessage msg = event->message;
             double originalTime = msg.getTimeStamp();
-            double newTime = originalTime;
 
-            if (msg.isNoteOn() || msg.isNoteOff()) {
-                if (isMixed) {
-                    // For mixed modes, snap to nearest grid (primary or secondary)
-                    double nearestPrimary = std::round(originalTime / gridTicks) * gridTicks;
-                    double nearestSecondary = std::round(originalTime / secondaryGridTicks) * secondaryGridTicks;
+            if (msg.isNoteOn()) {
+                double newTime = quantizeTime(originalTime);
+                msg.setTimeStamp(newTime);
+                newTrack.addEvent(msg);
 
-                    double diffPrimary = std::abs(originalTime - nearestPrimary);
-                    double diffSecondary = std::abs(originalTime - nearestSecondary);
-
-                    newTime = (diffPrimary <= diffSecondary) ? nearestPrimary : nearestSecondary;
-                } else if (isSwing) {
-                    // For swing, quantize to swing grid
-                    double pairLength = gridTicks * 2.0;  // Two notes form a swing pair
-                    double pairIndex = std::floor(originalTime / pairLength);
-                    double posInPair = originalTime - (pairIndex * pairLength);
-
-                    // First beat of pair is longer (swingRatio)
-                    double firstBeatEnd = pairLength * swingRatio;
-
-                    if (posInPair < firstBeatEnd) {
-                        // Snap to first beat (start of pair)
-                        double distToStart = posInPair;
-                        double distToSecond = firstBeatEnd - posInPair;
-                        newTime = (distToStart <= distToSecond)
-                            ? pairIndex * pairLength
-                            : pairIndex * pairLength + firstBeatEnd;
-                    } else {
-                        // Snap to second beat or next pair start
-                        double distToSecond = posInPair - firstBeatEnd;
-                        double distToNext = pairLength - posInPair;
-                        newTime = (distToSecond <= distToNext)
-                            ? pairIndex * pairLength + firstBeatEnd
-                            : (pairIndex + 1) * pairLength;
-                    }
-                } else {
-                    // Standard quantization - snap to nearest grid
-                    newTime = std::round(originalTime / gridTicks) * gridTicks;
+                if (event->noteOffObject != nullptr) {
+                    double duration = event->noteOffObject->message.getTimeStamp() - originalTime;
+                    if (duration < 1.0) duration = 1.0;
+                    forcedNoteOffTimes[event->noteOffObject] = newTime + duration;
                 }
-            }
+            } else if (msg.isNoteOff()) {
+                auto forced = forcedNoteOffTimes.find(event);
+                double newTime = forced != forcedNoteOffTimes.end()
+                    ? forced->second
+                    : quantizeTime(originalTime);
 
-            msg.setTimeStamp(newTime);
-            newTrack.addEvent(msg);
+                if (newTime < 0.0) newTime = 0.0;
+                msg.setTimeStamp(newTime);
+                newTrack.addEvent(msg);
+            } else {
+                newTrack.addEvent(msg);
+            }
         }
 
         newTrack.updateMatchedPairs();
@@ -3339,7 +3360,7 @@ void MIDIXplorerEditor::quantizeMidi() {
         double currentStartTime = playbackStartTime;
         bool wasPlaying = isPlaying;
 
-        pluginProcessor->loadPlaybackSequence(playbackSequence, midiFileDuration, midiFileBpm, filteredFiles[(size_t)selectedFileIndex].fullPath);
+        pluginProcessor->loadPlaybackSequence(playbackSequence, midiFileDuration, midiFileBpm, filteredFiles[(size_t)selectedFileIndex].fullPath, true);
 
         if (wasPlaying) {
             // Restore timing so playback continues from same position

@@ -39,8 +39,8 @@ public:
         legalBtn.setButtonText("Legal");
 
         auto setupBtn = [this](juce::TextButton& btn, Tab t) {
-            btn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a4a4a));
-            btn.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff5ba8a0));
+            btn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2f2f2f));
+            btn.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff0078d4));
             btn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
             btn.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
             btn.setClickingTogglesState(true);
@@ -56,7 +56,7 @@ public:
         // Audio settings (only for standalone)
         if (audioDeviceManager != nullptr) {
             audioSettingsBtn = std::make_unique<juce::TextButton>("Audio Settings");
-            audioSettingsBtn->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a4a4a));
+            audioSettingsBtn->setColour(juce::TextButton::buttonColourId, juce::Colour(0xff2f2f2f));
             audioSettingsBtn->setColour(juce::TextButton::textColourOffId, juce::Colours::white);
             audioSettingsBtn->onClick = [this]() { showAudioSettings(); };
             addAndMakeVisible(*audioSettingsBtn);
@@ -83,7 +83,7 @@ public:
         faqBtn.setButtonText("FAQ");
 
         auto styleHelpBtn = [](juce::TextButton& btn) {
-            btn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff5ba8a0));
+            btn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff0078d4));
             btn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
         };
 
@@ -107,7 +107,7 @@ public:
         g.fillAll(juce::Colour(0xff2a2a2a));
 
         // Sidebar
-        g.setColour(juce::Colour(0xff3a3a3a));
+        g.setColour(juce::Colour(0xff252525));
         g.fillRect(0, 0, sidebarWidth, getHeight());
 
         // Content area
@@ -193,11 +193,11 @@ public:
         g.setFont(juce::Font(juce::FontOptions(13.0f)));
         g.setColour(juce::Colours::lightgrey);
         g.drawFittedText(
-            juce::CharPointer_UTF8("VST\xc2\xae is a trademark of Steinberg Media Technologies GmbH, "
+            "VST is a trademark of Steinberg Media Technologies GmbH, "
             "registered in Europe and other countries.\n\n"
             "Audio Units is a trademark of Apple Inc.\n\n"
             "MIDI is a trademark of the MIDI Manufacturers Association.\n\n"
-            "All other trademarks are the property of their respective owners."),
+            "All other trademarks are the property of their respective owners.",
             area, juce::Justification::topLeft, 10);
     }
 
@@ -283,7 +283,7 @@ public:
         volSlider->setRange(0.0, 1.0, 0.01);
         volSlider->setValue(currentVolume);
         volSlider->setColour(juce::Slider::backgroundColourId, juce::Colour(0xff3a3a3a));
-        volSlider->setColour(juce::Slider::trackColourId, juce::Colour(0xff5ba8a0));
+        volSlider->setColour(juce::Slider::trackColourId, juce::Colour(0xff0078d4));
         volSlider->setColour(juce::Slider::thumbColourId, juce::Colours::white);
         volSlider->setBounds(10, 30, 480, 25);
         if (volumeCallback) {
@@ -779,4 +779,3 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MIDIXplorerEditor)
 };
-
