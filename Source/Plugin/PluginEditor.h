@@ -650,6 +650,8 @@ private:
     juce::ComboBox contentTypeFilterCombo;  // Filter by chords/notes
     juce::ComboBox tagFilterCombo;  // Filter by filename-extracted tags
     juce::ComboBox sortCombo;
+    int lastSortOption = 0;  // Track last selected sort to toggle direction
+    bool sortAscending = true;  // Sort direction toggle
     juce::ComboBox quantizeCombo;
     juce::TextEditor searchBox;
     std::unique_ptr<DraggableListBox> fileListBox;

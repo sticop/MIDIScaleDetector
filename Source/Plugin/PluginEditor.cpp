@@ -35,7 +35,7 @@ namespace {
                 return i + 2;
             }
         }
-        return 1;  // Custom
+        return 0;  // Not a preset - will show custom text
     }
 }
 
@@ -72,10 +72,9 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     addAndMakeVisible(keyFilterCombo);
 
     // Content type filter dropdown (chords vs notes)
-    contentTypeFilterCombo.addItem("All Types", 1);
     contentTypeFilterCombo.addItem("Chords Only", 2);
     contentTypeFilterCombo.addItem("Notes Only", 3);
-    contentTypeFilterCombo.setSelectedId(1);
+    contentTypeFilterCombo.setSelectedId(2);
     contentTypeFilterCombo.onChange = [this]() { filterFiles(); };
     addAndMakeVisible(contentTypeFilterCombo);
 
@@ -90,7 +89,18 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     sortCombo.addItem("Sort: Duration", 2);
     sortCombo.addItem("Sort: Name", 3);
     sortCombo.setSelectedId(1);
-    sortCombo.onChange = [this]() { sortFiles(); filterFiles(); };
+    sortCombo.onChange = [this]() {
+        int currentOption = sortCombo.getSelectedId();
+        // If clicking the same sort option, toggle direction
+        if (currentOption == lastSortOption) {
+            sortAscending = !sortAscending;
+        } else {
+            sortAscending = true;  // New sort option starts ascending
+            lastSortOption = currentOption;
+        }
+        sortFiles();
+        filterFiles();
+    };
     addAndMakeVisible(sortCombo);
 
     // Quantize dropdown (Off = no quantize, selecting a value applies it)
@@ -1338,7 +1348,15 @@ void MIDIXplorerEditor::playNextFile() {
 }
 
 void MIDIXplorerEditor::updateTransposeComboSelection() {
-    transposeComboBox.setSelectedId(getTransposePresetIdForValue(transposeAmount), juce::dontSendNotification);
+    int presetId = getTransposePresetIdForValue(transposeAmount);
+    if (presetId > 0) {
+        transposeComboBox.setSelectedId(presetId, juce::dontSendNotification);
+    } else {
+        // Custom value - show the actual semitone amount
+        juce::String label = (transposeAmount > 0) ? ("+" + juce::String(transposeAmount) + " st")
+                                                   : (juce::String(transposeAmount) + " st");
+        transposeComboBox.setText(label, juce::dontSendNotification);
+    }
 }
 
 void MIDIXplorerEditor::applyTransposeToPlayback() {
@@ -2016,25 +2034,29 @@ void MIDIXplorerEditor::analyzeFile(size_t index) {
 
 void MIDIXplorerEditor::sortFiles() {
     int sortOption = sortCombo.getSelectedId();
+    bool asc = sortAscending;
 
     if (sortOption == 1) {
         // Sort by Scale/Key
-        std::sort(allFiles.begin(), allFiles.end(), [](const MIDIFileInfo& a, const MIDIFileInfo& b) {
+        std::sort(allFiles.begin(), allFiles.end(), [asc](const MIDIFileInfo& a, const MIDIFileInfo& b) {
             int orderA = getKeyOrder(a.key);
             int orderB = getKeyOrder(b.key);
-            if (orderA != orderB) return orderA < orderB;
-            return a.fileName.compareIgnoreCase(b.fileName) < 0;
+            if (orderA != orderB) return asc ? (orderA < orderB) : (orderA > orderB);
+            return asc ? (a.fileName.compareIgnoreCase(b.fileName) < 0)
+                       : (a.fileName.compareIgnoreCase(b.fileName) > 0);
         });
     } else if (sortOption == 2) {
         // Sort by Duration
-        std::sort(allFiles.begin(), allFiles.end(), [](const MIDIFileInfo& a, const MIDIFileInfo& b) {
-            if (a.duration != b.duration) return a.duration < b.duration;
-            return a.fileName.compareIgnoreCase(b.fileName) < 0;
+        std::sort(allFiles.begin(), allFiles.end(), [asc](const MIDIFileInfo& a, const MIDIFileInfo& b) {
+            if (a.duration != b.duration) return asc ? (a.duration < b.duration) : (a.duration > b.duration);
+            return asc ? (a.fileName.compareIgnoreCase(b.fileName) < 0)
+                       : (a.fileName.compareIgnoreCase(b.fileName) > 0);
         });
     } else {
         // Sort by Name
-        std::sort(allFiles.begin(), allFiles.end(), [](const MIDIFileInfo& a, const MIDIFileInfo& b) {
-            return a.fileName.compareIgnoreCase(b.fileName) < 0;
+        std::sort(allFiles.begin(), allFiles.end(), [asc](const MIDIFileInfo& a, const MIDIFileInfo& b) {
+            return asc ? (a.fileName.compareIgnoreCase(b.fileName) < 0)
+                       : (a.fileName.compareIgnoreCase(b.fileName) > 0);
         });
     }
 }
@@ -2043,9 +2065,17 @@ void MIDIXplorerEditor::filterFiles() {
     filteredFiles.clear();
 
     juce::String keyFilter = keyFilterCombo.getText();
-    // Strip the count suffix (e.g., "C Major (5)" -> "C Major")
-    if (keyFilter.containsChar('(') && keyFilter.endsWithChar(')')) {
-        keyFilter = keyFilter.upToFirstOccurrenceOf(" (", false, false);
+    // Strip the count suffix (e.g., "A Japanese (A/F#m) (5)" -> "A Japanese (A/F#m)")
+    // Must strip from the LAST " (" to handle scales with parentheses in their name
+    if (keyFilter.endsWithChar(')')) {
+        int lastParen = keyFilter.lastIndexOfChar('(');
+        if (lastParen > 0 && keyFilter[lastParen - 1] == ' ') {
+            // Check if content inside is a number (the count)
+            juce::String insideParen = keyFilter.substring(lastParen + 1, keyFilter.length() - 1);
+            if (insideParen.containsOnly("0123456789")) {
+                keyFilter = keyFilter.substring(0, lastParen - 1);
+            }
+        }
     }
     juce::String searchText = searchBox.getText().toLowerCase();
 
@@ -2272,9 +2302,10 @@ void MIDIXplorerEditor::updateContentTypeFilter() {
     // Update combo box items with counts
     int currentId = contentTypeFilterCombo.getSelectedId();
     contentTypeFilterCombo.clear();
-    contentTypeFilterCombo.addItem("All Types", 1);
     contentTypeFilterCombo.addItem("Chords (" + juce::String(chordFileCount) + ")", 2);
     contentTypeFilterCombo.addItem("Notes (" + juce::String(noteFileCount) + ")", 3);
+    // Restore selection, default to Chords if previously on All Types
+    if (currentId < 2) currentId = 2;
     contentTypeFilterCombo.setSelectedId(currentId, juce::dontSendNotification);
 }
 
@@ -2532,7 +2563,7 @@ juce::String MIDIXplorerEditor::extractKeyFromFilename(const juce::String& filen
                             foundScale = next.startsWithIgnoreCase("min") ? "Minor" : "Major";
                         }
                     }
-                    
+
                     // ALSO check if this is the LAST token (note at end of filename like "28 Bass G#")
                     bool isLastToken = (i == tokens.size() - 1);
 
@@ -4036,7 +4067,7 @@ void MIDIXplorerEditor::showHelpDialog(const juce::String& topic) {
         content += "5. FILTER BY KEY\n";
         content += "   Use the 'All Keys' dropdown to filter by detected musical key.\n\n";
         content += "6. FILTER BY TYPE\n";
-        content += "   Use 'All Types' to filter between chords and single notes.";
+        content += "   Use 'Chords/Notes' filter to switch between chord files and single notes.";
     }
     else if (topic == "Keyboard Shortcuts") {
         title = "Keyboard Shortcuts";
