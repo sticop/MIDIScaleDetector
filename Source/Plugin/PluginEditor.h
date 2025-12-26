@@ -749,6 +749,7 @@ private:
     void updateContentTypeFilter();  // Update chord/note filter with counts
     void updateTagFilter();  // Update tag filter with available tags
     juce::StringArray extractTagsFromFilename(const juce::String& filename);  // Extract tags from filename
+    juce::String extractKeyFromFilename(const juce::String& filename);  // Extract key/scale from filename
     void loadSelectedFile();
     void scheduleFileChangeTo(int row);
     void stopPlayback();

@@ -517,6 +517,14 @@ void MIDIXplorerEditor::loadFileCache() {
                     info.containsChords = (bool)fileObj->getProperty("containsChords");
                     info.containsSingleNotes = (bool)fileObj->getProperty("containsSingleNotes");
 
+                    // If key is not set or is "---", try to extract from filename
+                    if (info.key.isEmpty() || info.key == "---") {
+                        juce::String extractedKey = extractKeyFromFilename(info.fileName);
+                        if (extractedKey.isNotEmpty()) {
+                            info.key = extractedKey;
+                        }
+                    }
+
                     // Load tags from cache or extract from filename
                     auto tagsVar = fileObj->getProperty("tags");
                     if (auto* tagsArray = tagsVar.getArray()) {
@@ -832,7 +840,9 @@ void MIDIXplorerEditor::timerCallback() {
                     info.fileName = file.getFileName();
                     info.fullPath = file.getFullPathName();
                     info.libraryName = libraries[currentScanLibraryIndex].name;
-                    info.key = "---";
+                    // Try to extract key from filename first
+                    juce::String extractedKey = extractKeyFromFilename(info.fileName);
+                    info.key = extractedKey.isNotEmpty() ? extractedKey : "---";
                     info.tags = extractTagsFromFilename(info.fileName);
                     allFiles.push_back(info);
 
@@ -2346,6 +2356,204 @@ juce::StringArray MIDIXplorerEditor::extractTagsFromFilename(const juce::String&
     }
 
     return tags;
+}
+
+juce::String MIDIXplorerEditor::extractKeyFromFilename(const juce::String& filename) {
+    // Remove file extension and convert to lowercase for matching
+    juce::String name = filename.upToLastOccurrenceOf(".", false, false);
+    juce::String lowerName = name.toLowerCase();
+
+    // Note names in various formats
+    static const std::vector<std::pair<juce::String, juce::String>> notePatterns = {
+        // Sharp notes - check longer patterns first
+        {"c#", "C#"}, {"c sharp", "C#"}, {"db", "Db"},
+        {"d#", "D#"}, {"d sharp", "D#"}, {"eb", "Eb"},
+        {"f#", "F#"}, {"f sharp", "F#"}, {"gb", "Gb"},
+        {"g#", "G#"}, {"g sharp", "G#"}, {"ab", "Ab"},
+        {"a#", "A#"}, {"a sharp", "A#"}, {"bb", "Bb"},
+        // Natural notes (check after sharps/flats to avoid false matches)
+        {"cmaj", "C"}, {"dmaj", "D"}, {"emaj", "E"}, {"fmaj", "F"},
+        {"gmaj", "G"}, {"amaj", "A"}, {"bmaj", "B"},
+    };
+
+    // Scale/mode patterns - order matters (longer patterns first)
+    static const std::vector<std::pair<juce::String, juce::String>> scalePatterns = {
+        // Minor variations
+        {"minor", "Minor"}, {"min", "Minor"}, {"m7", "Minor"}, {"m6", "Minor"},
+        {"m9", "Minor"}, {"m ", "Minor"},
+        // Major variations
+        {"major", "Major"}, {"maj", "Major"},
+        // Modes
+        {"dorian", "Dorian"}, {"phrygian", "Phrygian"}, {"lydian", "Lydian"},
+        {"mixolydian", "Mixolydian"}, {"locrian", "Locrian"}, {"aeolian", "Minor"},
+        {"ionian", "Major"},
+    };
+
+    // Try to find key patterns in filename
+    // Pattern formats seen in filenames:
+    // - "120 D#min" or "120 Dmin"
+    // - "128bpm Eminor"
+    // - "123bpm Cm"
+    // - "C#m" or "Cm"
+    // - "02_Am_" or "04_Dm_"
+    // - "Abmin" or "Abmaj"
+    // - "G#m" or "Gm7"
+    // - "F# Major" or "A Minor"
+
+    juce::String foundNote;
+    juce::String foundScale;
+
+    // First, try to find patterns like "Am", "Cm", "F#m", "Bbm" etc (note + m for minor)
+    // These are common short forms
+    static const juce::StringArray shortMinorPatterns = {
+        "c#m", "d#m", "f#m", "g#m", "a#m",  // Sharp minors
+        "dbm", "ebm", "gbm", "abm", "bbm",  // Flat minors
+        "cm", "dm", "em", "fm", "gm", "am", "bm"  // Natural minors
+    };
+
+    static const juce::StringArray shortMajorPatterns = {
+        "cmaj", "dmaj", "emaj", "fmaj", "gmaj", "amaj", "bmaj",
+        "c#maj", "d#maj", "f#maj", "g#maj", "a#maj",
+        "dbmaj", "ebmaj", "gbmaj", "abmaj", "bbmaj"
+    };
+
+    // Map short patterns to proper note names
+    auto getNoteFromShort = [](const juce::String& pattern) -> juce::String {
+        juce::String note = pattern.substring(0, pattern.length() - 1);  // Remove 'm' or last char
+        if (note.endsWith("maj")) note = note.dropLastCharacters(3);
+        if (note.endsWith("m")) note = note.dropLastCharacters(1);
+
+        // Capitalize properly
+        if (note.length() == 1) return note.toUpperCase();
+        if (note.length() == 2) return note.substring(0, 1).toUpperCase() + note.substring(1);
+        return note;
+    };
+
+    // Look for short minor patterns (e.g., "Cm", "F#m")
+    for (const auto& pattern : shortMinorPatterns) {
+        // Check with word boundaries to avoid false matches
+        int idx = lowerName.indexOf(pattern);
+        if (idx >= 0) {
+            // Check it's not part of a longer word (e.g., "bcm" shouldn't match "cm")
+            bool validStart = (idx == 0) || !juce::CharacterFunctions::isLetter(lowerName[idx - 1]);
+            int endIdx = idx + pattern.length();
+            bool validEnd = (endIdx >= lowerName.length()) ||
+                           (!juce::CharacterFunctions::isLetter(lowerName[endIdx]) ||
+                            lowerName.substring(endIdx).startsWith("aj") ||  // Allow "maj" continuation
+                            lowerName.substring(endIdx).startsWith("in"));   // Allow "minor" continuation
+
+            if (validStart && validEnd) {
+                foundNote = getNoteFromShort(pattern);
+                foundScale = "Minor";
+                break;
+            }
+        }
+    }
+
+    // If no minor found, look for major patterns
+    if (foundNote.isEmpty()) {
+        for (const auto& pattern : shortMajorPatterns) {
+            int idx = lowerName.indexOf(pattern);
+            if (idx >= 0) {
+                bool validStart = (idx == 0) || !juce::CharacterFunctions::isLetter(lowerName[idx - 1]);
+                int endIdx = idx + pattern.length();
+                bool validEnd = (endIdx >= lowerName.length()) ||
+                               !juce::CharacterFunctions::isLetter(lowerName[endIdx]);
+
+                if (validStart && validEnd) {
+                    foundNote = getNoteFromShort(pattern);
+                    foundScale = "Major";
+                    break;
+                }
+            }
+        }
+    }
+
+    // Try longer patterns like "Eminor", "Aminor", "F#minor", "Abmaj"
+    if (foundNote.isEmpty()) {
+        // Check for patterns with "minor" or "major" suffix
+        static const std::vector<std::pair<juce::String, juce::String>> longPatterns = {
+            // Sharp/flat + minor/major
+            {"c#minor", "C#"}, {"d#minor", "D#"}, {"f#minor", "F#"}, {"g#minor", "G#"}, {"a#minor", "A#"},
+            {"dbminor", "Db"}, {"ebminor", "Eb"}, {"gbminor", "Gb"}, {"abminor", "Ab"}, {"bbminor", "Bb"},
+            {"c#major", "C#"}, {"d#major", "D#"}, {"f#major", "F#"}, {"g#major", "G#"}, {"a#major", "A#"},
+            {"dbmajor", "Db"}, {"ebmajor", "Eb"}, {"gbmajor", "Gb"}, {"abmajor", "Ab"}, {"bbmajor", "Bb"},
+            // Natural + minor/major
+            {"cminor", "C"}, {"dminor", "D"}, {"eminor", "E"}, {"fminor", "F"},
+            {"gminor", "G"}, {"aminor", "A"}, {"bminor", "B"},
+            {"cmajor", "C"}, {"dmajor", "D"}, {"emajor", "E"}, {"fmajor", "F"},
+            {"gmajor", "G"}, {"amajor", "A"}, {"bmajor", "B"},
+            // Short forms with min/maj
+            {"c#min", "C#"}, {"d#min", "D#"}, {"f#min", "F#"}, {"g#min", "G#"}, {"a#min", "A#"},
+            {"dbmin", "Db"}, {"ebmin", "Eb"}, {"gbmin", "Gb"}, {"abmin", "Ab"}, {"bbmin", "Bb"},
+            {"cmin", "C"}, {"dmin", "D"}, {"emin", "E"}, {"fmin", "F"},
+            {"gmin", "G"}, {"amin", "A"}, {"bmin", "B"},
+        };
+
+        for (const auto& [pattern, note] : longPatterns) {
+            if (lowerName.contains(pattern)) {
+                foundNote = note;
+                foundScale = pattern.contains("minor") || pattern.contains("min") ? "Minor" : "Major";
+                break;
+            }
+        }
+    }
+
+    // Try standalone note detection with context (e.g., "120bpm G", "128 F#")
+    if (foundNote.isEmpty()) {
+        // Look for patterns like "bpm X" or "BPM X" followed by note
+        juce::StringArray tokens;
+        tokens.addTokens(lowerName, " _-", "");
+
+        for (int i = 0; i < tokens.size(); i++) {
+            juce::String token = tokens[i];
+
+            // Check if this token looks like a note (A-G optionally followed by # or b)
+            if (token.length() >= 1 && token.length() <= 2) {
+                juce::juce_wchar firstChar = token[0];
+                if (firstChar >= 'a' && firstChar <= 'g') {
+                    bool hasAccidental = token.length() == 2 && (token[1] == '#' || token[1] == 'b');
+
+                    // Validate by checking surrounding context
+                    bool hasContext = false;
+                    if (i > 0) {
+                        juce::String prev = tokens[i - 1];
+                        // Previous token ends with "bpm" or is a number
+                        if (prev.endsWithIgnoreCase("bpm") || prev.containsOnly("0123456789")) {
+                            hasContext = true;
+                        }
+                    }
+                    if (i < tokens.size() - 1) {
+                        juce::String next = tokens[i + 1];
+                        // Next token starts with scale indicator
+                        if (next.startsWithIgnoreCase("min") || next.startsWithIgnoreCase("maj") ||
+                            next.startsWithIgnoreCase("major") || next.startsWithIgnoreCase("minor")) {
+                            hasContext = true;
+                            foundScale = next.startsWithIgnoreCase("min") ? "Minor" : "Major";
+                        }
+                    }
+
+                    if (hasContext || hasAccidental) {
+                        foundNote = juce::String(token.substring(0, 1)).toUpperCase();
+                        if (hasAccidental) {
+                            foundNote += token[1];
+                        }
+                        if (foundScale.isEmpty()) {
+                            foundScale = "Major";  // Default to major if not specified
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Return the found key or empty string
+    if (foundNote.isNotEmpty()) {
+        return foundNote + " " + foundScale;
+    }
+
+    return juce::String();  // Return empty if no key found
 }
 
 void MIDIXplorerEditor::updateTagFilter() {
