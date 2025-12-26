@@ -470,6 +470,7 @@ public:
         juce::int64 fileSize = 0;  // File size in bytes
         juce::String instrument = "---";  // GM instrument name
         juce::String mood = "---";  // Detected mood (Happy, Melancholic, Energetic, etc.)
+        juce::StringArray tags;  // Tags extracted from filename (instrument type, genre, etc.)
         bool analyzed = false;
         bool isAnalyzing = false;  // Currently being analyzed
         bool favorite = false;  // Marked as favorite
@@ -647,6 +648,7 @@ private:
     juce::Label fileCountLabel;
     juce::ComboBox keyFilterCombo;
     juce::ComboBox contentTypeFilterCombo;  // Filter by chords/notes
+    juce::ComboBox tagFilterCombo;  // Filter by filename-extracted tags
     juce::ComboBox sortCombo;
     juce::ComboBox quantizeCombo;
     juce::TextEditor searchBox;
@@ -678,6 +680,7 @@ private:
     std::vector<juce::String> recentlyPlayed;  // Recently played file paths
     int selectedLibraryIndex = 0;  // 0=All, 1=Favorites, 2=Recently Played, 3+=user libraries
     juce::StringArray detectedKeys;
+    juce::StringArray allTags;  // All unique tags extracted from filenames
 
     int selectedFileIndex = -1;
     juce::String pendingSelectedFilePath;
@@ -744,6 +747,8 @@ private:
     void sortFiles();
     void updateKeyFilterFromDetectedScales();
     void updateContentTypeFilter();  // Update chord/note filter with counts
+    void updateTagFilter();  // Update tag filter with available tags
+    juce::StringArray extractTagsFromFilename(const juce::String& filename);  // Extract tags from filename
     void loadSelectedFile();
     void scheduleFileChangeTo(int row);
     void stopPlayback();

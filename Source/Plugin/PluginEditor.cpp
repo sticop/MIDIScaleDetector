@@ -79,6 +79,12 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     contentTypeFilterCombo.onChange = [this]() { filterFiles(); };
     addAndMakeVisible(contentTypeFilterCombo);
 
+    // Tag filter dropdown (extracted from filenames)
+    tagFilterCombo.addItem("All Tags", 1);
+    tagFilterCombo.setSelectedId(1);
+    tagFilterCombo.onChange = [this]() { filterFiles(); };
+    addAndMakeVisible(tagFilterCombo);
+
     // Sort dropdown
     sortCombo.addItem("Sort: Scale", 1);
     sortCombo.addItem("Sort: Duration", 2);
@@ -465,10 +471,18 @@ void MIDIXplorerEditor::saveFileCache() {
         fileObj->setProperty("analyzed", f.analyzed);
         fileObj->setProperty("containsChords", f.containsChords);
         fileObj->setProperty("containsSingleNotes", f.containsSingleNotes);
+
+        // Save tags
+        juce::Array<juce::var> tagsArray;
+        for (const auto& tag : f.tags) {
+            tagsArray.add(juce::var(tag));
+        }
+        fileObj->setProperty("tags", tagsArray);
+
         filesArray.add(juce::var(fileObj.get()));
     }
     root->setProperty("files", filesArray);
-    root->setProperty("cacheVersion", 2);
+    root->setProperty("cacheVersion", 3);  // Bump version for tags support
 
     juce::var jsonVar(root.get());
     auto jsonStr = juce::JSON::toString(jsonVar);
@@ -503,10 +517,22 @@ void MIDIXplorerEditor::loadFileCache() {
                     info.containsChords = (bool)fileObj->getProperty("containsChords");
                     info.containsSingleNotes = (bool)fileObj->getProperty("containsSingleNotes");
 
+                    // Load tags from cache or extract from filename
+                    auto tagsVar = fileObj->getProperty("tags");
+                    if (auto* tagsArray = tagsVar.getArray()) {
+                        for (const auto& tagVar : *tagsArray) {
+                            info.tags.add(tagVar.toString());
+                        }
+                    }
+                    // If no tags in cache, extract from filename
+                    if (info.tags.isEmpty()) {
+                        info.tags = extractTagsFromFilename(info.fileName);
+                    }
+
                     // Only add if file still exists
                     if (juce::File(info.fullPath).existsAsFile()) {
                         allFiles.push_back(info);
-                        
+
                         // Queue unanalyzed files for analysis to continue progress
                         if (!info.analyzed) {
                             analysisQueue.push_back(allFiles.size() - 1);
@@ -682,6 +708,7 @@ void MIDIXplorerEditor::resized() {
         fileCountLabel.setVisible(false);
         keyFilterCombo.setVisible(false);
         contentTypeFilterCombo.setVisible(false);
+        tagFilterCombo.setVisible(false);
         sortCombo.setVisible(false);
         velocitySlider.setVisible(false);
         velocityLabel.setVisible(false);
@@ -704,6 +731,7 @@ void MIDIXplorerEditor::resized() {
     fileCountLabel.setVisible(true);
     keyFilterCombo.setVisible(true);
     contentTypeFilterCombo.setVisible(true);
+    tagFilterCombo.setVisible(true);
     sortCombo.setVisible(true);
     velocitySlider.setVisible(true);
     velocityLabel.setVisible(true);
@@ -736,6 +764,7 @@ void MIDIXplorerEditor::resized() {
     fileCountLabel.setBounds(topBar.removeFromLeft(70));
     keyFilterCombo.setBounds(topBar.removeFromLeft(105).reduced(2));
     contentTypeFilterCombo.setBounds(topBar.removeFromLeft(100).reduced(2));
+    tagFilterCombo.setBounds(topBar.removeFromLeft(100).reduced(2));
     sortCombo.setBounds(topBar.removeFromLeft(110).reduced(2));
     // syncToHostToggle hidden
 
@@ -804,6 +833,7 @@ void MIDIXplorerEditor::timerCallback() {
                     info.fullPath = file.getFullPathName();
                     info.libraryName = libraries[currentScanLibraryIndex].name;
                     info.key = "---";
+                    info.tags = extractTagsFromFilename(info.fileName);
                     allFiles.push_back(info);
 
                     // Queue for analysis
@@ -860,6 +890,7 @@ void MIDIXplorerEditor::timerCallback() {
         if (filesAnalyzed > 0) {
             updateKeyFilterFromDetectedScales();
             updateContentTypeFilter();
+            updateTagFilter();
             fileListBox->repaint();
             libraryListBox.repaint();
         }
@@ -1407,6 +1438,7 @@ void MIDIXplorerEditor::scanLibraries() {
         filterFiles();
         updateKeyFilterFromDetectedScales();
         updateContentTypeFilter();
+        updateTagFilter();
         libraryListBox.repaint();
         return;  // Skip scanning - we have cached data
     }
@@ -1434,6 +1466,7 @@ void MIDIXplorerEditor::scanLibraries() {
     filterFiles();
     updateKeyFilterFromDetectedScales();
     updateContentTypeFilter();
+    updateTagFilter();
     libraryListBox.repaint();
 }
 
@@ -2053,12 +2086,31 @@ void MIDIXplorerEditor::filterFiles() {
             }
         }
 
-        // Check search filter (matches filename, key, relative key, or instrument)
+        // Check tag filter
+        if (tagFilterCombo.getSelectedId() > 1) {
+            juce::String selectedTag = tagFilterCombo.getText();
+            // Strip count suffix if present (e.g., "Bass (123)" -> "Bass")
+            if (selectedTag.containsChar('(') && selectedTag.endsWithChar(')')) {
+                selectedTag = selectedTag.upToFirstOccurrenceOf(" (", false, false);
+            }
+            if (!file.tags.contains(selectedTag)) continue;
+        }
+
+        // Check search filter (matches filename, key, relative key, instrument, or tags)
         if (searchText.isNotEmpty()) {
             bool matchesSearch = file.fileName.toLowerCase().contains(searchText) ||
                                  file.key.toLowerCase().contains(searchText) ||
                                  file.relativeKey.toLowerCase().contains(searchText) ||
                                  file.instrument.toLowerCase().contains(searchText);
+            // Also check tags
+            if (!matchesSearch) {
+                for (const auto& tag : file.tags) {
+                    if (tag.toLowerCase().contains(searchText)) {
+                        matchesSearch = true;
+                        break;
+                    }
+                }
+            }
             if (!matchesSearch) continue;
         }
 
@@ -2214,6 +2266,128 @@ void MIDIXplorerEditor::updateContentTypeFilter() {
     contentTypeFilterCombo.addItem("Chords (" + juce::String(chordFileCount) + ")", 2);
     contentTypeFilterCombo.addItem("Notes (" + juce::String(noteFileCount) + ")", 3);
     contentTypeFilterCombo.setSelectedId(currentId, juce::dontSendNotification);
+}
+
+juce::StringArray MIDIXplorerEditor::extractTagsFromFilename(const juce::String& filename) {
+    juce::StringArray tags;
+    juce::String lowerFilename = filename.toLowerCase();
+
+    // Instrument/Sound type tags
+    static const std::vector<std::pair<juce::String, juce::String>> instrumentPatterns = {
+        {"bass", "Bass"}, {"synth", "Synth"}, {"piano", "Piano"}, {"keys", "Keys"},
+        {"pad", "Pad"}, {"lead", "Lead"}, {"arp", "Arp"}, {"guitar", "Guitar"},
+        {"strings", "Strings"}, {"violin", "Violin"}, {"viola", "Viola"}, {"cello", "Cello"},
+        {"flute", "Flute"}, {"organ", "Organ"}, {"pluck", "Pluck"}, {"brass", "Brass"},
+        {"choir", "Choir"}, {"vocal", "Vocal"}, {"bell", "Bell"}, {"chimes", "Chimes"},
+        {"mallet", "Mallet"}, {"percussion", "Percussion"}, {"drums", "Drums"},
+        {"hihat", "Hi-Hat"}, {"hi-hat", "Hi-Hat"}, {"hi hat", "Hi-Hat"},
+        {"kick", "Kick"}, {"snare", "Snare"}, {"clap", "Clap"},
+        {"fx", "FX"}, {"riser", "Riser"}, {"sub", "Sub"}, {"stab", "Stab"},
+        {"melody", "Melody"}, {"chords", "Chords"}, {"chord", "Chords"}
+    };
+
+    for (const auto& [pattern, tag] : instrumentPatterns) {
+        if (lowerFilename.contains(pattern) && !tags.contains(tag)) {
+            tags.add(tag);
+        }
+    }
+
+    // Genre/Style tags
+    static const std::vector<std::pair<juce::String, juce::String>> genrePatterns = {
+        {"trance", "Trance"}, {"psy", "Psy"}, {"psytrance", "Psytrance"},
+        {"house", "House"}, {"deephouse", "Deep House"}, {"deep house", "Deep House"},
+        {"techno", "Techno"}, {"dubstep", "Dubstep"}, {"dnb", "DnB"}, {"drum and bass", "DnB"},
+        {"edm", "EDM"}, {"electronica", "Electronica"}, {"ambient", "Ambient"},
+        {"chillout", "Chillout"}, {"lofi", "Lo-Fi"}, {"lo-fi", "Lo-Fi"}, {"hellofi", "Lo-Fi"},
+        {"trap", "Trap"}, {"hip hop", "Hip Hop"}, {"hiphop", "Hip Hop"},
+        {"rock", "Rock"}, {"pop", "Pop"}, {"jazz", "Jazz"}, {"classical", "Classical"},
+        {"flamenco", "Flamenco"}, {"flamenko", "Flamenco"},
+        {"ballad", "Ballad"}, {"acid", "Acid"}, {"melodic", "Melodic"}
+    };
+
+    for (const auto& [pattern, tag] : genrePatterns) {
+        if (lowerFilename.contains(pattern) && !tags.contains(tag)) {
+            tags.add(tag);
+        }
+    }
+
+    // Producer/Pack source tags (common sample pack indicators)
+    static const std::vector<std::pair<juce::String, juce::String>> sourcePatterns = {
+        {"zenhiser", "Zenhiser"}, {"adsr", "ADSR"}, {"[tps]", "TPS"},
+        {"loopmasters", "Loopmasters"}, {"splice", "Splice"},
+        {"vengeance", "Vengeance"}, {"native instruments", "NI"},
+        {"cymatics", "Cymatics"}, {"kshmr", "KSHMR"}, {"black octopus", "Black Octopus"},
+        {"production master", "Production Master"}, {"ghosthack", "Ghosthack"}
+    };
+
+    for (const auto& [pattern, tag] : sourcePatterns) {
+        if (lowerFilename.contains(pattern) && !tags.contains(tag)) {
+            tags.add(tag);
+        }
+    }
+
+    // Detect numbered/indexed files (e.g., "01 Bass", "001 Midi")
+    if (lowerFilename.length() >= 2) {
+        bool startsWithNumber = true;
+        int digitCount = 0;
+        for (int i = 0; i < juce::jmin(3, lowerFilename.length()); i++) {
+            if (juce::CharacterFunctions::isDigit(lowerFilename[i])) {
+                digitCount++;
+            } else if (lowerFilename[i] == ' ' || lowerFilename[i] == '_' || lowerFilename[i] == '-') {
+                break;
+            } else {
+                startsWithNumber = false;
+                break;
+            }
+        }
+        if (startsWithNumber && digitCount >= 2 && !tags.contains("Indexed")) {
+            tags.add("Indexed");
+        }
+    }
+
+    return tags;
+}
+
+void MIDIXplorerEditor::updateTagFilter() {
+    // Collect all unique tags from files
+    allTags.clear();
+    std::map<juce::String, int> tagCounts;
+
+    for (const auto& file : allFiles) {
+        for (const auto& tag : file.tags) {
+            tagCounts[tag]++;
+            if (!allTags.contains(tag)) {
+                allTags.add(tag);
+            }
+        }
+    }
+
+    // Sort tags alphabetically
+    allTags.sort(true);
+
+    // Update combo box
+    juce::String currentSelection = tagFilterCombo.getText();
+    // Strip count suffix if present
+    if (currentSelection.containsChar('(') && currentSelection.endsWithChar(')')) {
+        currentSelection = currentSelection.upToFirstOccurrenceOf(" (", false, false);
+    }
+
+    tagFilterCombo.clear();
+    tagFilterCombo.addItem("All Tags", 1);
+
+    int itemId = 2;
+    int selectedId = 1;
+    for (const auto& tag : allTags) {
+        int count = tagCounts[tag];
+        juce::String itemText = tag + " (" + juce::String(count) + ")";
+        tagFilterCombo.addItem(itemText, itemId);
+        if (tag == currentSelection) {
+            selectedId = itemId;
+        }
+        itemId++;
+    }
+
+    tagFilterCombo.setSelectedId(selectedId, juce::dontSendNotification);
 }
 
 void MIDIXplorerEditor::revealInFinder(const juce::String& path) {
@@ -3119,6 +3293,7 @@ void MIDIXplorerEditor::LibraryListModel::listBoxItemClicked(int row, const juce
                 owner.filterFiles();
                 owner.updateKeyFilterFromDetectedScales();
                 owner.updateContentTypeFilter();
+                owner.updateTagFilter();
             }
         });
     }

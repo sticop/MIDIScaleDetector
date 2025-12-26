@@ -333,7 +333,7 @@ void MIDIScalePlugin::seekToPosition(double position) {
 
     // Get current host position
     double currentBeat = transportState.ppqPosition.load();
-    
+
     // Immediate seek - set start beat so that at current host position, we're at newTime
     // This allows the playhead to move immediately while staying in sync with host
     playbackState.playbackStartBeat.store(currentBeat - beatsOffset);
@@ -420,7 +420,7 @@ void MIDIScalePlugin::updatePlayback() {
             // Reset playback start time to now so currentTime = 0
             playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0);
         }
-        
+
         // Don't play notes in this cycle - let the next processBlock handle it
         // This prevents notes at time 0 from playing immediately after reset
         playbackState.playbackPosition.store(0.0);
