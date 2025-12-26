@@ -505,6 +505,7 @@ private:
         DraggableListBox(const juce::String& name, MIDIXplorerEditor& o)
             : juce::ListBox(name), owner(o) {
             setMultipleSelectionEnabled(false);
+            setMouseCursor(juce::MouseCursor::PointingHandCursor);
         }
 
         void mouseDown(const juce::MouseEvent& e) override {
@@ -593,6 +594,7 @@ private:
         void setZoomLevel(float newZoom) { zoomLevel = juce::jlimit(0.5f, 32.0f, newZoom); repaint(); }
         void resetZoom() { zoomLevel = 1.0f; scrollOffset = 0.0f; repaint(); }
         void setPlayingNotes(const std::vector<int>& notes) { playingNotes = notes; repaint(); }
+        void setVelocityScale(float scale) { velocityScale = juce::jlimit(0.0f, 2.0f, scale); repaint(); }
         static constexpr int PIANO_WIDTH = 40;  // Width of piano keyboard on left
 
         // Fullscreen mode
@@ -622,6 +624,7 @@ private:
         juce::Point<int> hoverPos;
         float zoomLevel = 1.0f;
         float scrollOffset = 0.0f;
+        float velocityScale = 1.0f;
         std::vector<int> playingNotes;  // Currently playing notes
         bool fullscreenMode = false;
 
@@ -678,6 +681,7 @@ private:
 
     int selectedFileIndex = -1;
     juce::String pendingSelectedFilePath;
+    bool suppressSelectionChange = false;
     bool fileLoaded = false;
     bool isQuantized = false;
     double playbackStartTime = 0;
@@ -740,11 +744,13 @@ private:
     void updateKeyFilterFromDetectedScales();
     void updateContentTypeFilter();  // Update chord/note filter with counts
     void loadSelectedFile();
-    void scheduleFileChange();
+    void scheduleFileChangeTo(int row);
     void stopPlayback();
     void restartPlayback();
     void playNextFile();  // Play next or random file
+    void updateTransposeComboSelection();
     void applyTransposeToPlayback();  // Apply transpose to current playback
+    void restoreSelectionFromCurrentFile();
     void revealInFinder(const juce::String& path);
     void toggleFavorite(int row);
     void saveFavorites();

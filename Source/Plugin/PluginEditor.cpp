@@ -19,6 +19,24 @@ namespace {
         }
         return 9999;
     }
+
+    constexpr int kTransposePresetValues[] = {36, 24, 12, 0, -12, -24, -36};
+
+    int getTransposePresetValueForId(int id) {
+        int index = id - 2;  // id 2..8 map to presets
+        if (index < 0 || index >= (int)(sizeof(kTransposePresetValues) / sizeof(kTransposePresetValues[0])))
+            return 0;
+        return kTransposePresetValues[index];
+    }
+
+    int getTransposePresetIdForValue(int value) {
+        for (int i = 0; i < (int)(sizeof(kTransposePresetValues) / sizeof(kTransposePresetValues[0])); ++i) {
+            if (kTransposePresetValues[i] == value) {
+                return i + 2;
+            }
+        }
+        return 1;  // Custom
+    }
 }
 
 MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
@@ -227,19 +245,23 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
 
     // Zoom is now handled by mouse wheel in the MIDI viewer
 
-    // Transpose dropdown with more granular values
-    for (int i = 36; i >= -36; --i) {
-        juce::String label = (i > 0) ? ("+" + juce::String(i)) : (i == 0 ? juce::CharPointer_UTF8("\xc2\xb1 0") : juce::String(i));
-        transposeComboBox.addItem(label, i + 37);  // IDs from 1 to 73
+    // Transpose dropdown presets
+    transposeComboBox.addItem("Custom", 1);
+    for (int i = 0; i < (int)(sizeof(kTransposePresetValues) / sizeof(kTransposePresetValues[0])); ++i) {
+        int value = kTransposePresetValues[i];
+        juce::String label = (value > 0) ? ("+" + juce::String(value))
+                                         : (value == 0 ? juce::CharPointer_UTF8("\xc2\xb1 0") : juce::String(value));
+        transposeComboBox.addItem(label, i + 2);
     }
-    transposeComboBox.setSelectedId(37);  // Default to ± 0 (id = 0 + 37)
+    transposeComboBox.setSelectedId(getTransposePresetIdForValue(0), juce::dontSendNotification);
     transposeComboBox.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff3a3a3a));
     transposeComboBox.setColour(juce::ComboBox::textColourId, juce::Colours::white);
     transposeComboBox.setColour(juce::ComboBox::arrowColourId, juce::Colours::white);
     transposeComboBox.setTooltip("Transpose in semitones");
     transposeComboBox.onChange = [this]() {
         int selectedId = transposeComboBox.getSelectedId();
-        transposeAmount = selectedId - 37;  // Convert back: id 1 = +36, id 37 = 0, id 73 = -36
+        if (selectedId <= 1) return;
+        transposeAmount = getTransposePresetValueForId(selectedId);
         applyTransposeToPlayback();
     };
     addAndMakeVisible(transposeComboBox);
@@ -247,12 +269,12 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     // Transpose up button (+1 semitone)
     transposeUpButton.setButtonText("+");
     transposeUpButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
-    transposeUpButton.setColour(juce::TextButton::textColourOffId, juce::Colours::lightgreen);
+    transposeUpButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     transposeUpButton.setTooltip("+1 semitone");
     transposeUpButton.onClick = [this]() {
         if (transposeAmount < 36) {
             transposeAmount++;
-            transposeComboBox.setSelectedId(transposeAmount + 37, juce::dontSendNotification);
+            updateTransposeComboSelection();
             applyTransposeToPlayback();
         }
     };
@@ -261,12 +283,12 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     // Transpose down button (-1 semitone)
     transposeDownButton.setButtonText("-");
     transposeDownButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff3a3a3a));
-    transposeDownButton.setColour(juce::TextButton::textColourOffId, juce::Colours::orange);
+    transposeDownButton.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     transposeDownButton.setTooltip("-1 semitone");
     transposeDownButton.onClick = [this]() {
         if (transposeAmount > -36) {
             transposeAmount--;
-            transposeComboBox.setSelectedId(transposeAmount + 37, juce::dontSendNotification);
+            updateTransposeComboSelection();
             applyTransposeToPlayback();
         }
     };
@@ -304,6 +326,7 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
         if (pluginProcessor) {
             pluginProcessor->setVelocityScale((float)(velocitySlider.getValue() / 100.0));
         }
+        midiNoteViewer.setVelocityScale((float)(velocitySlider.getValue() / 100.0));
     };
     addAndMakeVisible(velocitySlider);
 
@@ -505,9 +528,13 @@ void MIDIXplorerEditor::saveLibraries() {
     }
     root->setProperty("libraries", libsArray);
 
-    // Save selected file path
-    if (selectedFileIndex >= 0 && selectedFileIndex < (int)filteredFiles.size()) {
-        root->setProperty("selectedFilePath", filteredFiles[(size_t)selectedFileIndex].fullPath);
+    // Save selected file path (prefer processor state if available)
+    juce::String selectedPath = pluginProcessor ? pluginProcessor->getCurrentFilePath() : juce::String();
+    if (selectedPath.isEmpty() && selectedFileIndex >= 0 && selectedFileIndex < (int)filteredFiles.size()) {
+        selectedPath = filteredFiles[(size_t)selectedFileIndex].fullPath;
+    }
+    if (selectedPath.isNotEmpty()) {
+        root->setProperty("selectedFilePath", selectedPath);
     }
 
     juce::var jsonVar(root.get());
@@ -716,9 +743,15 @@ void MIDIXplorerEditor::resized() {
     // addToDAWButton hidden
 
     // Transpose controls on the right: [-] [dropdown] [+]
-    transposeUpButton.setBounds(transport.removeFromRight(28).reduced(0, 2));
-    transposeComboBox.setBounds(transport.removeFromRight(65));
-    transposeDownButton.setBounds(transport.removeFromRight(28).reduced(0, 2));
+    int transposeComboWidth = 80;
+    int transposeButtonSize = transport.getHeight() - 4;
+    auto transposeArea = transport.removeFromRight(transposeComboWidth + transposeButtonSize * 2);
+    transposeArea = transposeArea.reduced(0, 2);
+    auto downArea = transposeArea.removeFromLeft(transposeArea.getHeight());
+    auto upArea = transposeArea.removeFromRight(transposeArea.getHeight());
+    transposeDownButton.setBounds(downArea);
+    transposeComboBox.setBounds(transposeArea);
+    transposeUpButton.setBounds(upArea);
     transport.removeFromRight(8);
     quantizeCombo.setBounds(transport.removeFromRight(145));
     transport.removeFromRight(4);
@@ -944,8 +977,11 @@ void MIDIXplorerEditor::timerCallback() {
         if (nearBeatStart || beatChanged) {
             // Apply pending file change
             if (pendingFileIndex >= 0 && pendingFileIndex < (int)filteredFiles.size()) {
+                suppressSelectionChange = true;
                 fileListBox->selectRow(pendingFileIndex);
+                suppressSelectionChange = false;
                 selectedFileIndex = pendingFileIndex;
+                dragToDAWButton.setCurrentFile(filteredFiles[(size_t)pendingFileIndex].fullPath);
                 loadSelectedFile();
                 playbackStartBeat = std::floor(hostBeat); // Start from this beat
             }
@@ -1049,7 +1085,11 @@ bool MIDIXplorerEditor::keyPressed(const juce::KeyPress& key) {
 void MIDIXplorerEditor::selectAndPreview(int row) {
     if (row < 0 || row >= (int)filteredFiles.size()) return;
 
-    fileListBox->selectRow(row);
+    if (fileListBox->getSelectedRow() != row) {
+        suppressSelectionChange = true;
+        fileListBox->selectRow(row);
+        suppressSelectionChange = false;
+    }
     fileListBox->scrollToEnsureRowIsOnscreen(row);
     selectedFileIndex = row;
 
@@ -1058,6 +1098,12 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
 
     // Add to recently played
     addToRecentlyPlayed(filteredFiles[(size_t)row].fullPath);
+
+    bool shouldSchedule = syncToHostToggle.getToggleState() && isHostPlaying() && isPlaying;
+    if (shouldSchedule) {
+        scheduleFileChangeTo(row);
+        return;
+    }
 
     // Don't auto-start playback - file should start paused
     // User must explicitly press play or use Enter key to start playback
@@ -1075,7 +1121,8 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
     loadSelectedFile();
 }
 
-void MIDIXplorerEditor::scheduleFileChange() {
+void MIDIXplorerEditor::scheduleFileChangeTo(int row) {
+    if (row < 0 || row >= (int)filteredFiles.size()) return;
     // Send all notes off immediately when scheduling a file change
     if (auto* pluginProcessor = dynamic_cast<MIDIScaleDetector::MIDIScalePlugin*>(&processor)) {
         for (int ch = 1; ch <= 16; ch++) {
@@ -1083,7 +1130,7 @@ void MIDIXplorerEditor::scheduleFileChange() {
         }
     }
     pendingFileChange = true;
-    pendingFileIndex = selectedFileIndex;
+    pendingFileIndex = row;
 }
 
 void MIDIXplorerEditor::loadSelectedFile() {
@@ -1092,7 +1139,7 @@ void MIDIXplorerEditor::loadSelectedFile() {
 
     // Reset transpose when loading new file
     transposeAmount = 0;
-    transposeComboBox.setSelectedId(37, juce::dontSendNotification);  // Reset to "± 0" (0 + 37)
+    updateTransposeComboSelection();
     if (pluginProcessor) {
         pluginProcessor->setTransposeAmount(0);
     }
@@ -1103,6 +1150,7 @@ void MIDIXplorerEditor::loadSelectedFile() {
     if (pluginProcessor) {
         pluginProcessor->setVelocityScale(1.0f);  // Use original velocity (1.0 = no change)
     }
+    midiNoteViewer.setVelocityScale(1.0f);
 
     if (selectedFileIndex < 0 || selectedFileIndex >= (int)filteredFiles.size()) return;
 
@@ -1221,7 +1269,7 @@ void MIDIXplorerEditor::stopPlayback() {
 void MIDIXplorerEditor::restartPlayback() {
     if (syncToHostToggle.getToggleState() && isHostPlaying()) {
         // Queue restart for the next beat to maintain sync
-        scheduleFileChange();
+        scheduleFileChangeTo(selectedFileIndex);
     } else {
         // Restart immediately in freerun mode
         if (pluginProcessor) {
@@ -1240,6 +1288,10 @@ void MIDIXplorerEditor::playNextFile() {
     int nextIndex = (selectedFileIndex + 1) % (int)filteredFiles.size();
 
     selectAndPreview(nextIndex);
+}
+
+void MIDIXplorerEditor::updateTransposeComboSelection() {
+    transposeComboBox.setSelectedId(getTransposePresetIdForValue(transposeAmount), juce::dontSendNotification);
 }
 
 void MIDIXplorerEditor::applyTransposeToPlayback() {
@@ -1453,7 +1505,9 @@ void MIDIXplorerEditor::scanLibrary(size_t index) {
             indexToSelect = 0;
         }
 
+        suppressSelectionChange = true;
         fileListBox->selectRow(indexToSelect);
+        suppressSelectionChange = false;
         selectedFileIndex = indexToSelect;
 
         // Only load a new file if nothing is currently loaded in processor
@@ -2012,6 +2066,57 @@ void MIDIXplorerEditor::filterFiles() {
     fileCountLabel.setText(juce::String((int)filteredFiles.size()) + " files", juce::dontSendNotification);
     fileListBox->updateContent();
     fileListBox->repaint();
+    restoreSelectionFromCurrentFile();
+}
+
+void MIDIXplorerEditor::restoreSelectionFromCurrentFile() {
+    if (filteredFiles.empty()) {
+        selectedFileIndex = -1;
+        return;
+    }
+
+    bool needsRestore = pendingSelectedFilePath.isNotEmpty() ||
+                        selectedFileIndex < 0 ||
+                        selectedFileIndex >= (int)filteredFiles.size();
+    if (!needsRestore) return;
+
+    juce::String processorPath = pluginProcessor ? pluginProcessor->getCurrentFilePath() : juce::String();
+    juce::String targetPath = processorPath.isNotEmpty() ? processorPath : pendingSelectedFilePath;
+
+    int indexToSelect = -1;
+    if (targetPath.isNotEmpty()) {
+        for (size_t i = 0; i < filteredFiles.size(); i++) {
+            if (filteredFiles[i].fullPath == targetPath) {
+                indexToSelect = (int)i;
+                break;
+            }
+        }
+    }
+
+    if (indexToSelect < 0) {
+        indexToSelect = 0;
+    }
+
+    suppressSelectionChange = true;
+    fileListBox->selectRow(indexToSelect);
+    suppressSelectionChange = false;
+    fileListBox->scrollToEnsureRowIsOnscreen(indexToSelect);
+    selectedFileIndex = indexToSelect;
+    dragToDAWButton.setCurrentFile(filteredFiles[(size_t)indexToSelect].fullPath);
+
+    if (targetPath == pendingSelectedFilePath &&
+        indexToSelect >= 0 &&
+        filteredFiles[(size_t)indexToSelect].fullPath == targetPath) {
+        pendingSelectedFilePath = "";
+    }
+
+    if (processorPath.isNotEmpty() && pluginProcessor) {
+        fileLoaded = true;
+        midiFileDuration = pluginProcessor->getFileDuration();
+        midiFileBpm = pluginProcessor->getFileBpm();
+        auto& seq = pluginProcessor->getPlaybackSequence();
+        midiNoteViewer.setSequence(&seq, midiFileDuration);
+    }
 }
 
 void MIDIXplorerEditor::updateKeyFilterFromDetectedScales() {
@@ -2322,7 +2427,8 @@ void MIDIXplorerEditor::MIDINoteViewer::paint(juce::Graphics& g) {
 
                 // Note color based on velocity: green (low) to red (high)
                 int velocity = msg.getVelocity();
-                float velocityNorm = juce::jlimit(0.0f, 1.0f, (float)velocity / 127.0f);
+                int effectiveVelocity = juce::jlimit(0, 127, (int)std::round((float)velocity * velocityScale));
+                float velocityNorm = juce::jlimit(0.0f, 1.0f, (float)effectiveVelocity / 127.0f);
                 juce::Colour noteColour = juce::Colour(0xff22cc55)
                                               .interpolatedWith(juce::Colour(0xffcc3333), velocityNorm);
 
@@ -2609,13 +2715,24 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseMove(const juce::MouseEvent& e) {
     }
 
     auto bounds = getLocalBounds();
+    auto noteArea = bounds.withTrimmedLeft(PIANO_WIDTH);
     float noteRangeF = (float)(highestNote - lowestNote + 1);
     if (noteRangeF < 1.0f) noteRangeF = 12.0f;
-    float noteHeight = (float)bounds.getHeight() / noteRangeF;
+    float noteHeight = (float)noteArea.getHeight() / noteRangeF;
+    float pixelsPerSecond = (float)noteArea.getWidth() * zoomLevel / (float)totalDuration;
+    float scrollPixels = scrollOffset * pixelsPerSecond;
 
     // Find which note the mouse is over
     int newHoveredNote = -1;
     hoverPos = e.getPosition();
+
+    if (e.x < noteArea.getX()) {
+        if (newHoveredNote != hoveredNote) {
+            hoveredNote = newHoveredNote;
+            repaint();
+        }
+        return;
+    }
 
     for (int i = 0; i < sequence->getNumEvents(); i++) {
         auto* event = sequence->getEventPointer(i);
@@ -2630,9 +2747,9 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseMove(const juce::MouseEvent& e) {
         }
 
         // Calculate note rectangle
-        float x = (float)(startTime / totalDuration) * bounds.getWidth();
-        float width = (float)((endTime - startTime) / totalDuration) * bounds.getWidth();
-        float y = (float)(highestNote - noteNumber) / noteRangeF * bounds.getHeight();
+        float x = noteArea.getX() + (float)(startTime * pixelsPerSecond) - scrollPixels;
+        float width = (float)((endTime - startTime) * pixelsPerSecond);
+        float y = noteArea.getHeight() - (noteNumber - lowestNote + 1) * noteHeight;
 
         if (width < 2.0f) width = 2.0f;
 
@@ -2807,6 +2924,22 @@ void MIDIXplorerEditor::MIDINoteViewer::mouseUp(const juce::MouseEvent& e) {
                 scrollOffset = juce::jlimit(0.0f, juce::jmax(0.0f, maxScroll), scrollOffset);
             }
         }
+        else {
+            // Treat as click-to-jump playhead
+            if (onPlayheadJump) {
+                int clickX = e.getPosition().x;
+                if (clickX > PIANO_WIDTH) {
+                    float noteAreaWidth = (float)(getWidth() - PIANO_WIDTH);
+                    float pixelsPerSecond = noteAreaWidth * zoomLevel / (float)totalDuration;
+                    float localX = (float)(clickX - PIANO_WIDTH);
+                    localX = juce::jlimit(0.0f, juce::jmax(0.0f, noteAreaWidth), localX);
+                    float timeAtClick = scrollOffset + (localX / pixelsPerSecond);
+                    double position = timeAtClick / (float)totalDuration;
+                    position = juce::jlimit(0.0, 1.0, position);
+                    onPlayheadJump(position);
+                }
+            }
+        }
 
         repaint();
     }
@@ -2816,6 +2949,9 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
     // Special libraries: 0=All, 1=Favorites, 2=Recently Played
     juce::String name;
     int fileCount = 0;
+    int processingCount = 0;
+    int pendingCount = 0;
+    bool showProcessingCounts = false;
     juce::String icon;
     bool isLibraryScanning = false;
 
@@ -2862,6 +2998,14 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
                 }
             }
         }
+
+        for (const auto& f : owner.allFiles) {
+            if (f.libraryName != lib.name) continue;
+            if (f.isAnalyzing) processingCount++;
+            if (!f.analyzed) pendingCount++;
+        }
+        pendingCount = std::max(0, pendingCount - processingCount);
+        showProcessingCounts = true;
     }
 
     bool isSelected = (row == owner.selectedLibraryIndex);
@@ -2884,8 +3028,13 @@ void MIDIXplorerEditor::LibraryListModel::paintListBoxItem(int row, juce::Graphi
     g.setFont(13.0f);
     g.drawText(name, 26, 0, w - 80, h, juce::Justification::centredLeft);
 
-    // File count or spinner
-    if (isLibraryScanning) {
+    // File count, spinner, or processing/pending
+    if (showProcessingCounts) {
+        juce::String progressText = juce::String(processingCount) + "/" + juce::String(pendingCount);
+        g.setColour(processingCount > 0 ? juce::Colour(0xff00cc88) : juce::Colours::grey);
+        g.setFont(11.0f);
+        g.drawText(progressText, w - 70, 0, 65, h, juce::Justification::centredRight);
+    } else if (isLibraryScanning) {
         // Draw animated spinner
         float centerX = w - 25.0f;
         float centerY = h / 2.0f;
@@ -3070,8 +3219,7 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     juce::String bpmStr = juce::String((int)file.bpm) + " bpm";
     g.drawText(bpmStr, w - 130, 0, 60, h, juce::Justification::centredRight);
 
-    // Draw duration (bars and time) with elapsed time for playing file
-    int bars = (int)(file.durationBeats / 4.0);
+    // Draw duration (time) with elapsed time for playing file
     int mins = (int)(file.duration) / 60;
     int secs = (int)(file.duration) % 60;
 
@@ -3084,23 +3232,14 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
         g.setColour(juce::Colour(0xff00cc88));  // Green for playing
         g.drawText(timeStr, w - 95, 0, 90, h, juce::Justification::centredRight);
     } else {
-        juce::String durationStr = juce::String::formatted("%dbar %d:%02d", bars, mins, secs);
+        juce::String durationStr = juce::String::formatted("%d:%02d", mins, secs);
         g.drawText(durationStr, w - 85, 0, 80, h, juce::Justification::centredRight);
     }
 
-    // Progress bar for currently playing file
-    if (row == owner.selectedFileIndex && owner.isPlaying && owner.fileLoaded) {
-        // Background of progress bar
-        g.setColour(juce::Colour(0xff333333));
-        g.fillRect(8, h - 4, w - 16, 3);
-        // Progress fill
-        int progressWidth = (int)((w - 16) * owner.currentPlaybackPosition);
-        g.setColour(juce::Colour(0xff00cc88));
-        g.fillRect(8, h - 4, progressWidth, 3);
-    }
 }
 
 void MIDIXplorerEditor::FileListModel::selectedRowsChanged(int lastRowSelected) {
+    if (owner.suppressSelectionChange) return;
     // Trigger preview when selection changes (arrow keys, click, etc.)
     if (lastRowSelected >= 0 && lastRowSelected < (int)owner.filteredFiles.size()) {
         owner.selectAndPreview(lastRowSelected);

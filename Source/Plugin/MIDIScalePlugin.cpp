@@ -399,9 +399,12 @@ void MIDIScalePlugin::updatePlayback() {
 
         // If time is negative (DAW seeked backwards), reset completely
         if (currentTime < 0) {
-            // Send note-offs for currently playing notes
-            sendActiveNoteOffs();
-            playbackState.playbackNoteIndex.store(0);
+            bool atStart = playbackState.playbackNoteIndex.load() == 0 &&
+                           playbackState.playbackPosition.load() <= 0.0;
+            if (!atStart) {
+                sendActiveNoteOffs();
+                playbackState.playbackNoteIndex.store(0);
+            }
             playbackState.playbackStartBeat.store(hostBeat);
             currentTime = 0;
         }
