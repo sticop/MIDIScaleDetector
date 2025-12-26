@@ -2570,8 +2570,28 @@ void MIDIXplorerEditor::updateTagFilter() {
         }
     }
 
-    // Sort tags alphabetically
-    allTags.sort(true);
+    // Define tag categories
+    struct TagCategory {
+        juce::String name;
+        juce::StringArray tags;
+    };
+
+    std::vector<TagCategory> categories = {
+        {"Drums & Percussion", {"Drums", "Kick", "Snare", "Hi-Hat", "Clap", "Percussion"}},
+        {"Keys & Melodic", {"Piano", "Keys", "Organ", "Bell", "Chimes", "Mallet"}},
+        {"Synths", {"Synth", "Pad", "Lead", "Arp", "Pluck", "Stab"}},
+        {"Bass", {"Bass", "Sub"}},
+        {"Strings & Guitar", {"Strings", "Violin", "Viola", "Cello", "Guitar"}},
+        {"Winds & Vocals", {"Flute", "Brass", "Choir", "Vocal"}},
+        {"FX & Risers", {"FX", "Riser"}},
+        {"Content Type", {"Melody", "Chords"}},
+        {"Genre", {"Trance", "Psy", "Psytrance", "House", "Deep House", "Techno", "Dubstep", 
+                   "DnB", "EDM", "Electronica", "Ambient", "Chillout", "Lo-Fi", "Trap", 
+                   "Hip Hop", "Rock", "Pop", "Jazz", "Classical", "Flamenco", "Ballad", "Acid", "Melodic"}},
+        {"Source", {"Zenhiser", "ADSR", "TPS", "Loopmasters", "Splice", "Vengeance", "NI", 
+                    "Cymatics", "KSHMR", "Black Octopus", "Production Master", "Ghosthack"}},
+        {"Other", {"Indexed"}}
+    };
 
     // Update combo box
     juce::String currentSelection = tagFilterCombo.getText();
@@ -2585,14 +2605,62 @@ void MIDIXplorerEditor::updateTagFilter() {
 
     int itemId = 2;
     int selectedId = 1;
-    for (const auto& tag : allTags) {
-        int count = tagCounts[tag];
-        juce::String itemText = tag + " (" + juce::String(count) + ")";
-        tagFilterCombo.addItem(itemText, itemId);
-        if (tag == currentSelection) {
-            selectedId = itemId;
+
+    // Track which tags have been added to avoid duplicates
+    juce::StringArray addedTags;
+
+    // Add tags by category
+    for (const auto& category : categories) {
+        bool hasTagsInCategory = false;
+
+        // Check if any tags from this category exist in the file set
+        for (const auto& tag : category.tags) {
+            if (tagCounts.find(tag) != tagCounts.end()) {
+                hasTagsInCategory = true;
+                break;
+            }
         }
-        itemId++;
+
+        if (hasTagsInCategory) {
+            tagFilterCombo.addSeparator();
+            tagFilterCombo.addSectionHeading(category.name);
+
+            for (const auto& tag : category.tags) {
+                auto it = tagCounts.find(tag);
+                if (it != tagCounts.end()) {
+                    int count = it->second;
+                    juce::String itemText = tag + " (" + juce::String(count) + ")";
+                    tagFilterCombo.addItem(itemText, itemId);
+                    if (tag == currentSelection) {
+                        selectedId = itemId;
+                    }
+                    addedTags.add(tag);
+                    itemId++;
+                }
+            }
+        }
+    }
+
+    // Add any uncategorized tags at the end
+    juce::StringArray uncategorizedTags;
+    for (const auto& tag : allTags) {
+        if (!addedTags.contains(tag)) {
+            uncategorizedTags.add(tag);
+        }
+    }
+
+    if (!uncategorizedTags.isEmpty()) {
+        tagFilterCombo.addSeparator();
+        tagFilterCombo.addSectionHeading("Uncategorized");
+        for (const auto& tag : uncategorizedTags) {
+            int count = tagCounts[tag];
+            juce::String itemText = tag + " (" + juce::String(count) + ")";
+            tagFilterCombo.addItem(itemText, itemId);
+            if (tag == currentSelection) {
+                selectedId = itemId;
+            }
+            itemId++;
+        }
     }
 
     tagFilterCombo.setSelectedId(selectedId, juce::dontSendNotification);
