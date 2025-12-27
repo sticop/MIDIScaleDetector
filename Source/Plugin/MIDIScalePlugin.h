@@ -86,6 +86,7 @@ public:
         std::atomic<int> playbackNoteIndex{0};
         std::atomic<double> fileDuration{0.0};
         std::atomic<double> fileBpm{120.0};
+        std::atomic<double> firstNoteTime{0.0};  // Time of first note-on in the MIDI file
         std::atomic<bool> syncToHost{true};
         std::atomic<float> velocityScale{1.0f};  // 0.0 to 2.0 (0% to 200%)
         std::atomic<int> transposeAmount{0};      // -24 to +24 semitones

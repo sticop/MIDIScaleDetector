@@ -290,6 +290,17 @@ void MIDIScalePlugin::loadPlaybackSequence(const juce::MidiMessageSequence& seq,
     playbackSequence.sort();
     playbackSequence.updateMatchedPairs();
 
+    // Find the first note-on event time
+    double firstNoteTime = 0.0;
+    for (int i = 0; i < playbackSequence.getNumEvents(); i++) {
+        auto* event = playbackSequence.getEventPointer(i);
+        if (event->message.isNoteOn()) {
+            firstNoteTime = event->message.getTimeStamp();
+            break;
+        }
+    }
+    playbackState.firstNoteTime.store(firstNoteTime);
+
     playbackState.fileDuration.store(duration);
     playbackState.fileBpm.store(bpm);
     playbackState.currentFilePath = path;
@@ -309,14 +320,41 @@ void MIDIScalePlugin::loadPlaybackSequence(const juce::MidiMessageSequence& seq,
 }
 
 void MIDIScalePlugin::resetPlayback() {
-    playbackState.playbackNoteIndex.store(0);
-    playbackState.playbackPosition.store(0.0);
-    playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0);
+    // Get the first note time to start playback from there
+    double firstNoteTime = playbackState.firstNoteTime.load();
+    double bpm = playbackState.fileBpm.load();
+    if (bpm <= 0) bpm = 120.0;
+    double duration = playbackState.fileDuration.load();
+    
+    // Calculate the position as a fraction (0-1) for the first note
+    double firstNotePosition = (duration > 0) ? (firstNoteTime / duration) : 0.0;
+    
+    // Find the note index for the first note
+    int firstNoteIndex = 0;
+    {
+        std::lock_guard<std::mutex> lock(sequenceMutex);
+        for (int i = 0; i < playbackSequence.getNumEvents(); i++) {
+            auto* event = playbackSequence.getEventPointer(i);
+            if (event->message.getTimeStamp() >= firstNoteTime) {
+                firstNoteIndex = i;
+                break;
+            }
+        }
+    }
+    
+    playbackState.playbackNoteIndex.store(firstNoteIndex);
+    playbackState.playbackPosition.store(firstNotePosition);
+    
+    // Calculate beats offset for the first note position
+    double beatsOffset = (firstNoteTime * bpm) / 60.0;
+    
+    // Adjust start time/beat to account for starting at first note
+    playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 - firstNoteTime);
 
     // When syncing to host, quantize start to current beat position
     // This ensures the MIDI file starts at beat 0 = host current beat
     double currentBeat = transportState.ppqPosition.load();
-    playbackState.playbackStartBeat.store(currentBeat);
+    playbackState.playbackStartBeat.store(currentBeat - beatsOffset);
 }
 
 void MIDIScalePlugin::seekToPosition(double position) {

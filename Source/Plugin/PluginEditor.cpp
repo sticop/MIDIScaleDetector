@@ -1066,7 +1066,7 @@ void MIDIXplorerEditor::timerCallback() {
     double currentTime = 0.0;
     if (pluginProcessor) {
         position = pluginProcessor->getPlaybackPosition();
-        
+
         // Adjust for audio buffer latency - the playhead should lag behind
         // because notes are queued at the start of processBlock but heard at the end
         double sampleRate = pluginProcessor->getSampleRate();
@@ -1077,7 +1077,7 @@ void MIDIXplorerEditor::timerCallback() {
             double latencyFraction = latencySeconds / totalDuration;
             position = std::max(0.0, position - latencyFraction);
         }
-        
+
         currentTime = position * totalDuration;
     }
     if (position >= 0 && position <= 1) {
