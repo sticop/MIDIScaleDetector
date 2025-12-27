@@ -27,8 +27,9 @@ MIDIScalePlugin::MIDIScalePlugin()
 
 MIDIScalePlugin::~MIDIScalePlugin() {}
 
-void MIDIScalePlugin::prepareToPlay(double sampleRate, int /*samplesPerBlock*/) {
+void MIDIScalePlugin::prepareToPlay(double sampleRate, int samplesPerBlock) {
     currentSampleRate = sampleRate;
+    currentBlockSize = samplesPerBlock;
 }
 
 void MIDIScalePlugin::releaseResources() {

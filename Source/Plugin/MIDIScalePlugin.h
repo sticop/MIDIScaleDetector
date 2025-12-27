@@ -64,6 +64,7 @@ public:
     void addMidiMessage(const juce::MidiMessage& msg);
     void clearMidiQueue();
     double getSampleRate() const { return currentSampleRate; }
+    int getBlockSize() const { return currentBlockSize; }
 
     // Host transport state - updated in processBlock, read from editor
     struct TransportState {
@@ -153,6 +154,7 @@ private:
     bool constrainToScale;
     TransformMode transformMode;
     double currentSampleRate = 44100.0;
+    int currentBlockSize = 512;
 
     // MIDI processing
     int constrainNoteToScale(int midiNote);

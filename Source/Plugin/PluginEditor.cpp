@@ -1066,6 +1066,18 @@ void MIDIXplorerEditor::timerCallback() {
     double currentTime = 0.0;
     if (pluginProcessor) {
         position = pluginProcessor->getPlaybackPosition();
+        
+        // Adjust for audio buffer latency - the playhead should lag behind
+        // because notes are queued at the start of processBlock but heard at the end
+        double sampleRate = pluginProcessor->getSampleRate();
+        int blockSize = pluginProcessor->getBlockSize();
+        if (sampleRate > 0 && totalDuration > 0) {
+            // Subtract approximately 1.5 buffer lengths of latency (typical DAW latency)
+            double latencySeconds = (blockSize * 1.5) / sampleRate;
+            double latencyFraction = latencySeconds / totalDuration;
+            position = std::max(0.0, position - latencyFraction);
+        }
+        
         currentTime = position * totalDuration;
     }
     if (position >= 0 && position <= 1) {
@@ -2204,12 +2216,12 @@ void MIDIXplorerEditor::restoreSelectionFromCurrentFile() {
         midiFileBpm = pluginProcessor->getFileBpm();
         auto& seq = pluginProcessor->getPlaybackSequence();
         midiNoteViewer.setSequence(&seq, midiFileDuration);
-        
+
         // Also load the sequence into the editor's local copy for proper state sync
         playbackSequence = seq;
         playbackSequence.sort();
         playbackSequence.updateMatchedPairs();
-        
+
         // Sync playback timing
         playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
         playbackStartBeat = getHostBeatPosition();
