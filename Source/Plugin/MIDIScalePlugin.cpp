@@ -325,10 +325,10 @@ void MIDIScalePlugin::resetPlayback() {
     double bpm = playbackState.fileBpm.load();
     if (bpm <= 0) bpm = 120.0;
     double duration = playbackState.fileDuration.load();
-    
+
     // Calculate the position as a fraction (0-1) for the first note
     double firstNotePosition = (duration > 0) ? (firstNoteTime / duration) : 0.0;
-    
+
     // Find the note index for the first note
     int firstNoteIndex = 0;
     {
@@ -341,13 +341,13 @@ void MIDIScalePlugin::resetPlayback() {
             }
         }
     }
-    
+
     playbackState.playbackNoteIndex.store(firstNoteIndex);
     playbackState.playbackPosition.store(firstNotePosition);
-    
+
     // Calculate beats offset for the first note position
     double beatsOffset = (firstNoteTime * bpm) / 60.0;
-    
+
     // Adjust start time/beat to account for starting at first note
     playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 - firstNoteTime);
 
@@ -414,6 +414,10 @@ void MIDIScalePlugin::updatePlayback() {
 
     bool synced = playbackState.syncToHost.load() && transportState.isPlaying.load();
     double hostBeat = transportState.ppqPosition.load();
+    double firstNoteTime = playbackState.firstNoteTime.load();
+    if (firstNoteTime < 0.0 || firstNoteTime > totalDuration) {
+        firstNoteTime = 0.0;
+    }
 
     double currentTime;
     if (synced) {
@@ -428,8 +432,9 @@ void MIDIScalePlugin::updatePlayback() {
                 sendActiveNoteOffs();
                 playbackState.playbackNoteIndex.store(0);
             }
-            playbackState.playbackStartBeat.store(hostBeat);
-            currentTime = 0;
+            double beatsOffset = (firstNoteTime * midiFileBpm) / 60.0;
+            playbackState.playbackStartBeat.store(hostBeat - beatsOffset);
+            currentTime = firstNoteTime;
         }
     } else {
         currentTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - playbackState.playbackStartTime.load();
@@ -451,18 +456,21 @@ void MIDIScalePlugin::updatePlayback() {
         // Reset note index to start from scratch
         playbackState.playbackNoteIndex.store(0);
 
-        // Reset timing to start a fresh loop - ensure currentTime becomes exactly 0
+        // Reset timing to start a fresh loop - jump to the first note to avoid leading silence
         if (synced) {
-            // Align playback start to current host beat so currentTime = 0
-            playbackState.playbackStartBeat.store(hostBeat);
+            double beatsOffset = (firstNoteTime * midiFileBpm) / 60.0;
+            playbackState.playbackStartBeat.store(hostBeat - beatsOffset);
         } else {
-            // Reset playback start time to now so currentTime = 0
-            playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0);
+            playbackState.playbackStartTime.store(juce::Time::getMillisecondCounterHiRes() / 1000.0 - firstNoteTime);
         }
 
         // Don't play notes in this cycle - let the next processBlock handle it
         // This prevents notes at time 0 from playing immediately after reset
-        playbackState.playbackPosition.store(0.0);
+        if (totalDuration > 0.0) {
+            playbackState.playbackPosition.store(firstNoteTime / totalDuration);
+        } else {
+            playbackState.playbackPosition.store(0.0);
+        }
         return;
     }
 

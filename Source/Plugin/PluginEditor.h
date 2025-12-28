@@ -704,6 +704,9 @@ private:
     // Pending file change
     bool pendingFileChange = false;
     int pendingFileIndex = -1;
+    bool pendingSeek = false;
+    bool pendingSeekStartPlayback = false;
+    double pendingSeekPosition = 0.0;
 
     // Background analysis queue for large libraries
     std::vector<size_t> analysisQueue;
@@ -753,6 +756,7 @@ private:
     juce::String extractKeyFromFilename(const juce::String& filename);  // Extract key/scale from filename
     void loadSelectedFile();
     void scheduleFileChangeTo(int row);
+    void applySeekToPosition(double position, bool startPlayback);
     void stopPlayback();
     void restartPlayback();
     void playNextFile();  // Play next or random file

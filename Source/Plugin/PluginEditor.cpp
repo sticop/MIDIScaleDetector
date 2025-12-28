@@ -367,39 +367,15 @@ MIDIXplorerEditor::MIDIXplorerEditor(juce::AudioProcessor& p)
     // Setup playhead jump callback for MIDI viewer
     midiNoteViewer.onPlayheadJump = [this](double position) {
         if (!fileLoaded || !pluginProcessor) return;
-
-        // Update processor playback position (handles beat sync internally)
-        pluginProcessor->seekToPosition(position);
-
-        // Update local playback variables to match the new position
-        double newTime = position * midiFileDuration;
-        playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - newTime;
-
-        // If synced to host, also update beat-based start
-        if (syncToHostToggle.getToggleState()) {
-            double bpm = midiFileBpm > 0 ? midiFileBpm : 120.0;
-            double beatsOffset = (newTime * bpm) / 60.0;
-            double hostBeat = pluginProcessor->getHostBeat();
-            playbackStartBeat = hostBeat - beatsOffset;
+        bool shouldSchedule = syncToHostToggle.getToggleState() && isHostPlaying();
+        if (shouldSchedule) {
+            pendingSeek = true;
+            pendingSeekStartPlayback = !isPlaying;
+            pendingSeekPosition = position;
+            return;
         }
 
-        // Update note index to skip past notes before this position
-        playbackNoteIndex = 0;
-        while (playbackNoteIndex < playbackSequence.getNumEvents()) {
-            auto* event = playbackSequence.getEventPointer(playbackNoteIndex);
-            if (event->message.getTimeStamp() < newTime) {
-                playbackNoteIndex++;
-            } else {
-                break;
-            }
-        }
-
-        // Make sure we're playing
-        if (!isPlaying) {
-            isPlaying = true;
-            playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));  // Pause icon
-            pluginProcessor->setPlaybackPlaying(true);
-        }
+        applySeekToPosition(position, true);
     };
 
     // License management UI
@@ -1026,7 +1002,7 @@ void MIDIXplorerEditor::timerCallback() {
     }
 
     // Handle pending file changes on beat boundary
-    if (synced && pendingFileChange && hostPlaying) {
+    if (synced && hostPlaying) {
         int currentBeat = (int)std::floor(hostBeat);
         double currentBeatFrac = hostBeat - currentBeat;
 
@@ -1035,7 +1011,7 @@ void MIDIXplorerEditor::timerCallback() {
         bool nearBeatStart = currentBeatFrac < 0.2 || currentBeatFrac > 0.95;
         bool beatChanged = (int)std::floor(lastBeatPosition) != currentBeat;
 
-        if (nearBeatStart || beatChanged) {
+        if (pendingFileChange && (nearBeatStart || beatChanged)) {
             // Apply pending file change
             if (pendingFileIndex >= 0 && pendingFileIndex < (int)filteredFiles.size()) {
                 suppressSelectionChange = true;
@@ -1048,6 +1024,12 @@ void MIDIXplorerEditor::timerCallback() {
             }
             pendingFileChange = false;
             pendingFileIndex = -1;
+            pendingSeek = false;
+            pendingSeekStartPlayback = false;
+        } else if (pendingSeek && (nearBeatStart || beatChanged)) {
+            applySeekToPosition(pendingSeekPosition, pendingSeekStartPlayback);
+            pendingSeek = false;
+            pendingSeekStartPlayback = false;
         }
     }
 
@@ -1163,7 +1145,7 @@ void MIDIXplorerEditor::selectAndPreview(int row) {
     // Add to recently played
     addToRecentlyPlayed(filteredFiles[(size_t)row].fullPath);
 
-    bool shouldSchedule = syncToHostToggle.getToggleState() && isHostPlaying() && isPlaying;
+    bool shouldSchedule = syncToHostToggle.getToggleState() && isHostPlaying() && isPlaying && fileLoaded;
     if (shouldSchedule) {
         scheduleFileChangeTo(row);
         return;
@@ -1195,6 +1177,40 @@ void MIDIXplorerEditor::scheduleFileChangeTo(int row) {
     }
     pendingFileChange = true;
     pendingFileIndex = row;
+}
+
+void MIDIXplorerEditor::applySeekToPosition(double position, bool startPlayback) {
+    if (!fileLoaded || !pluginProcessor) return;
+    if (midiFileDuration <= 0.0) return;
+
+    pluginProcessor->seekToPosition(position);
+
+    double newTime = position * midiFileDuration;
+    playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - newTime;
+
+    double bpm = midiFileBpm > 0 ? midiFileBpm : 120.0;
+    double beatsOffset = (newTime * bpm) / 60.0;
+    double hostBeat = getHostBeatPosition();
+    playbackStartBeat = hostBeat - beatsOffset;
+
+    playbackNoteIndex = 0;
+    while (playbackNoteIndex < playbackSequence.getNumEvents()) {
+        auto* event = playbackSequence.getEventPointer(playbackNoteIndex);
+        if (event->message.getTimeStamp() < newTime) {
+            playbackNoteIndex++;
+        } else {
+            break;
+        }
+    }
+
+    currentPlaybackPosition = position;
+    midiNoteViewer.setPlaybackPosition(position);
+
+    if (startPlayback && !isPlaying) {
+        isPlaying = true;
+        playPauseButton.setButtonText(juce::String::fromUTF8("\u23F8"));
+        pluginProcessor->setPlaybackPlaying(true);
+    }
 }
 
 void MIDIXplorerEditor::loadSelectedFile() {
@@ -2222,9 +2238,34 @@ void MIDIXplorerEditor::restoreSelectionFromCurrentFile() {
         playbackSequence.sort();
         playbackSequence.updateMatchedPairs();
 
-        // Sync playback timing
-        playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0;
-        playbackStartBeat = getHostBeatPosition();
+        // Sync playback timing from processor position to avoid resetting on reopen
+        double position = pluginProcessor->getPlaybackPosition();
+        if (midiFileDuration > 0.0) {
+            double newTime = position * midiFileDuration;
+            playbackStartTime = juce::Time::getMillisecondCounterHiRes() / 1000.0 - newTime;
+
+            double bpm = midiFileBpm > 0 ? midiFileBpm : 120.0;
+            double beatsOffset = (newTime * bpm) / 60.0;
+            double hostBeat = getHostBeatPosition();
+            playbackStartBeat = hostBeat - beatsOffset;
+
+            playbackNoteIndex = 0;
+            while (playbackNoteIndex < playbackSequence.getNumEvents()) {
+                auto* event = playbackSequence.getEventPointer(playbackNoteIndex);
+                if (event->message.getTimeStamp() < newTime) {
+                    playbackNoteIndex++;
+                } else {
+                    break;
+                }
+            }
+
+            currentPlaybackPosition = position;
+            midiNoteViewer.setPlaybackPosition(position);
+        }
+
+        wasHostPlaying = isHostPlaying();
+    } else if (!fileLoaded && !filteredFiles.empty()) {
+        loadSelectedFile();
     }
 }
 
