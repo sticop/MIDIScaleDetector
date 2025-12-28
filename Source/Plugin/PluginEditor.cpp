@@ -7,6 +7,70 @@
 #include <unordered_map>
 
 namespace {
+    // Color palette for tags - consistent colors based on tag hash
+    juce::Colour getTagColor(const juce::String& tag) {
+        // Predefined colors for common categories
+        static const std::unordered_map<juce::String, juce::Colour> categoryColors = {
+            // Instruments
+            {"Piano", juce::Colour(0xff4a90d9)},      // Blue
+            {"Guitar", juce::Colour(0xffcc7744)},     // Orange/Brown
+            {"Bass", juce::Colour(0xff8844aa)},       // Purple
+            {"Drums", juce::Colour(0xffaa4444)},      // Red
+            {"Strings", juce::Colour(0xff44aa77)},    // Green
+            {"Synth", juce::Colour(0xffcc44cc)},      // Magenta
+            {"Pad", juce::Colour(0xff6688cc)},        // Light Blue
+            {"Lead", juce::Colour(0xffddaa44)},       // Gold
+            {"Organ", juce::Colour(0xff997755)},      // Brown
+            {"Brass", juce::Colour(0xffdd8844)},      // Orange
+            {"Choir", juce::Colour(0xffaa88cc)},      // Lavender
+            {"Vocal", juce::Colour(0xffee7799)},      // Pink
+            {"FX", juce::Colour(0xff66cccc)},         // Cyan
+            // Genres
+            {"Jazz", juce::Colour(0xffbb9955)},       // Tan
+            {"Rock", juce::Colour(0xffcc5555)},       // Red
+            {"Pop", juce::Colour(0xffee77bb)},        // Pink
+            {"Classical", juce::Colour(0xff88aa66)},  // Olive
+            {"Electronic", juce::Colour(0xff55ccee)}, // Cyan
+            {"Hip-Hop", juce::Colour(0xffeeaa33)},    // Orange
+            {"HipHop", juce::Colour(0xffeeaa33)},     // Orange
+            {"Trap", juce::Colour(0xffff6655)},       // Red-Orange
+            {"EDM", juce::Colour(0xff55ddff)},        // Light Cyan
+            {"House", juce::Colour(0xff9966ff)},      // Purple
+            {"Techno", juce::Colour(0xff6699ff)},     // Blue
+            {"Ambient", juce::Colour(0xff77bbaa)},    // Teal
+            {"Lo-Fi", juce::Colour(0xffaa9988)},      // Taupe
+            {"LoFi", juce::Colour(0xffaa9988)},       // Taupe
+            // Types
+            {"Chord", juce::Colour(0xff55bb77)},      // Green
+            {"Chords", juce::Colour(0xff55bb77)},     // Green
+            {"Melody", juce::Colour(0xff77aadd)},     // Light Blue
+            {"Arp", juce::Colour(0xffbb77cc)},        // Light Purple
+            {"Loop", juce::Colour(0xffccaa55)},       // Yellow
+            {"Riff", juce::Colour(0xffdd7755)},       // Coral
+            {"Fill", juce::Colour(0xff99bb44)},       // Lime
+        };
+
+        // Check for exact match first
+        auto tagLower = tag.toLowerCase();
+        for (const auto& [key, color] : categoryColors) {
+            if (key.toLowerCase() == tagLower) {
+                return color;
+            }
+        }
+
+        // Check for partial match (tag contains category word)
+        for (const auto& [key, color] : categoryColors) {
+            if (tagLower.contains(key.toLowerCase())) {
+                return color;
+            }
+        }
+
+        // Generate consistent color from hash for unknown tags
+        auto hash = (unsigned int)tag.hashCode();
+        float hue = (hash % 360) / 360.0f;
+        return juce::Colour::fromHSV(hue, 0.5f, 0.75f, 1.0f);
+    }
+
     int getKeyOrder(const juce::String& key) {
         if (key == "---") return 9999;
         const char* noteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
@@ -3729,7 +3793,38 @@ void MIDIXplorerEditor::FileListModel::paintListBoxItem(int row, juce::Graphics&
     // File name
     g.setColour(juce::Colours::white);
     g.setFont(13.0f);
-    g.drawText(file.fileName, 175, 0, w - 530, h, juce::Justification::centredLeft);
+    int fileNameWidth = w - 530;
+    g.drawText(file.fileName, 175, 0, fileNameWidth, h, juce::Justification::centredLeft);
+
+    // Draw colored tags after filename
+    if (!file.tags.isEmpty()) {
+        int tagX = 175 + juce::jmin(fileNameWidth, (int)g.getCurrentFont().getStringWidth(file.fileName) + 10);
+        int tagMaxX = w - 200;  // Stop before BPM/duration area
+
+        for (const auto& tag : file.tags) {
+            if (tagX >= tagMaxX) break;
+
+            int tagWidth = (int)g.getCurrentFont().getStringWidthFloat(tag) + 10;
+            if (tagX + tagWidth > tagMaxX) break;
+
+            // Draw tag background pill
+            juce::Colour tagColor = getTagColor(tag);
+            g.setColour(tagColor.withAlpha(0.3f));
+            g.fillRoundedRectangle((float)tagX, 6.0f, (float)tagWidth, 20.0f, 4.0f);
+
+            // Draw tag border
+            g.setColour(tagColor.withAlpha(0.6f));
+            g.drawRoundedRectangle((float)tagX + 0.5f, 6.5f, (float)tagWidth - 1.0f, 19.0f, 3.5f, 1.0f);
+
+            // Draw tag text
+            g.setColour(tagColor.brighter(0.5f));
+            g.setFont(10.0f);
+            g.drawText(tag, tagX, 6, tagWidth, 20, juce::Justification::centred);
+
+            tagX += tagWidth + 4;  // Gap between tags
+        }
+        g.setFont(11.0f);  // Restore font size
+    }
 
     // File size
     g.setColour(juce::Colour(0xff888888));
@@ -3792,10 +3887,43 @@ juce::var MIDIXplorerEditor::FileListModel::getDragSourceDescription(const juce:
 void MIDIXplorerEditor::FileListModel::listBoxItemClicked(int row, const juce::MouseEvent& e) {
     if (row < 0 || row >= (int)owner.filteredFiles.size()) return;
 
+    auto& file = owner.filteredFiles[(size_t)row];
+
     // Check if star area clicked (first 24 pixels)
     if (e.x < 24 && e.mods.isLeftButtonDown()) {
         owner.toggleFavorite(row);
         return;
+    }
+
+    // Check if clicking on a tag
+    if (e.mods.isLeftButtonDown() && !file.tags.isEmpty()) {
+        int listWidth = owner.fileListBox->getWidth();
+        int fileNameWidth = listWidth - 530;
+        juce::Font font(13.0f);
+        int tagX = 175 + juce::jmin(fileNameWidth, (int)font.getStringWidth(file.fileName) + 10);
+        int tagMaxX = listWidth - 200;
+
+        juce::Font tagFont(10.0f);
+        for (const auto& tag : file.tags) {
+            if (tagX >= tagMaxX) break;
+
+            int tagWidth = (int)tagFont.getStringWidth(tag) + 10;
+            if (tagX + tagWidth > tagMaxX) break;
+
+            // Check if click is within this tag's bounds (Y: 6-26)
+            if (e.x >= tagX && e.x < tagX + tagWidth && e.y >= 6 && e.y <= 26) {
+                // Find this tag in the tagFilterCombo and select it
+                for (int i = 0; i < owner.tagFilterCombo.getNumItems(); i++) {
+                    if (owner.tagFilterCombo.getItemText(i) == tag) {
+                        owner.tagFilterCombo.setSelectedItemIndex(i, juce::sendNotification);
+                        return;
+                    }
+                }
+                return;
+            }
+
+            tagX += tagWidth + 4;
+        }
     }
 
     if (e.mods.isRightButtonDown()) {

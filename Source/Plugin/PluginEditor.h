@@ -520,13 +520,45 @@ private:
                 starClicked = true;
                 return;
             }
+
+            // Check if clicking on a tag
+            if (dragStartRow >= 0 && dragStartRow < (int)owner.filteredFiles.size()) {
+                auto& file = owner.filteredFiles[(size_t)dragStartRow];
+                if (!file.tags.isEmpty()) {
+                    int listWidth = getWidth();
+                    int fileNameWidth = listWidth - 530;
+                    juce::Font font(13.0f);
+                    int tagX = 175 + juce::jmin(fileNameWidth, (int)font.getStringWidth(file.fileName) + 10);
+                    int tagMaxX = listWidth - 200;
+
+                    juce::Font tagFont(10.0f);
+                    for (const auto& tag : file.tags) {
+                        if (tagX >= tagMaxX) break;
+
+                        int tagWidth = (int)tagFont.getStringWidth(tag) + 10;
+                        if (tagX + tagWidth > tagMaxX) break;
+
+                        // Check if click is within this tag's bounds (Y: 6-26 relative to row)
+                        int rowY = e.y - getRowPosition(dragStartRow, true).getY();
+                        if (e.x >= tagX && e.x < tagX + tagWidth && rowY >= 6 && rowY <= 26) {
+                            tagClicked = true;
+                            // Tag click handling is done in listBoxItemClicked
+                            return;
+                        }
+
+                        tagX += tagWidth + 4;
+                    }
+                }
+            }
+
             starClicked = false;
+            tagClicked = false;
 
             juce::ListBox::mouseDown(e);
         }
 
         void mouseDrag(const juce::MouseEvent& e) override {
-            if (starClicked) return;
+            if (starClicked || tagClicked) return;
             if (isDragging) return;
 
             // Start native file drag when mouse moves enough
@@ -557,6 +589,7 @@ private:
             isDragging = false;
             dragStartRow = -1;
             starClicked = false;
+            tagClicked = false;
             juce::ListBox::mouseUp(e);
         }
 
@@ -579,6 +612,7 @@ private:
         MIDIXplorerEditor& owner;
         bool isDragging = false;
         bool starClicked = false;
+        bool tagClicked = false;
         int dragStartRow = -1;
         juce::Point<int> dragStartPos;
     };
